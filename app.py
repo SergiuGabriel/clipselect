@@ -1990,7 +1990,7 @@ class MulticamPage(QWidget):
         try:
             r = director.export_xml(s["masters"], self.p["cams"], s["clips"], self.an, self.edits, out, self.p["name"])
             self.status.setText(f"Saved one sequence ({r['video_tracks']} video, {r['audio_tracks']} audio tracks"
-                                f"{', auto edit on the top track' if r['edit'] else ''}) to {out}. In Premiere: File > Import.")
+                                f"{', each camera track holds only its cuts' if r['edit'] else ', full clips (no auto edit yet)'}) to {out}. In Premiere: File > Import.")
         except Exception as e:
             self.status.setText(f"Export failed: {e}")
 

@@ -25,9 +25,9 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
    Sync uses clocks as hints (camera timecode, BWF time_reference of the recorder, creation time, file date): the first
    clip of each camera folder is searched in the whole master, its result gives that camera's clock error, the next
    clips are searched only +-90 s around the prediction (~18x faster), with fallback to a full search.
-   Export = ONE sequence (owner's wish): V1..Vn every camera on its own track (full clips, synced), top track = auto
-   edit, A1(/A2) = all recorder files on one common timeline (`sync.master_starts`), then one (disabled) audio track
-   per camera. Renaming a camera to an existing name merges them.
+   Export = ONE sequence (owner's wish): V1..Vn one track per camera holding ONLY that camera's cuts of the auto edit
+   (no overlaps, so it plays as the edit; full clips when there is no auto edit yet), A1(/A2) = all recorder files,
+   uncut, on one common timeline (`sync.master_starts`), then one (disabled) audio track per camera, uncut. Renaming a camera to an existing name merges them.
    The owner's usual Premiere workflow for reference: Premiere audio sync, or timecode sync (TC set by hand on each
    camera, not frame accurate) + camera labels + "Create Multi-Camera Source Sequence", then a manual audio re-sync.
    Video analyses of multicam projects live in `<project id>.analysis.json` next to projects.json (cached by size+mtime).

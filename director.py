@@ -208,8 +208,8 @@ def build(cams, results, analyses, masters, st):
 
 
 # ---------------- XML: ONE sequence with everything ----------------
-# V1..Vn  = every camera on its own track, synced (full clips)        -> fix the edit by grabbing the right camera
-# V(n+1)  = the auto edit (on top, so it is what plays)
+# V1..Vn  = one track per camera. With an auto edit: only that camera's cuts (nothing overlaps, so it plays as the edit).
+#           Sync only (no auto edit yet): the full clips.
 # A1(/A2) = recorder (all recorder files, one after another on the common timeline)
 # then one audio track per camera (camera sound, synced, track disabled so only the recorder plays)
 
@@ -281,17 +281,24 @@ def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=N
     flag = lambda p: " [CHECK SYNC]" if results[p]["conf"] == "low" else ""
     dur = lambda p: vinfo(p).duration or results[p].get("dur", 0)
     v_tracks, a_tracks = [], []
-    for ci, cam in enumerate(cams):
-        its = [item(p, 0.0, dur(p), g, lab(ci), f"{cam['name']} · {Path(p).stem}{flag(p)}") for c, p, g in sorted(placed, key=lambda x: x[2]) if c == ci]
-        if its:
-            v_tracks.append(track(its))
-    edit_items = []
+    # video: if there is an auto edit, every camera's track holds ONLY its cuts (like a multicam edit already
+    # flattened), so a wrong cut is fixed by trimming / swapping on that camera's track. Without an auto edit
+    # (sync only) every camera track holds its full clips.
+    cuts = {ci: [] for ci in range(len(cams))}
     for e in edits or []:
         if e:
             g0 = starts[e["master"]]
-            edit_items += [item(p, a, b, g0 + s0, lab(ci), f"EDIT · {cams[ci]['name']} · {Path(p).stem}") for ci, p, a, b, s0 in e["pieces"]]
-    if edit_items:
-        v_tracks.append(track(edit_items))
+            for ci, p, a, b, s0 in e["pieces"]:
+                cuts[ci].append((g0 + s0, p, a, b))
+    has_edit = any(cuts.values())
+    for ci, cam in enumerate(cams):
+        if has_edit:
+            its = [item(p, a, b, g, lab(ci), f"{cam['name']} · {Path(p).stem}{flag(p)}") for g, p, a, b in sorted(cuts[ci])]
+        else:
+            its = [item(p, 0.0, dur(p), g, lab(ci), f"{cam['name']} · {Path(p).stem}{flag(p)}")
+                   for c, p, g in sorted(placed, key=lambda x: x[2]) if c == ci]
+        v_tracks.append(track(its))
+    edit_items = has_edit
     # recorder
     arate, ach = ai(masters[0]["path"])
     ach = max(1, min(2, ach))
