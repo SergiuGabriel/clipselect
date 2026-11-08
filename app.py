@@ -15,9 +15,11 @@ from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QDialog, QFileDialog, QFrame,
                                QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
                                QMainWindow, QProgressBar, QPushButton, QScrollArea, QSlider, QStackedWidget,
-                               QTabWidget, QVBoxLayout, QWidget, QSizePolicy)
+                               QTabWidget, QVBoxLayout, QWidget, QSizePolicy, QTableWidget, QTableWidgetItem,
+                               QHeaderView)
 
 import core
+import sync
 
 APP, VER = "MoneyMakingMachine", "v1.0.0"
 C = dict(BG="#0b0d12", PANEL="#10131a", CARD="#141821", BORDER="#232834", TEXT="#e6e9ef", MUTED="#8b93a3",
@@ -34,7 +36,16 @@ SEQ_SIZES = ["Match footage", "1920 x 1080", "3840 x 2160", "4096 x 2160", "1080
 SEQ_RATES = ["Match footage", "23.976", "24", "25", "29.97", "30", "50", "59.94", "60"]
 SEQ_FIELDS = {"Lower Field First": "lower", "Upper Field First": "upper", "None (Progressive)": "none"}
 SEQ_DEFAULT = dict(size="Match footage", rate="Match footage", fields="Lower Field First")
-DEFAULTS = dict(contrast=50, exposure=50, focus=60, importance=40, stability=50, preset="Normal", p1=25, p2=65)
+DEFAULT_ON = {k: True for k, _, _ in SLIDERS}
+DEFAULTS = dict(mode="auto", thr=60, mincut=3, protect=True, contrast=50, exposure=50, focus=60, importance=40,
+                stability=50, preset="Normal", p1=25, p2=65)
+
+
+def norm_settings(s):
+    out = dict(DEFAULTS)
+    out.update(s)
+    out["on"] = {**DEFAULT_ON, **s.get("on", {})}
+    return out
 
 STYLE = """
 QWidget{background:@BG;color:@TEXT;font-size:13px}
@@ -73,6 +84,11 @@ QLineEdit:focus{border:1.5px solid @BLUE}
 QComboBox{background:#0d1017;border:1px solid @BORDER;border-radius:6px;padding:8px}
 QComboBox QAbstractItemView{background:#10131a;border:1px solid @BORDER;selection-background-color:#1f3558}
 QSlider::groove:horizontal{height:6px;background:#232834;border-radius:3px}
+QSlider::sub-page:horizontal:disabled{background:#2a303d}
+QSlider::handle:horizontal:disabled{border-color:#3a4150}
+QTableWidget{background:transparent;border:1px solid @BORDER;gridline-color:#1a1e28}
+QTableWidget::item{padding:4px}
+QHeaderView::section{background:#10131a;color:@MUTED;border:none;padding:6px}
 QSlider::sub-page:horizontal{background:@BLUE;border-radius:3px}
 QSlider::handle:horizontal{background:#0b0d12;border:2px solid @BLUE;width:14px;height:14px;margin:-6px 0;border-radius:9px}
 QProgressBar{background:#232834;border:none;border-radius:3px;max-height:6px;min-height:6px}
@@ -187,9 +203,13 @@ class Store:
     def save(self):
         self.file.write_text(json.dumps(self.projects), "utf-8")
 
-    def new(self, name):
+    def new(self, name, kind="footage"):
         p = dict(id=uuid.uuid4().hex, name=name, created=datetime.now().isoformat(timespec="seconds"),
-                 videos=[], settings=dict(DEFAULTS), history=[], out_dir="", out_name="", out_sw="Premiere Pro", seq=dict(SEQ_DEFAULT))
+                 videos=[], settings=norm_settings({}), history=[], out_dir="", out_name="", out_sw="Premiere Pro", seq=dict(SEQ_DEFAULT))
+        if kind == "multicam":
+            p.update(type="multicam", masters=[], sync=None,
+                     cams=[dict(name="Handheld 1", role="Handheld", clips=[]), dict(name="Handheld 2", role="Handheld", clips=[]),
+                           dict(name="Static 1", role="Static", clips=[])])
         self.projects.append(p)
         self.save()
         return p
@@ -333,41 +353,88 @@ class DropZone(QFrame):
         self.dropped.emit([u.toLocalFile() for u in e.mimeData().urls()])
 
 
+class Switch(QWidget):
+    toggled = Signal(bool)
+
+    def __init__(self, on=True):
+        super().__init__()
+        self.on = on
+        self.setFixedSize(34, 18)
+        self.setCursor(Qt.PointingHandCursor)
+
+    def set(self, v):
+        self.on = v
+        self.update()
+
+    def mousePressEvent(self, _):
+        self.on = not self.on
+        self.update()
+        self.toggled.emit(self.on)
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(C["BLUE"] if self.on else "#2a303d"))
+        p.drawRoundedRect(0, 0, 34, 18, 9, 9)
+        p.setBrush(QColor("white"))
+        p.drawEllipse(18 if self.on else 2, 2, 14, 14)
+
+
 class SliderRow(QWidget):
     changed = Signal(int)
+    switched = Signal(bool)
 
-    def __init__(self, title, sub, value):
+    def __init__(self, title, sub, value, lo=0, hi=100, suffix="%", switch=False, on=True):
         super().__init__()
+        self.suffix = suffix
         v = QVBoxLayout(self)
         v.setContentsMargins(0, 0, 0, 6)
         v.setSpacing(2)
         top = QHBoxLayout()
-        t = lbl(title)
-        t.setStyleSheet("font-weight:600")
+        self.t = lbl(title)
         q = lbl("?", "muted")
         q.setToolTip(sub)
-        self.pct = lbl(f"{value}%", "muted")
-        top.addWidget(t)
+        self.pct = lbl(f"{value}{suffix}", "muted")
+        top.addWidget(self.t)
         top.addWidget(q)
         top.addStretch()
         top.addWidget(self.pct)
+        self.sw = None
+        if switch:
+            self.sw = Switch(on)
+            self.sw.toggled.connect(self._sw)
+            top.addSpacing(10)
+            top.addWidget(self.sw)
         self.sl = QSlider(Qt.Horizontal)
-        self.sl.setRange(0, 100)
+        self.sl.setRange(lo, hi)
         self.sl.setValue(value)
         self.sl.valueChanged.connect(self._ch)
         v.addLayout(top)
         v.addWidget(self.sl)
         v.addWidget(lbl(sub, "muted"))
+        self._dim(on)
+
+    def _dim(self, on):
+        self.sl.setEnabled(on)
+        self.t.setStyleSheet("font-weight:600" + ("" if on else ";color:#5a6272"))
+
+    def _sw(self, on):
+        self._dim(on)
+        self.switched.emit(on)
 
     def _ch(self, x):
-        self.pct.setText(f"{x}%")
+        self.pct.setText(f"{x}{self.suffix}")
         self.changed.emit(x)
 
-    def set(self, x):
+    def set(self, x, on=True):
         self.sl.blockSignals(True)
         self.sl.setValue(x)
         self.sl.blockSignals(False)
-        self.pct.setText(f"{x}%")
+        self.pct.setText(f"{x}{self.suffix}")
+        if self.sw:
+            self.sw.set(on)
+        self._dim(on)
 
 
 class JobCard(QFrame):
@@ -462,25 +529,48 @@ class Worker(QThread):
 # ---------------------------------------------------------------- pages
 
 class NewProjectDialog(QDialog):
+    DESC = {"footage": "Grade your clips Good / Fair / Poor and export a colour-labelled timeline.",
+            "multicam": "Sync several cameras to a master audio recorder, then build the multicam edit."}
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("New Project")
         self.setModal(True)
-        self.setFixedWidth(400)
+        self.setFixedWidth(440)
+        self._kind = "footage"
         v = QVBoxLayout(self)
         v.setContentsMargins(22, 20, 22, 20)
         v.setSpacing(10)
         v.addWidget(lbl("New Project", "h2"))
-        v.addWidget(lbl("Give your project a name.", "muted"))
+        v.addWidget(lbl("Project type", "muted"))
+        row = QHBoxLayout()
+        self.b1 = btn("Footage Selection", "seg", lambda: self.pick("footage"))
+        self.b2 = btn("Multicam", "seg", lambda: self.pick("multicam"))
+        row.addWidget(self.b1)
+        row.addWidget(self.b2)
+        v.addLayout(row)
+        self.desc = lbl("", "muted", True)
+        v.addWidget(self.desc)
         self.edit = QLineEdit()
         self.edit.setPlaceholderText("Project name")
         self.edit.returnPressed.connect(self.accept)
         v.addWidget(self.edit)
-        row = QHBoxLayout()
-        row.addStretch()
-        row.addWidget(btn("Cancel", slot=self.reject))
-        row.addWidget(btn("Create Project", "primary", self.accept))
-        v.addLayout(row)
+        r2 = QHBoxLayout()
+        r2.addStretch()
+        r2.addWidget(btn("Cancel", slot=self.reject))
+        r2.addWidget(btn("Create Project", "primary", self.accept))
+        v.addLayout(r2)
+        self.pick("footage")
+
+    def pick(self, k):
+        self._kind = k
+        for b, on in ((self.b1, k == "footage"), (self.b2, k == "multicam")):
+            b.setProperty("active", on)
+            repolish(b)
+        self.desc.setText(self.DESC[k])
+
+    def kind(self):
+        return self._kind
 
     def name(self):
         return self.edit.text().strip()
@@ -503,9 +593,15 @@ class ProjectCard(QFrame):
         d = btn("Delete", "del", lambda: self.deleted.emit(self.pid))
         top.addWidget(d)
         v.addLayout(top)
-        v.addWidget(lbl(f"{len(p['videos'])} videos · {len(p['history'])} analyses", "muted"))
-        last = p["history"][-1]["ts"][:16].replace("T", " ") if p["history"] else "never"
-        v.addWidget(lbl(f"Last analysis: {last}", "muted"))
+        if p.get("type") == "multicam":
+            n = sum(len(c["clips"]) for c in p["cams"])
+            v.addWidget(lbl(f"Multicam · {len(p['cams'])} cameras · {n} clips", "muted"))
+            when = (p.get("sync") or {}).get("when", "")[:16].replace("T", " ")
+            v.addWidget(lbl(f"Last sync: {when or 'never'}", "muted"))
+        else:
+            v.addWidget(lbl(f"{len(p['videos'])} videos · {len(p['history'])} analyses", "muted"))
+            last = p["history"][-1]["ts"][:16].replace("T", " ") if p["history"] else "never"
+            v.addWidget(lbl(f"Last analysis: {last}", "muted"))
         v.addStretch()
 
     def mousePressEvent(self, _):
@@ -629,30 +725,76 @@ class ProjectPage(QWidget):
         mw = QWidget()
         mv = QVBoxLayout(mw)
         mv.setContentsMargins(22, 16, 22, 16)
-        mv.addWidget(lbl("ANALYSIS SENSITIVITY", "section"))
-        mv.addWidget(lbl("Adjust how strict each quality check is during frame-by-frame analysis", "muted"))
-        mv.addSpacing(6)
+        mv.addWidget(lbl("SELECTION MODE", "section"))
+        mrow = QHBoxLayout()
+        self.m_auto = btn("Auto", "seg", lambda: self.set_mode("auto"))
+        self.m_custom = btn("Custom", "seg", lambda: self.set_mode("custom"))
+        mrow.addWidget(self.m_auto)
+        mrow.addWidget(self.m_custom)
+        mv.addLayout(mrow)
+        self.mode_desc = lbl("", "muted", True)
+        mv.addWidget(self.mode_desc)
+        mv.addSpacing(8)
+
+        # AUTO box
+        self.auto_box = QWidget()
+        av = QVBoxLayout(self.auto_box)
+        av.setContentsMargins(0, 0, 0, 0)
+        self.r_thr = SliderRow("Selection threshold",
+                               "Higher = pickier. Frames 10+ points above it are Good, within 10 points of it Fair, the rest Poor.",
+                               60, lo=20, hi=90, suffix="")
+        self.r_thr.changed.connect(lambda x: self.set_s("thr", x))
+        av.addWidget(self.r_thr)
+        mv.addWidget(self.auto_box)
+
+        # CUSTOM box
+        self.custom_box = QWidget()
+        cv = QVBoxLayout(self.custom_box)
+        cv.setContentsMargins(0, 0, 0, 0)
+        cv.addWidget(lbl("ANALYSIS SENSITIVITY", "section"))
+        cv.addWidget(lbl("Switch a check on or off and adjust how strict it is", "muted"))
+        cv.addSpacing(6)
         self.rows = {}
         for key, title, sub in SLIDERS:
-            r = SliderRow(title, sub, DEFAULTS[key])
+            r = SliderRow(title, sub, DEFAULTS[key], switch=True)
             r.changed.connect(lambda x, k=key: self.set_s(k, x))
+            r.switched.connect(lambda on, k=key: self.set_on(k, on))
             self.rows[key] = r
-            mv.addWidget(r)
-        mv.addSpacing(8)
-        mv.addWidget(lbl("STRICTNESS PRESET", "section"))
-        mv.addWidget(lbl("Controls how aggressively quality issues are flagged. Lenient keeps more frames; Strict removes more.", "muted", True))
+            cv.addWidget(r)
+        cv.addSpacing(8)
+        cv.addWidget(lbl("STRICTNESS PRESET", "section"))
+        cv.addWidget(lbl("Controls how aggressively quality issues are flagged. Lenient keeps more frames; Strict removes more.", "muted", True))
         self.combo = QComboBox()
         self.combo.addItems(["Lenient", "Normal", "Strict", "Custom"])
         self.combo.currentTextChanged.connect(self.preset)
-        mv.addWidget(self.combo)
-        mv.addSpacing(10)
-        mv.addWidget(lbl("QUALITY THRESHOLD", "section"))
-        mv.addWidget(lbl("Define the distribution of quality ratings across your footage", "muted"))
+        cv.addWidget(self.combo)
+        cv.addSpacing(10)
+        cv.addWidget(lbl("QUALITY THRESHOLD", "section"))
+        cv.addWidget(lbl("Define the distribution of quality ratings across your footage", "muted"))
         self.dist_lbl = QLabel()
-        mv.addWidget(self.dist_lbl)
+        cv.addWidget(self.dist_lbl)
         self.range = RangeBar()
         self.range.changed.connect(self.set_range)
-        mv.addWidget(self.range)
+        cv.addWidget(self.range)
+        pr = QHBoxLayout()
+        pr.addWidget(lbl("Protect good frames"))
+        pq = lbl("?", "muted")
+        pq.setToolTip("Frames that score well are never marked Poor, even when they fall inside the lowest percentile.")
+        pr.addWidget(pq)
+        pr.addStretch()
+        self.sw_protect = Switch(True)
+        self.sw_protect.toggled.connect(lambda v: self.set_s("protect", v))
+        pr.addWidget(self.sw_protect)
+        cv.addLayout(pr)
+        mv.addWidget(self.custom_box)
+
+        # common: minimum cut
+        mv.addSpacing(6)
+        self.r_cut = SliderRow("Minimum cut length",
+                               "Segments shorter than this are merged into the neighbouring segment.",
+                               3, lo=1, hi=10, suffix=" s")
+        self.r_cut.changed.connect(lambda x: self.set_s("mincut", x))
+        mv.addWidget(self.r_cut)
         mv.addSpacing(6)
         ph = QHBoxLayout()
         ph.addWidget(lbl("PREVIEW TIMELINE", "section"))
@@ -664,11 +806,8 @@ class ProjectPage(QWidget):
         mv.addWidget(self.pv)
         self.bar = DistBar(order=(0, 1, 2), height=8)
         mv.addWidget(self.bar)
-        sl = QHBoxLayout()
-        sl.addWidget(lbl("Strict", "muted"))
-        sl.addStretch()
-        sl.addWidget(lbl("Lenient", "muted"))
-        mv.addLayout(sl)
+        self.actual = lbl("", "muted")
+        mv.addWidget(self.actual)
         mv.addStretch()
         mid.setWidget(mw)
         body.addWidget(mid, 1)
@@ -709,14 +848,19 @@ class ProjectPage(QWidget):
     # --- loading
     def load(self, p):
         self.p = p
+        p["settings"] = norm_settings(p["settings"])
         self.title.setText(p["name"])
         s = p["settings"]
         for k, r in self.rows.items():
-            r.set(s[k])
+            r.set(s[k], s["on"][k])
         self.combo.blockSignals(True)
         self.combo.setCurrentText(s["preset"])
         self.combo.blockSignals(False)
         self.range.set_values(s["p1"], s["p2"])
+        self.r_thr.set(s["thr"])
+        self.r_cut.set(s["mincut"])
+        self.sw_protect.set(s["protect"])
+        self.apply_mode()
         self.refresh_videos()
         self.refresh_history()
         self.refresh_preview()
@@ -781,6 +925,29 @@ class ProjectPage(QWidget):
             QListWidget.keyPressEvent(self.list, e)
 
     # --- settings
+    def apply_mode(self):
+        auto = self.p["settings"]["mode"] == "auto"
+        self.auto_box.setVisible(auto)
+        self.custom_box.setVisible(not auto)
+        for b, on in ((self.m_auto, auto), (self.m_custom, not auto)):
+            b.setProperty("active", on)
+            repolish(b)
+        self.mode_desc.setText(
+            "The program decides. It scores focus, stability and exposure; frames above the threshold are Good."
+            if auto else
+            "You choose which checks run, how strict each one is, and how the footage is split into Poor / Fair / Good.")
+
+    def set_mode(self, m):
+        self.p["settings"]["mode"] = m
+        self.store.save()
+        self.apply_mode()
+        self.refresh_preview()
+
+    def set_on(self, k, on):
+        self.p["settings"]["on"][k] = on
+        self.store.save()
+        self.refresh_preview()
+
     def set_s(self, k, x):
         self.p["settings"][k] = x
         self.store.save()
@@ -811,20 +978,22 @@ class ProjectPage(QWidget):
             f'<span style="color:{C["POOR"]}">●</span> <b>Poor {p1}%</b> &nbsp; '
             f'<span style="color:{C["FAIR"]}">●</span> <b>Fair {p2 - p1}%</b> &nbsp; '
             f'<span style="color:{C["GOOD"]}">●</span> <b>Good {100 - p2}%</b>')
-        self.bar.set_values(p1, p2 - p1, 100 - p2)
         if self.an:
-            lv = core.grade(self.an, weights_of(s), p1, p2)
             total = sum(a.duration for a in self.an) or 1
             blocks, pos = [], 0.0
-            for a, l in zip(self.an, lv):
-                for t0, t1, g in core.level_segments(a, l):
+            for a, segs in zip(self.an, core.grade_segments(self.an, s)):
+                for t0, t1, g in segs:
                     blocks.append((pos + t0 / total, pos + t1 / total, g))
                 pos += a.duration / total
             self.sample.hide()
         else:
             rng = np.random.default_rng(7)
             sc = np.convolve(rng.random(60), np.ones(4) / 4, "same")
-            lo, hi = np.percentile(sc, [p1, p2])
+            sc = (sc - sc.min()) / (sc.max() - sc.min()) * 100
+            if s["mode"] == "auto":
+                lo, hi = s["thr"] - 10, s["thr"] + 10
+            else:
+                lo, hi = np.percentile(sc, [p1, p2])
             blocks = [(i / 60, (i + 1) / 60, 0 if x < lo else 1 if x < hi else 2) for i, x in enumerate(sc)]
             self.sample.show()
         merged = []
@@ -833,8 +1002,13 @@ class ProjectPage(QWidget):
                 merged[-1] = (merged[-1][0], b[1], b[2])
             else:
                 merged.append(b)
+        dur = [0.0, 0.0, 0.0]
+        for x0, x1, g in merged:
+            dur[g] += x1 - x0
+        tot = sum(dur) or 1
+        self.bar.set_values(*dur)
+        self.actual.setText(f"Result: Poor {dur[0] / tot * 100:.0f}%  ·  Fair {dur[1] / tot * 100:.0f}%  ·  Good {dur[2] / tot * 100:.0f}%")
         self.pv.set_blocks(merged)
-
 
 class AnalyzingPage(QWidget):
     pause = Signal(bool)
@@ -987,7 +1161,16 @@ class ResultsPage(QWidget):
         self.next = lbl("", "muted", True)
         nv.addWidget(self.next)
         left.addWidget(nx)
-        left.addStretch()
+        left.addWidget(lbl("CLIP DETAILS (average score 0-100, seconds per level)", "section"))
+        self.detail = QTableWidget(0, 9)
+        self.detail.setHorizontalHeaderLabels(["Clip", "Contrast", "Exposure", "Focus", "Importance", "Stability", "Poor", "Fair", "Good"])
+        self.detail.verticalHeader().hide()
+        self.detail.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.detail.setSelectionMode(QAbstractItemView.NoSelection)
+        hh = self.detail.horizontalHeader()
+        hh.setSectionResizeMode(QHeaderView.ResizeToContents)
+        hh.setSectionResizeMode(0, QHeaderView.Stretch)
+        left.addWidget(self.detail, 1)
         h.addLayout(left, 3)
 
         right = QFrame()
@@ -1047,18 +1230,28 @@ class ResultsPage(QWidget):
             self.dir.setText(d)
 
     def show_entry(self, p, entry, seconds=None):
-        self.p, self.msg_text = p, ""
+        self.p = p
         self.msg.setText("")
         s = p["settings"]
         an = [core.Analysis.from_json(d) for d in entry["clips"]]
-        lv = core.grade(an, weights_of(s), s["p1"], s["p2"])
-        self.items, cnt, dur = [], [0, 0, 0], [0.0, 0.0, 0.0]
-        for a, l in zip(an, lv):
-            segs = core.level_segments(a, l)
-            self.items.append((a, segs))
+        self.items = list(zip(an, core.grade_segments(an, s)))
+        cnt, dur = [0, 0, 0], [0.0, 0.0, 0.0]
+        auto = s.get("mode", "auto") == "auto"
+        self.detail.setRowCount(len(self.items))
+        for r, (a, segs) in enumerate(self.items):
+            d = [0.0, 0.0, 0.0]
             for t0, t1, g in segs:
                 cnt[g] += 1
                 dur[g] += t1 - t0
+                d[g] += t1 - t0
+            st = a.comp["stability_v1"] if auto and "stability_v1" in a.comp else a.comp["stability"]
+            vals = [a.comp[k].mean() * 100 for k in ("contrast", "exposure", "focus", "importance")] + [st.mean() * 100]
+            cells = [Path(a.info.path).name] + [f"{v:.0f}" for v in vals] + [f"{x:.0f}s" for x in d]
+            for c, t in enumerate(cells):
+                it = QTableWidgetItem(t)
+                if c >= 6:
+                    it.setForeground(QColor(LV_COL[c - 6]))
+                self.detail.setItem(r, c, it)
         tot = sum(dur) or 1
         self.stats["videos"].setText(str(len(an)))
         self.stats["dur"].setText(hms(sum(a.duration for a in an)))
@@ -1117,6 +1310,485 @@ class QueuePage(QWidget):
         self.b.setVisible(bool(text))
 
 
+# ---------------------------------------------------------------- multicam
+
+CONF_COL = {"high": C["GOOD"], "medium": C["FAIR"], "low": "#f08a3c", "fail": C["POOR"]}
+CONF_NAME = {"high": "High", "medium": "Medium", "low": "Check", "fail": "Failed"}
+
+
+def fmt_t(sec):
+    sign = "-" if sec < 0 else ""
+    sec = abs(sec)
+    return f"{sign}{int(sec // 3600)}:{int(sec % 3600 // 60):02d}:{sec % 60:06.3f}"
+
+
+def parse_t(txt):
+    txt = txt.strip().replace(",", ".")
+    neg = txt.startswith("-")
+    sec = 0.0
+    for x in txt.lstrip("+-").split(":"):
+        sec = sec * 60 + float(x)
+    return -sec if neg else sec
+
+
+def scan_audio(paths):
+    out = []
+    for p in map(Path, paths):
+        if p.is_dir():
+            out += sorted(str(f) for f in p.rglob("*") if f.is_file() and f.suffix.lower() in sync.AUDIO_EXT and not f.name.startswith("."))
+        elif p.is_file() and p.suffix.lower() not in SKIP_EXT and not p.name.startswith("."):
+            out.append(str(p))
+    return out
+
+
+class SyncMap(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.mdur, self.rows, self.tmin, self.tmax = 0.0, [], 0.0, 1.0
+        self.setMinimumHeight(110)
+
+    def set_data(self, mdur, rows):
+        self.mdur, self.rows = mdur, rows
+        starts = [b[0] for _, bl in rows for b in bl]
+        ends = [b[1] for _, bl in rows for b in bl]
+        self.tmin, self.tmax = min([0.0] + starts), max([mdur] + ends)
+        self.setMinimumHeight(54 + 26 * (len(rows) + 1))
+        self.update()
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        left = 120
+        W, span = self.width() - left - 12, max(1e-6, self.tmax - self.tmin)
+        X = lambda t: left + (t - self.tmin) / span * W
+        y = 6
+        p.setPen(QColor(C["MUTED"]))
+        p.drawText(QRectF(0, y, left - 8, 20), Qt.AlignVCenter | Qt.AlignLeft, "Audio master")
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor("#2a4a85"))
+        p.drawRoundedRect(QRectF(X(0), y, max(2.0, X(self.mdur) - X(0)), 20), 3, 3)
+        for label, blocks in self.rows:
+            y += 26
+            p.setPen(QColor(C["TEXT"]))
+            p.drawText(QRectF(0, y, left - 8, 20), Qt.AlignVCenter | Qt.AlignLeft, p.fontMetrics().elidedText(label, Qt.ElideRight, left - 12))
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor("#1b1f29"))
+            p.drawRoundedRect(QRectF(left, y, W, 20), 3, 3)
+            for t0, t1, conf in blocks:
+                p.setBrush(QColor(CONF_COL[conf]))
+                p.drawRoundedRect(QRectF(X(t0), y + 1, max(2.0, X(t1) - X(t0)), 18), 2, 2)
+        y += 30
+        p.setPen(QColor(C["MUTED"]))
+        step = next((s for s in (10, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200) if span / s <= 8), 7200)
+        t = (self.tmin // step) * step
+        while t <= self.tmax:
+            if t >= self.tmin:
+                lab = f"{int(t // 3600)}:{int(t % 3600 // 60):02d}" if step >= 60 else f"{int(t)}s"
+                p.drawText(QRectF(X(t) - 30, y, 60, 16), Qt.AlignCenter, lab if t >= 0 else "-" + lab)
+            t += step
+
+
+class CameraCard(QFrame):
+    changed = Signal()
+    removed = Signal()
+
+    def __init__(self, cam):
+        super().__init__()
+        self.cam = cam
+        self.setObjectName("card")
+        self.setAcceptDrops(True)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(12, 10, 12, 10)
+        v.setSpacing(6)
+        top = QHBoxLayout()
+        self.name = QLineEdit(cam["name"])
+        self.name.textChanged.connect(self._name)
+        self.role = QComboBox()
+        self.role.addItems(["Handheld", "Static"])
+        self.role.setCurrentText(cam["role"])
+        self.role.currentTextChanged.connect(self._role)
+        top.addWidget(self.name, 1)
+        top.addWidget(self.role)
+        top.addWidget(btn("Remove", "del", self.removed.emit))
+        v.addLayout(top)
+        row = QHBoxLayout()
+        row.addWidget(btn("Add Clips", slot=self.pick_files))
+        row.addWidget(btn("Add Folder", slot=self.pick_dir))
+        row.addStretch()
+        self.count = lbl("", "muted")
+        row.addWidget(self.count)
+        v.addLayout(row)
+        self.list = QListWidget()
+        self.list.setFixedHeight(66)
+        self.list.keyPressEvent = self._key
+        v.addWidget(self.list)
+        self.refresh()
+
+    def _name(self, t):
+        self.cam["name"] = t
+        self.changed.emit()
+
+    def _role(self, t):
+        self.cam["role"] = t
+        self.changed.emit()
+
+    def refresh(self):
+        self.list.clear()
+        for p in self.cam["clips"]:
+            it = QListWidgetItem(Path(p).name)
+            it.setData(Qt.UserRole, p)
+            it.setToolTip(p)
+            self.list.addItem(it)
+        self.count.setText(f"{len(self.cam['clips'])} clips")
+
+    def add(self, paths):
+        have = set(self.cam["clips"])
+        found, _ = scan_paths(paths)
+        self.cam["clips"] += [f for f in found if f not in have]
+        self.refresh()
+        self.changed.emit()
+
+    def pick_files(self):
+        fs, _ = QFileDialog.getOpenFileNames(self, "Choose clips", "", "All files (*)")
+        self.add(fs)
+
+    def pick_dir(self):
+        d = QFileDialog.getExistingDirectory(self, "Choose a folder")
+        if d:
+            self.add([d])
+
+    def _key(self, e):
+        if e.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+            gone = {i.data(Qt.UserRole) for i in self.list.selectedItems()}
+            self.cam["clips"] = [c for c in self.cam["clips"] if c not in gone]
+            self.refresh()
+            self.changed.emit()
+        else:
+            QListWidget.keyPressEvent(self.list, e)
+
+    def dragEnterEvent(self, e):
+        e.acceptProposedAction()
+
+    def dropEvent(self, e):
+        self.add([u.toLocalFile() for u in e.mimeData().urls()])
+
+
+class SyncWorker(QThread):
+    progress = Signal(str, float)
+    done = Signal(object, object)
+    failed = Signal(str)
+
+    def __init__(self, masters, clips):
+        super().__init__()
+        self.masters, self.clips, self._stop = masters, clips, False
+
+    def cancel(self):
+        self._stop = True
+
+    def run(self):
+        try:
+            info, res = sync.run_sync(self.masters, self.clips, lambda s, f: self.progress.emit(s, f), lambda: self._stop)
+            self.done.emit(info, res)
+        except InterruptedError:
+            self.failed.emit("Cancelled")
+        except Exception as e:
+            self.failed.emit(str(e))
+
+
+class MulticamPage(QWidget):
+    back = Signal()
+
+    def __init__(self, store):
+        super().__init__()
+        self.store, self.p, self.worker, self._paths = store, None, None, []
+        v = QVBoxLayout(self)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(0)
+        head = QFrame()
+        head.setObjectName("head")
+        hh = QHBoxLayout(head)
+        hh.setContentsMargins(20, 10, 20, 10)
+        hh.addWidget(btn("←  Projects", "link", self.back.emit))
+        self.title = lbl("", "h2")
+        hh.addWidget(self.title)
+        hh.addStretch()
+        self.b_exp = btn("Export Sync XML", slot=self.export)
+        self.b_sync = btn("Sync Cameras", "primary", self.toggle_sync)
+        hh.addWidget(self.b_exp)
+        hh.addWidget(self.b_sync)
+        v.addWidget(head)
+        body = QHBoxLayout()
+        body.setSpacing(0)
+        v.addLayout(body, 1)
+
+        left = QFrame()
+        left.setObjectName("leftpanel")
+        left.setFixedWidth(430)
+        lv = QVBoxLayout(left)
+        lv.setContentsMargins(16, 14, 16, 14)
+        mh = QHBoxLayout()
+        mh.addWidget(lbl("AUDIO MASTER", "section"))
+        mh.addStretch()
+        mh.addWidget(btn("Add Audio", slot=self.pick_master))
+        mh.addWidget(btn("Add Folder", slot=self.pick_master_dir))
+        lv.addLayout(mh)
+        self.m_list = QListWidget()
+        self.m_list.setFixedHeight(84)
+        self.m_list.keyPressEvent = self._mkey
+        lv.addWidget(self.m_list)
+        lv.addWidget(lbl("The recording from your mixer. Every camera is aligned to it. Select a file and press Delete to remove it.", "muted", True))
+        lv.addSpacing(8)
+        ch = QHBoxLayout()
+        ch.addWidget(lbl("CAMERAS", "section"))
+        ch.addStretch()
+        ch.addWidget(btn("+  Add Camera", slot=self.add_cam))
+        lv.addLayout(ch)
+        sc = QScrollArea()
+        sc.setWidgetResizable(True)
+        cw = QWidget()
+        self.cams_l = QVBoxLayout(cw)
+        self.cams_l.setAlignment(Qt.AlignTop)
+        self.cams_l.setContentsMargins(0, 0, 6, 0)
+        sc.setWidget(cw)
+        lv.addWidget(sc, 1)
+        body.addWidget(left)
+
+        right = QWidget()
+        rv = QVBoxLayout(right)
+        rv.setContentsMargins(22, 16, 22, 12)
+        top = QHBoxLayout()
+        top.addWidget(lbl("SYNC MAP", "section"))
+        top.addStretch()
+        self.m_sel = QComboBox()
+        self.m_sel.currentIndexChanged.connect(lambda _: self.refresh_map())
+        top.addWidget(self.m_sel)
+        rv.addLayout(top)
+        mc = QFrame()
+        mc.setObjectName("card")
+        mcv = QVBoxLayout(mc)
+        self.map = SyncMap()
+        mcv.addWidget(self.map)
+        rv.addWidget(mc)
+        self.summary = lbl("Add your master audio and camera clips, then press Sync Cameras.", "muted", True)
+        rv.addWidget(self.summary)
+        rv.addWidget(lbl("CLIPS", "section"))
+        self.table = QTableWidget(0, 7)
+        self.table.setHorizontalHeaderLabels(["Camera", "Clip", "Master", "Start in master", "Duration", "Drift", "Confidence"])
+        self.table.verticalHeader().hide()
+        self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self.table.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed)
+        hdr = self.table.horizontalHeader()
+        hdr.setSectionResizeMode(QHeaderView.ResizeToContents)
+        hdr.setSectionResizeMode(1, QHeaderView.Stretch)
+        self.table.itemChanged.connect(self.on_edit)
+        rv.addWidget(self.table, 1)
+        self.pbar = QProgressBar()
+        self.pbar.setRange(0, 1000)
+        self.pbar.setTextVisible(False)
+        self.pbar.hide()
+        rv.addWidget(self.pbar)
+        self.status = lbl("", "muted")
+        rv.addWidget(self.status)
+        body.addWidget(right, 1)
+
+    # --- loading
+    def load(self, p):
+        self.p = p
+        self.title.setText(p["name"])
+        self.status.setText("")
+        self.refresh_masters()
+        self.rebuild_cams()
+        self.refresh_results()
+
+    def refresh_masters(self):
+        self.m_list.clear()
+        for m in self.p["masters"]:
+            it = QListWidgetItem(Path(m).name)
+            it.setData(Qt.UserRole, m)
+            it.setToolTip(m)
+            self.m_list.addItem(it)
+
+    def rebuild_cams(self):
+        while self.cams_l.count():
+            w = self.cams_l.takeAt(0).widget()
+            if w:
+                w.deleteLater()
+        for cam in self.p["cams"]:
+            c = CameraCard(cam)
+            c.changed.connect(self.cams_changed)
+            c.removed.connect(lambda cam=cam: self.remove_cam(cam))
+            self.cams_l.addWidget(c)
+
+    def cams_changed(self):
+        self.store.save()
+        self.refresh_results()
+
+    def add_cam(self):
+        n = len(self.p["cams"]) + 1
+        self.p["cams"].append(dict(name=f"Camera {n}", role="Static", clips=[]))
+        self.store.save()
+        self.rebuild_cams()
+        self.refresh_results()
+
+    def remove_cam(self, cam):
+        self.p["cams"].remove(cam)
+        self.store.save()
+        self.rebuild_cams()
+        self.refresh_results()
+
+    # --- masters
+    def pick_master(self):
+        fs, _ = QFileDialog.getOpenFileNames(self, "Choose master audio", "", "All files (*)")
+        self.add_masters(fs)
+
+    def pick_master_dir(self):
+        d = QFileDialog.getExistingDirectory(self, "Choose a folder with the recorder files")
+        if d:
+            self.add_masters([d])
+
+    def add_masters(self, paths):
+        have = set(self.p["masters"])
+        self.p["masters"] += [f for f in scan_audio(paths) if f not in have]
+        self.store.save()
+        self.refresh_masters()
+
+    def _mkey(self, e):
+        if e.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+            gone = {i.data(Qt.UserRole) for i in self.m_list.selectedItems()}
+            self.p["masters"] = [m for m in self.p["masters"] if m not in gone]
+            self.store.save()
+            self.refresh_masters()
+        else:
+            QListWidget.keyPressEvent(self.m_list, e)
+
+    # --- sync
+    def toggle_sync(self):
+        if self.worker and self.worker.isRunning():
+            self.worker.cancel()
+            return
+        clips = list(dict.fromkeys(c for cam in self.p["cams"] for c in cam["clips"]))
+        if not self.p["masters"]:
+            self.status.setText("Add at least one master audio file first.")
+            return
+        if not clips:
+            self.status.setText("Add some camera clips first.")
+            return
+        self.worker = SyncWorker(list(self.p["masters"]), clips)
+        self.worker.progress.connect(self.on_progress)
+        self.worker.done.connect(self.on_done)
+        self.worker.failed.connect(self.on_failed)
+        self.b_sync.setText("Cancel")
+        self.pbar.show()
+        self.worker.start()
+
+    def on_progress(self, text, f):
+        self.status.setText(text)
+        self.pbar.setValue(int(f * 1000))
+
+    def _finish(self):
+        self.b_sync.setText("Sync Cameras")
+        self.pbar.hide()
+
+    def on_done(self, info, res):
+        self._finish()
+        self.p["sync"] = dict(masters=info, clips=res, when=datetime.now().isoformat(timespec="seconds"))
+        self.store.save()
+        self.refresh_results()
+        s = self.summary.text()
+        self.status.setText("Sync finished.")
+
+    def on_failed(self, msg):
+        self._finish()
+        self.status.setText("Sync stopped: " + msg)
+
+    # --- results
+    def refresh_results(self):
+        s = self.p.get("sync")
+        rows = [(cam, path) for cam in self.p["cams"] for path in cam["clips"]]
+        self._paths = [p for _, p in rows]
+        self.table.blockSignals(True)
+        self.table.setRowCount(len(rows))
+        counts = dict(high=0, medium=0, low=0, fail=0)
+        for r, (cam, path) in enumerate(rows):
+            res = s["clips"].get(path) if s else None
+            cells = [cam["name"], Path(path).name, "", "", "", "", "Not synced yet"]
+            col = C["MUTED"]
+            if res:
+                counts[res["conf"]] += 1
+                ok = res["conf"] != "fail"
+                cells[2] = Path(s["masters"][res["master"]]["path"]).name if ok else "–"
+                cells[3] = fmt_t(res["offset"]) if ok else "–"
+                cells[4] = f"{int(res['dur'] // 60)}:{res['dur'] % 60:04.1f}"
+                cells[5] = f"{res['drift_ppm']:+.0f} ppm" if res["n"] >= 3 and ok else "–"
+                cells[6] = CONF_NAME[res["conf"]] + (" (manual)" if res.get("manual") else "") + (f" · {res['error']}" if res.get("error") else "")
+                col = CONF_COL[res["conf"]]
+            for c, t in enumerate(cells):
+                it = QTableWidgetItem(t)
+                if c == 6:
+                    it.setForeground(QColor(col))
+                if c != 3 or not res:
+                    it.setFlags(it.flags() & ~Qt.ItemIsEditable)
+                self.table.setItem(r, c, it)
+        self.table.blockSignals(False)
+        self.b_exp.setEnabled(bool(s))
+        self.m_sel.blockSignals(True)
+        self.m_sel.clear()
+        if s:
+            self.m_sel.addItems([Path(m["path"]).name for m in s["masters"]])
+        self.m_sel.setVisible(bool(s) and len(s["masters"]) > 1)
+        self.m_sel.blockSignals(False)
+        if s:
+            n = sum(counts.values())
+            self.summary.setText(f"{counts['high'] + counts['medium']} of {n} clips synced  ·  {counts['low']} need a check  ·  {counts['fail']} failed.  "
+                                 "Double-click a Start value to correct it by hand (seconds or h:mm:ss.mmm).")
+        self.refresh_map()
+
+    def refresh_map(self):
+        s = self.p.get("sync")
+        if not s:
+            self.map.set_data(0.0, [(c["name"], []) for c in self.p["cams"]])
+            return
+        mi = max(0, self.m_sel.currentIndex())
+        rows = []
+        for cam in self.p["cams"]:
+            bl = []
+            for path in cam["clips"]:
+                r = s["clips"].get(path)
+                if r and r["conf"] != "fail" and r["master"] == mi:
+                    bl.append((r["offset"], r["offset"] + r["dur"], r["conf"]))
+            rows.append((cam["name"], bl))
+        self.map.set_data(s["masters"][mi]["duration"], rows)
+
+    def on_edit(self, item):
+        if item.column() != 3 or not self.p.get("sync"):
+            return
+        path = self._paths[item.row()]
+        try:
+            val = parse_t(item.text())
+        except ValueError:
+            self.refresh_results()
+            return
+        r = self.p["sync"]["clips"][path]
+        r.update(offset=val, manual=True, conf="high", master=r.get("master", 0), n=max(r.get("n", 0), 1))
+        r.pop("error", None)
+        self.store.save()
+        self.refresh_results()
+
+    def export(self):
+        s = self.p.get("sync")
+        if not s:
+            return
+        d = str(Path(s["masters"][0]["path"]).parent / f"{self.p['name']} - sync.xml")
+        out, _ = QFileDialog.getSaveFileName(self, "Save sync XML", d, "XML (*.xml)")
+        if not out:
+            return
+        try:
+            n = sync.export_sync_xml(s["masters"], self.p["cams"], s["clips"], out, self.p["name"])
+            self.status.setText(f"Saved {n} sequence(s) to {out}. In Premiere: File > Import.")
+        except Exception as e:
+            self.status.setText(f"Export failed: {e}")
+
+
 # ---------------------------------------------------------------- main window
 
 class Main(QMainWindow):
@@ -1154,12 +1826,14 @@ class Main(QMainWindow):
 
         self.dash, self.proj = Dashboard(), ProjectPage(self.store)
         self.anl, self.res, self.queue = AnalyzingPage(), ResultsPage(self.store), QueuePage()
-        for w in (self.dash, self.proj, self.anl, self.res, self.queue):
+        self.mc = MulticamPage(self.store)
+        for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc):
             self.stack.addWidget(w)
         self.dash.new_project.connect(self.new_project)
         self.dash.open_project.connect(self.open_project)
         self.dash.delete_project.connect(self.delete_project)
         self.proj.back.connect(lambda: self.go("dash"))
+        self.mc.back.connect(lambda: self.go("dash"))
         self.proj.analyze.connect(self.start_analysis)
         self.proj.open_history.connect(self.show_history)
         self.anl.back.connect(lambda: self.show_page(self.proj))
@@ -1173,7 +1847,7 @@ class Main(QMainWindow):
     def show_page(self, w):
         self.stack.setCurrentWidget(w)
         for k, b in self.nav.items():
-            b.setProperty("active", (k == "dash" and w in (self.dash, self.proj, self.res)) or (k == "queue" and w in (self.queue, self.anl)))
+            b.setProperty("active", (k == "dash" and w in (self.dash, self.proj, self.res, self.mc)) or (k == "queue" and w in (self.queue, self.anl)))
             repolish(b)
 
     def go(self, where):
@@ -1187,10 +1861,14 @@ class Main(QMainWindow):
     def new_project(self):
         d = NewProjectDialog(self)
         if d.exec() and d.name():
-            self.open_project(self.store.new(d.name())["id"])
+            self.open_project(self.store.new(d.name(), d.kind())["id"])
 
     def open_project(self, pid):
         p = next(x for x in self.store.projects if x["id"] == pid)
+        if p.get("type") == "multicam":
+            self.mc.load(p)
+            self.show_page(self.mc)
+            return
         self.proj.load(p)
         self.show_page(self.proj)
 
