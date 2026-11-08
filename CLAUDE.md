@@ -80,6 +80,11 @@ bottleneck, decoding is: explain this if asked again.
   recorder and pile up at one position. A weak clip is accepted only when every window agrees (conf high), otherwise
   "Failed: no usable sound". "Medium" needs 2 agreeing windows (one window out of several is "low").
   Future idea: place silent clips by timecode / file order relative to synced neighbours (like Syncaila).
+- "A camera cannot film two things at once": in auto_cameras the surest clips are placed first; a clip that overlaps an
+  already placed clip of the same camera becomes 'low' and goes to "· check sync", unless it is itself 'high' (then it
+  is really a second camera). This stopped short 'Medium' gimbal clips piling up into RS CAM 2..18.
+- Import XML skips files that are not on this computer (with a warning) instead of refusing the whole timeline.
+- The Sync Map has a colour legend right under it (High / Medium / Check / Failed, auto-edit row = cameras).
 - A clip's duration comes from the real sound length when the container duration disagrees (some MP4s inflate it).
 - xmeml must declare `<pixelaspectratio>square</pixelaspectratio>` or Premiere applies 109.4 % width scale.
 - Sony sidecar files (M01.XML etc.) must be skipped when adding clips.

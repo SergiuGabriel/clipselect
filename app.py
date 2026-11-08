@@ -1763,8 +1763,23 @@ class MulticamPage(QWidget):
         sc = QScrollArea()
         sc.setWidgetResizable(True)
         self.map = SyncMap()
-        sc.setWidget(self.map)
+        holder = QWidget()
+        hv_ = QVBoxLayout(holder)
+        hv_.setContentsMargins(0, 0, 0, 0)
+        hv_.addWidget(self.map)
+        sc.setWidget(holder)
         t1v.addWidget(sc, 1)
+        dot = lambda c: f'<span style="color:{c}">●</span>'
+        legend = QLabel(
+            f'{dot(CONF_COL["high"])} <b>High</b> sure &nbsp;&nbsp; {dot(CONF_COL["medium"])} <b>Medium</b> very likely right &nbsp;&nbsp; '
+            f'{dot(CONF_COL["low"])} <b>Check</b> position unsure: on the "check sync" track, not used in the auto edit &nbsp;&nbsp; '
+            f'{dot(CONF_COL["fail"])} <b>Failed</b> not placed (see the Clips tab) &nbsp;&nbsp;·&nbsp;&nbsp; '
+            f'<b>Auto edit</b> row: one colour per camera')
+        legend.setWordWrap(True)
+        legend.setStyleSheet(f"color:{C['MUTED']};font-size:11px")
+        hv_.addSpacing(6)
+        hv_.addWidget(legend)
+        hv_.addStretch()
         self.tabs.addTab(t1, "Sync Map")
         self.cam_t = QTableWidget(0, 5)
         self.cam_t.setHorizontalHeaderLabels(["Camera (double-click to rename)", "Role", "Clips", "Footage", "In the edit"])
@@ -1987,8 +2002,11 @@ class MulticamPage(QWidget):
             p["cams"], p["source"] = r["cams"], "xml"
             if here:
                 self.refresh_files()
+                miss = r.get("missing") or []
+                warn = (f"  {len(miss)} file(s) from the XML were not found and were skipped, e.g. {miss[0]}"
+                        if miss else "")
                 self.status.setText(f"XML imported: {len(r['results'])} clips on {len(r['cams'])} cameras. "
-                                    "Press Auto Edit to build the edit, or Export XML.")
+                                    "Press Auto Edit to build the edit, or Export XML." + warn)
         elif "results" in r:   # sync finished
             p["infos"] = r["infos"]
             p["sync"] = dict(masters=r["masters"], clips=r["results"], note=r["note"], when=datetime.now().isoformat(timespec="seconds"))

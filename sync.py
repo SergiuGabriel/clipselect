@@ -526,8 +526,9 @@ def classify(files, infos):
 
 
 def auto_cameras(files, infos, results, old_cams=None):
-    """Group synced video clips into cameras: same card folder + same format fingerprint + same file-name pattern.
-    Clips of one group that overlap in time cannot be one camera, so they are split into separate cameras.
+    """Group synced video clips into cameras: same card folder + same model + same file-name pattern.
+    Overlapping clips of one group: if both are sure they are two cameras (separate tracks), otherwise the less sure
+    one is wrong and goes to the '· check sync' track (its result becomes 'low').
     Names/roles the user edited before are kept for the clips they cover."""
     groups, unsure = {}, {}
     for f in files:
@@ -543,20 +544,27 @@ def auto_cameras(files, infos, results, old_cams=None):
         key = (f["group"], i["model"], re.sub(r"\d+", "#", Path(p).stem))
         groups.setdefault(key, []).append(p)
     cams = []
+    rank = {"high": 2, "medium": 1, "low": 0}
     for key, paths in sorted(groups.items(), key=lambda kv: kv[0]):
-        lanes = []   # [(master, end), [paths]]
-        for p in sorted(paths, key=lambda q: (results[q]["master"], results[q]["offset"])):
+        # "A camera cannot film two things at once": the surest clips are placed first; a clip that overlaps an already
+        # placed clip of the same camera is wrong unless it is itself sure (then it really is a second camera)
+        lanes = []
+        for p in sorted(paths, key=lambda q: (-(3 if results[q].get("manual") else rank[results[q]["conf"]]), -results[q].get("z", 0))):
             r = results[p]
-            for lane in lanes:
-                if lane[0][0] != r["master"] or lane[0][1] <= r["offset"] + 0.5:
-                    lane[0] = (r["master"], r["offset"] + r["dur"])
-                    lane[1].append(p)
-                    break
+            m, a, b = r["master"], r["offset"], r["offset"] + r["dur"]
+            lane = next((L for L in lanes if all(mm != m or e <= a + 0.5 or s0 >= b - 0.5 for mm, s0, e, _ in L)), None)
+            if lane is not None:
+                lane.append((m, a, b, p))
+            elif r["conf"] == "high" or r.get("manual") or not lanes:
+                lanes.append([(m, a, b, p)])
             else:
-                lanes.append([(r["master"], r["offset"] + r["dur"]), [p]])
+                r["conf"] = "low"
+                r["error"] = "overlaps another clip of the same camera (position unsure)"
+                unsure.setdefault(key[0] or "Camera", []).append(p)
         for k, lane in enumerate(lanes):
             base = key[0] or "Camera"
-            cams.append(dict(name=base + (f" {k + 1}" if len(lanes) > 1 else ""), role="Handheld", clips=lane[1], user=False))
+            cams.append(dict(name=base + (f" {k + 1}" if len(lanes) > 1 else ""), role="Handheld",
+                             clips=[x[3] for x in sorted(lane)], user=False))
     for g, paths in sorted(unsure.items()):
         cams.append(dict(name=f"{g} · check sync", role="Handheld", clips=sorted(paths, key=lambda q: results[q]["offset"]),
                          user=False, check=True))

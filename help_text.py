@@ -47,6 +47,10 @@ merge mult mai repede.</p>
 cu fiecare cameră pe pista ei și apasă <b>Import XML</b>. Aplicația preia pozițiile exact cum sunt (fără să mai sincronizeze),
 fiecare pistă video devine o cameră, iar fișierele doar-audio devin recorderul. Apoi dai <b>Auto Edit</b> și <b>Export XML</b>,
 ca de obicei.</p>
+<p><b>Culorile de pe hartă:</b> verde = <b>High</b> (sigur), galben = <b>Medium</b> (foarte probabil corect), portocaliu =
+<b>Check</b> (poziție nesigură), roșu = <b>Failed</b> (nu a putut fi pus). Pe rândul „Auto edit”, fiecare culoare e o cameră.
+O cameră nu poate filma două lucruri deodată: dacă două clipuri ale aceleiași camere se suprapun, cel mai puțin sigur
+ajunge pe pista „check sync”.</p>
 <p><b>Pista „· check sync":</b> clipurile a căror poziție nu e sigură sunt puse toate pe o singură pistă separată și nu sunt
 folosite în montajul automat. Le verifici în tab-ul Clips și le corectezi cu dublu click pe Start.</p>
 <p><b>Export XML</b> merge și în Premiere Pro (File &gt; Import), și în DaVinci Resolve (File &gt; Import &gt; Timeline).</p>
@@ -161,6 +165,9 @@ is much faster.</p>
 with every camera on its own track and press <b>Import XML</b>. The app takes the positions exactly as they are (it does not
 sync again), every video track becomes a camera and audio-only files become the recorder. Then press <b>Auto Edit</b> and
 <b>Export XML</b> as usual.</p>
+<p><b>Map colours:</b> green = <b>High</b> (sure), yellow = <b>Medium</b> (very likely right), orange = <b>Check</b>
+(position unsure), red = <b>Failed</b> (could not be placed). On the "Auto edit" row every colour is a camera. A camera cannot
+film two things at once: when two clips of the same camera overlap, the less sure one goes to the "check sync" track.</p>
 <p><b>The "· check sync" track:</b> clips whose position is not certain all go on one separate track and are not used in the
 auto edit. Check them in the Clips tab and fix them by double-clicking Start.</p>
 <p><b>Export XML</b> works in Premiere Pro (File &gt; Import) and in DaVinci Resolve (File &gt; Import &gt; Timeline).</p>

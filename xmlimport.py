@@ -94,8 +94,13 @@ def build(xml_path, progress=None, cancel=None):
                 clip_zero[p], clip_track[p] = z, t
     allp = list(clip_zero) + [p for p, _ in x["audio"]]
     missing = [p for p in allp if not Path(p).exists()]
-    if missing:
-        raise ValueError(f"{len(missing)} file(s) from the XML are not on this computer, e.g. {missing[0]}")
+    if missing:   # skip what is not on this computer instead of refusing the whole timeline
+        allp = [p for p in allp if p not in missing]
+        clip_zero = {p: z for p, z in clip_zero.items() if p not in missing}
+        x["audio"] = [(p, z) for p, z in x["audio"] if p not in missing]
+        x["video"] = [[(p, z) for p, z in row if p not in missing] for row in x["video"]]
+        if not clip_zero:
+            raise ValueError(f"None of the video files in the XML were found on this computer, e.g. {missing[0]}")
     for i, p in enumerate(allp):
         if cancel and cancel():
             raise InterruptedError("Cancelled")
@@ -127,4 +132,4 @@ def build(xml_path, progress=None, cancel=None):
             cams.append(dict(name=f"V{t + 1} · {g}", role="Handheld", clips=clips, user=False))
     if progress:
         progress("XML imported", 1.0)
-    return dict(files=files, infos=infos, masters=masters, results=results, cams=cams)
+    return dict(files=files, infos=infos, masters=masters, results=results, cams=cams, missing=missing)
