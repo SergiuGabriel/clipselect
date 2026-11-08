@@ -82,27 +82,36 @@ class MasterIndex:
                 break
             s += self.step
 
-    def correlate(self, t):
-        """Returns (lag_samples, z, ratio): best position of window `t` in the master."""
+    def correlate(self, t, lo=None, hi=None):
+        """Returns (lag_samples, z, ratio): best position of window `t` in the master.
+        lo/hi (samples) restrict the search to a window around a predicted position (much faster)."""
         wn = len(t)
+        lo = -10**12 if lo is None else lo
+        hi = 10**12 if hi is None else hi
         T = np.fft.rfft(t, F)
         T = (T / (np.abs(T) + 1e-9)).astype(np.complex64)
         peaks, s1, s2, cnt = [], 0.0, 0.0, 0
         guard = int(0.5 * SR)
         for s, X in self.blocks:
             kmax = min(self.step, self.n - s - wn)
-            if kmax < 0:
+            if kmax < 0 or s + kmax < lo or s > hi:
                 continue
             v = np.fft.irfft(X * np.conj(T), F)[:kmax + 1]
+            k0 = max(0, lo - s)
+            k1 = min(kmax, hi - s)
+            if k1 < k0:
+                continue
+            v = v[k0:k1 + 1]
+            s = s + k0
             v64 = v.astype(np.float64)
             s1 += v64.sum()
             s2 += (v64 * v64).sum()
             cnt += len(v)
             k = int(np.argmax(v))
             peaks.append((float(v[k]), s + k))
-            lo, hi = max(0, k - guard), min(len(v), k + guard)
+            g0, g1 = max(0, k - guard), min(len(v), k + guard)
             w = v.copy()
-            w[lo:hi] = -1
+            w[g0:g1] = -1
             k2 = int(np.argmax(w))
             if w[k2] > -1:
                 peaks.append((float(w[k2]), s + k2))
@@ -155,27 +164,44 @@ def _decide(cands):
     return dict(conf=conf, z=zm, n=n, k=len(cands), offset=float(o0), drift_ppm=float(d * 1e6))
 
 
-def sync_clip(indexes, x):
+def sync_clip(indexes, x, preds=None, win=90.0):
+    """preds: {master_index: predicted offset (s)} -> only those masters, only +-win seconds around the prediction."""
     x = _prep(x)
     starts, wn = _pick_windows(x)
     best = None
     for mi, idx in enumerate(indexes):
+        if preds is not None and mi not in preds:
+            continue
         cands = []
         for st in starts:
-            lag, z, ratio = idx.correlate(x[st:st + wn])
+            if preds is not None:
+                c = (preds[mi] * SR) + st
+                lag, z, ratio = idx.correlate(x[st:st + wn], int(c - win * SR), int(c + win * SR))
+            else:
+                lag, z, ratio = idx.correlate(x[st:st + wn])
             cands.append((st / SR, lag / SR - st / SR, z, ratio))
         r = _decide(cands)
         r["master"] = mi
         rank = ({"fail": 0, "low": 1, "medium": 2, "high": 3}[r["conf"]], r["n"], r["z"])
         if best is None or rank > best[0]:
             best = (rank, r)
+    if best is None:
+        return dict(conf="fail", z=0.0, n=0, k=0, offset=0.0, drift_ppm=0.0, master=0, dur=len(x) / SR)
     r = best[1]
     r["dur"] = len(x) / SR
     return r
 
 
-def run_sync(masters, clips, progress=None, cancel=None):
-    """masters, clips: lists of paths. Returns (masters_info, {clip_path: result})."""
+def run_sync(masters, clips, progress=None, cancel=None, clocks=None, groups=None, jobs=2):
+    """masters, clips: lists of paths. clocks: {path: time-of-day seconds or None} (timecode / BWF / file dates),
+    groups: {clip: camera folder}. Returns (masters_info, {clip_path: result}).
+
+    The first clip of every camera folder is searched in the whole master. Its result teaches the difference between
+    that camera's clock and the recorder's clock; the next clips of the same camera are then searched only +-90 s around
+    the predicted position (falls back to a full search when that fails)."""
+    from concurrent.futures import ThreadPoolExecutor
+    clocks, groups = clocks or {}, groups or {}
+
     def chk():
         if cancel and cancel():
             raise InterruptedError("Cancelled")
@@ -184,28 +210,74 @@ def run_sync(masters, clips, progress=None, cancel=None):
     for i, m in enumerate(masters):
         chk()
         if progress:
-            progress(f"Reading master {i + 1} of {len(masters)}", 0.0)
+            progress(f"Step 1 · reading recorder file {i + 1} of {len(masters)}", 0.02 * i / max(1, len(masters)))
         x = audio_pcm(m)
-        info.append(dict(path=m, duration=len(x) / SR, onsets=onsets(x)))
+        info.append(dict(path=m, duration=len(x) / SR, onsets=onsets(x), clock=clocks.get(m)))
         indexes.append(MasterIndex(x))
-    results = {}
-    for i, c in enumerate(clips):
-        chk()
-        if progress:
-            progress(f"Syncing {Path(c).name}", i / max(1, len(clips)))
+    order = sorted(clips, key=lambda c: (groups.get(c, ""), clocks.get(c) if clocks.get(c) is not None else 1e12, c))
+    delta, results, full = {}, {}, 0
+
+    def load(c):
         try:
-            r = sync_clip(indexes, audio_pcm(c))
-            r["manual"] = False
+            return audio_pcm(c), None
         except Exception as e:
-            r = dict(conf="fail", z=0.0, n=0, k=0, offset=0.0, drift_ppm=0.0, master=0, dur=0.0, manual=False, error=str(e))
-        try:
-            r["dur"] = core.probe(c).duration or r["dur"]
-        except Exception:
-            pass
-        results[c] = r
+            return None, str(e)
+
+    with ThreadPoolExecutor(max(1, jobs)) as ex:
+        for i, (c, (x, err)) in enumerate(zip(order, ex.map(load, order))):
+            chk()
+            if progress:
+                progress(f"Step 1 · syncing audio: clip {i + 1} of {len(order)} ({Path(c).name})", 0.02 + 0.98 * i / max(1, len(order)))
+            if x is None:
+                results[c] = dict(conf="fail", z=0.0, n=0, k=0, offset=0.0, drift_ppm=0.0, master=0, dur=0.0, manual=False, error=err)
+                continue
+            g, ck, r = groups.get(c, ""), clocks.get(c), None
+            if g in delta and ck is not None:
+                preds = {}
+                for mi, m in enumerate(info):
+                    if m["clock"] is None:
+                        continue
+                    d = _tod_diff(ck, m["clock"]) - delta[g]
+                    if -120 <= d <= m["duration"] + 120:
+                        preds[mi] = d
+                if preds:
+                    r = sync_clip(indexes, x, preds)
+                    if r["conf"] not in ("high", "medium"):
+                        r = None
+            if r is None:
+                full += 1
+                r = sync_clip(indexes, x)
+            r["manual"] = False
+            if r["conf"] == "high" and ck is not None and info[r["master"]]["clock"] is not None:
+                delta[g] = _tod_diff(ck, info[r["master"]]["clock"]) - r["offset"]   # this camera's clock error
+            results[c] = r
     if progress:
-        progress("Done", 1.0)
+        progress(f"Step 1 · sync finished ({full} full searches, {len(order) - full} fast)", 1.0)
     return info, results
+
+
+def _tod_diff(a, b):
+    """a - b for time-of-day seconds, unwrapped across midnight (parties go past 00:00)."""
+    d = a - b
+    while d > 43200:
+        d -= 86400
+    while d < -43200:
+        d += 86400
+    return d
+
+
+def master_starts(info):
+    """Start of every recorder file on ONE common timeline (s). Uses the recorders' clocks when they make sense,
+    otherwise lays the files out one after another."""
+    if not info:
+        return []
+    starts, ok = [0.0], all(m.get("clock") is not None for m in info)
+    for k in range(1, len(info)):
+        prev = info[k - 1]
+        d = _tod_diff(info[k]["clock"], info[0]["clock"]) if ok else None
+        lo = starts[-1] + prev["duration"]
+        starts.append(d if d is not None and d >= lo - 1 else lo + 5.0)
+    return starts
 
 
 # ---------------- verification XML: master audio on A1/A2, one video track per camera, at synced positions -------------
@@ -305,12 +377,37 @@ def media_info(path):
         info["size"] = f"{mm.group(1)}x{mm.group(2)}" if mm else ""
         mm = re.search(r"([\d.]+)\s*fps", body)
         info["fps"] = round(float(mm.group(1)), 2) if mm else 0.0
+    info["clock"] = _clock(t, path, dur)
     for key in ("com.apple.quicktime.model", "product_name", "model", "device_model", "make", "company_name"):
         mm = re.search(rf"^\s*{re.escape(key)}\s*:\s*(.+)$", t, re.M)
         if mm and not mm.group(1).strip().lower().startswith("lavf"):
             info["model"] = mm.group(1).strip()
             break
     return info
+
+
+def _clock(t, path, dur):
+    """Best guess of the recording start as time of day (s): camera timecode, BWF time reference, creation time,
+    file date. Only used as a hint to narrow the audio search, never as the final sync."""
+    import datetime as _dt
+    import os as _os
+    m = re.search(r"^\s*timecode\s*:\s*(\d+):(\d+):(\d+)[:;.](\d+)", t, re.M)
+    if m:
+        return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + int(m.group(3))
+    m = re.search(r"^\s*time_reference\s*:\s*(\d+)", t, re.M)
+    r = re.search(r"Audio:.*?(\d+) Hz", t)
+    if m and r and int(m.group(1)) > 0:
+        return (int(m.group(1)) / int(r.group(1))) % 86400
+    m = re.search(r"^\s*creation_time\s*:\s*(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)", t, re.M)
+    if m:
+        utc = _dt.datetime.fromisoformat(m.group(1)).replace(tzinfo=_dt.timezone.utc)
+        lt = utc.astimezone()
+        return lt.hour * 3600 + lt.minute * 60 + lt.second
+    try:
+        lt = _dt.datetime.fromtimestamp(_os.path.getmtime(path) - dur)
+        return lt.hour * 3600 + lt.minute * 60 + lt.second
+    except Exception:
+        return None
 
 
 def classify(files, infos):

@@ -3,6 +3,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -22,6 +23,27 @@ VIDEO_EXT = {
 }
 
 _NOWIN = {"creationflags": 0x08000000} if os.name == "nt" else {}
+
+
+HWACCEL = True          # set by the app (Settings > Performance)
+_HW = None
+
+
+def decode_flags():
+    """Speed-ups for the analysis decode: skip the in-loop deblocking filter (invisible at 320x180) and, on a Mac,
+    use the hardware decoder when this FFmpeg build has it (FFmpeg falls back to software when a codec isn't supported)."""
+    global _HW
+    flags = ["-skip_loop_filter", "all"]
+    if HWACCEL and sys.platform == "darwin":
+        if _HW is None:
+            try:
+                out = subprocess.run([ffmpeg_exe(), "-hide_banner", "-hwaccels"], capture_output=True, text=True).stdout
+                _HW = "videotoolbox" in out
+            except Exception:
+                _HW = False
+        if _HW:
+            flags = ["-hwaccel", "videotoolbox"] + flags
+    return flags
 
 
 def ffmpeg_exe():
@@ -128,7 +150,7 @@ def _accel(sh, a, b):
 
 def analyze(path, progress=None, cancel=None):
     info = probe(path)
-    cmd = [ffmpeg_exe(), "-v", "error", "-nostdin", "-i", path, "-map", "0:v:0", "-an", "-sn", "-dn",
+    cmd = [ffmpeg_exe(), "-v", "error", "-nostdin", *decode_flags(), "-i", path, "-map", "0:v:0", "-an", "-sn", "-dn",
            "-vf", f"fps={SAMPLE_FPS},scale={AW}:{AH}:flags=fast_bilinear,format=gray",
            "-f", "rawvideo", "-"]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **_NOWIN)

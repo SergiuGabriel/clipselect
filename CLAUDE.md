@@ -19,8 +19,17 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
    + file-name pattern, overlapping clips split), `director.detect_role` sets Static/Handheld. `director.build` scores
    every camera on a 0.5 s grid (handheld judged against its own footage, moves penalised, static gets an activity
    bonus) and runs a Viterbi over (camera, shot length) with min/max shot, switch penalty (pace) and handheld/static
-   bias, then snaps cuts to onsets of the master audio. Export = per master an "Auto Edit" sequence (1 video track +
-   master audio) and a "Synced Cameras" sequence (one track per camera). Renaming a camera to an existing name merges them.
+   bias, then snaps cuts to onsets of the master audio. Max shot (up to 120 s) is applied after the DP by
+   interrupting long shots with the best other camera. "Static cameras only as backup" = -40 on static.
+   Two separate steps in the UI: **Sync** (fast, audio only) and **Auto Edit** (video analysis + director).
+   Sync uses clocks as hints (camera timecode, BWF time_reference of the recorder, creation time, file date): the first
+   clip of each camera folder is searched in the whole master, its result gives that camera's clock error, the next
+   clips are searched only +-90 s around the prediction (~18x faster), with fallback to a full search.
+   Export = ONE sequence (owner's wish): V1..Vn every camera on its own track (full clips, synced), top track = auto
+   edit, A1(/A2) = all recorder files on one common timeline (`sync.master_starts`), then one (disabled) audio track
+   per camera. Renaming a camera to an existing name merges them.
+   The owner's usual Premiere workflow for reference: Premiere audio sync, or timecode sync (TC set by hand on each
+   camera, not frame accurate) + camera labels + "Create Multi-Camera Source Sequence", then a manual audio re-sync.
    Video analyses of multicam projects live in `<project id>.analysis.json` next to projects.json (cached by size+mtime).
 
 ## Files
@@ -31,6 +40,12 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 - `director.py` — multicam auto director + XML export.
 - `make_icons.py` — builds icon.icns / icon.ico / icon.png from `icon_source.png` (run in CI before PyInstaller).
 - `.github/workflows/build.yml` — builds macOS DMGs (Apple Silicon + Intel) and a Windows folder with PyInstaller on every push.
+
+## UI style
+Premiere Pro look (owner's wish): neutral greys (#1d1d1d / #232323 / #2a2a2a), pill buttons (blue #1473e6 for the main
+action, outlined for the rest), dark inputs, slider values in blue. Settings > Performance shows CPU / RAM and has
+"Parallel jobs" and "Hardware video decoding (Mac)" (VideoToolbox when the bundled FFmpeg has it). RAM is not the
+bottleneck, decoding is: explain this if asked again.
 
 ## Rules learned the hard way
 - xmeml must declare `<pixelaspectratio>square</pixelaspectratio>` or Premiere applies 109.4 % width scale.
