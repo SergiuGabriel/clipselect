@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.1.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.2.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -50,6 +50,7 @@ linking to https://www.instagram.com/sergiugabrielcg/.
 - `sync.py` — media detection, audio sync engine, camera grouping, onsets.
 - `director.py` — multicam auto director + XML export.
 - `help_text.py` — Info / How to use page (HTML, Romanian + English).
+- `xmlimport.py` — import of an already synced FCP7 XML for Auto Edit.
 - `make_icons.py` — builds icon.icns / icon.ico / icon.png from `icon_source.png` (run in CI before PyInstaller).
 - `.github/workflows/build.yml` — builds macOS DMGs (Apple Silicon + Intel) and a Windows folder with PyInstaller on every push.
 
@@ -59,7 +60,27 @@ action, outlined for the rest), dark inputs, slider values in blue. Settings > P
 "Parallel jobs" and "Hardware video decoding (Mac)" (VideoToolbox when the bundled FFmpeg has it). RAM is not the
 bottleneck, decoding is: explain this if asked again.
 
+## Done in v2.2 (was planned)
+- "Export to Premiere" is now "Export XML" everywhere (the XML works in Premiere and DaVinci Resolve). If Resolve later
+  needs special handling, add a Premiere / DaVinci choice next to the button (like the Footage results page).
+- Import XML (xmlimport.py): an already synced FCP7 XML (Syncaila / Premiere / Resolve) -> every video track = a camera,
+  clip positions taken as they are, audio-only files = recorder (master "start" = timeline position, used by
+  sync.master_starts); without a recorder the timeline is the reference (no beat snapping).
+- Low-confidence ("Check") clips never split a camera into many tracks: they go to one "<group> · check sync" camera and
+  are not used by the director (a DJI Osmo project once exploded into 59 tracks).
+
 ## Rules learned the hard way
+- Audio for sync is read channel by channel and the LOUDEST single channel is used (never a downmix): dual-mono with one
+  empty or polarity-inverted channel, poly-WAVs and Sony MXF all work. Errors show FFmpeg's real message.
+  Files with several audio streams (Sony MXF) are read in ONE pass (one output file per stream), never once per
+  stream: 4K MXF files are huge and per-stream reading made Sync ~4x slower on disk.
+- Camera proxies are never footage: DJI .LRF, GoPro .LRV, Sony SUB/*S03.MP4 (they doubled every Osmo clip into two
+  identical cameras).
+- Clips without usable sound (gimbal cameras with the mic off: silence or hiss) used to stick to a loud click in the
+  recorder and pile up at one position. A weak clip is accepted only when every window agrees (conf high), otherwise
+  "Failed: no usable sound". "Medium" needs 2 agreeing windows (one window out of several is "low").
+  Future idea: place silent clips by timecode / file order relative to synced neighbours (like Syncaila).
+- A clip's duration comes from the real sound length when the container duration disagrees (some MP4s inflate it).
 - xmeml must declare `<pixelaspectratio>square</pixelaspectratio>` or Premiere applies 109.4 % width scale.
 - Sony sidecar files (M01.XML etc.) must be skipped when adding clips.
 - Keep FFmpeg bundled via imageio-ffmpeg (owner does not want to install anything).

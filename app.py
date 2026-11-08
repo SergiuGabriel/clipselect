@@ -21,9 +21,10 @@ from PySide6.QtWidgets import (QTextBrowser, QAbstractItemView, QApplication, QC
 import core
 import director
 import help_text
+import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v2.1.0"
+APP, VER = "MoneyMakingMachine", "v2.2.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 C = dict(BG="#1d1d1d", PANEL="#232323", CARD="#2a2a2a", BORDER="#3a3a3a", TEXT="#d6d6d6", MUTED="#8f8f8f",
          BLUE="#1473e6", HOT="#4b9cf5", GOOD="#4cc38a", FAIR="#e6b93a", POOR="#e5534b")   # Premiere Pro look
@@ -184,7 +185,16 @@ def icon_pix(kind, s=56):
 
 
 SKIP_EXT = {".xml", ".txt", ".json", ".bim", ".xmp", ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".csv", ".db", ".plist",
-            ".cpf", ".ppn", ".sif", ".smi", ".thm", ".bup", ".ifo", ".srt", ".ini", ".log", ".md", ".html", ".ds_store"}
+            ".cpf", ".ppn", ".sif", ".smi", ".thm", ".bup", ".ifo", ".srt", ".ini", ".log", ".md", ".html", ".ds_store",
+            ".lrf", ".lrv"}   # .LRF = DJI low-res proxy, .LRV = GoPro low-res proxy: same sound as the original -> duplicates
+
+
+def is_proxy(p):
+    """Camera proxies / previews that must never be treated as footage."""
+    p = Path(p)
+    if p.suffix.lower() in (".lrf", ".lrv"):
+        return True
+    return p.parent.name.upper() == "SUB" and p.stem.upper().endswith("S03")   # Sony proxy (M4ROOT/SUB/C0001S03.MP4)
 
 
 def scan_paths(paths):
@@ -194,9 +204,9 @@ def scan_paths(paths):
     for p in map(Path, paths):
         if p.is_dir():
             out += sorted(str(f) for f in p.rglob("*")
-                          if f.is_file() and f.suffix.lower() in core.VIDEO_EXT and not f.name.startswith("."))
+                          if f.is_file() and f.suffix.lower() in core.VIDEO_EXT and not f.name.startswith(".") and not is_proxy(f))
         elif p.is_file():
-            if p.suffix.lower() in SKIP_EXT or p.name.startswith("."):
+            if p.suffix.lower() in SKIP_EXT or p.name.startswith(".") or is_proxy(p):
                 skipped += 1
             else:
                 out.append(str(p))  # picked manually -> accepted whatever the extension
@@ -1524,10 +1534,10 @@ def scan_media(paths):
     for p in map(Path, paths):
         if p.is_dir():
             for f in sorted(p.rglob("*")):
-                if f.is_file() and f.suffix.lower() in MEDIA_EXT and not f.name.startswith("."):
+                if f.is_file() and f.suffix.lower() in MEDIA_EXT and not f.name.startswith(".") and not is_proxy(f):
                     rel = f.relative_to(p).parts
                     out.append(dict(path=str(f), group=rel[0] if len(rel) > 1 else p.name))
-        elif p.is_file() and p.suffix.lower() not in SKIP_EXT and not p.name.startswith("."):
+        elif p.is_file() and p.suffix.lower() not in SKIP_EXT and not p.name.startswith(".") and not is_proxy(p):
             out.append(dict(path=str(p), group=p.parent.name))
     return out
 
@@ -1613,6 +1623,9 @@ class MCWorker(QThread):
 
     def run(self):
         try:
+            if self.mode == "xml":
+                self.done.emit(xmlimport.build(self.todo, lambda s, f: self.progress.emit(s, f), lambda: self._stop))
+                return
             self.done.emit(self._sync() if self.mode == "sync" else self._analyze())
         except InterruptedError:
             self.failed.emit("Cancelled")
@@ -1689,9 +1702,12 @@ class MulticamPage(QWidget):
         self.title = lbl("", "h2")
         hh.addWidget(self.title)
         hh.addStretch()
-        self.b_exp = btn("Export to Premiere", slot=self.export)
+        self.b_exp = btn("Export XML", slot=self.export)
+        self.b_xml = btn("Import XML", slot=self.import_xml)
+        self.b_xml.setToolTip("Use a timeline that is already synced in Syncaila, Premiere Pro or DaVinci Resolve (FCP7 XML).")
         self.b_auto = btn("Auto Edit", slot=self.run_auto)
         self.b_run = btn("Sync", "primary", self.toggle_run)
+        hh.addWidget(self.b_xml)
         hh.addWidget(self.b_exp)
         hh.addWidget(self.b_auto)
         hh.addWidget(self.b_run)
@@ -1820,7 +1836,7 @@ class MulticamPage(QWidget):
         self.stats = lbl("Press Auto Edit to build the edit.", "muted", True)
         rv.addWidget(self.stats)
         rv.addStretch()
-        rv.addWidget(btn("Export to Premiere", "primary", self.export))
+        rv.addWidget(btn("Export XML", "primary", self.export))
         body.addWidget(right)
 
     # ---- load / migrate
@@ -1900,6 +1916,10 @@ class MulticamPage(QWidget):
         self.b_auto.setText("Cancel" if mine and mode == "analyze" else "Auto Edit")
         self.b_run.setEnabled((not busy and bool(self.p["files"])) or (mine and mode == "sync"))
         self.b_auto.setEnabled((not busy and bool(self.p.get("sync"))) or (mine and mode == "analyze"))
+        self.b_xml.setEnabled(not busy)
+        if mine and mode == "xml":
+            self.b_run.setText("Cancel")
+            self.b_run.setEnabled(False)
         self.pbar.setVisible(bool(mine))
         if busy and not mine:
             self.status.setText(f"Another job is running ({self._job_p['name']}). See Analysis Queue.")
@@ -1921,6 +1941,13 @@ class MulticamPage(QWidget):
             return
         if self.p["files"]:
             self._start(MCWorker("sync", list(self.p["files"]), jobs=self.store.app["jobs"]), self.b_run)
+
+    def import_xml(self):
+        if self._busy():
+            return
+        f, _ = QFileDialog.getOpenFileName(self, "Import a synced timeline (Syncaila / Premiere / DaVinci)", "", "XML (*.xml)")
+        if f:
+            self._start(MCWorker("xml", None, todo=f), self.b_run)
 
     def run_auto(self):
         if self._busy():
@@ -1953,7 +1980,16 @@ class MulticamPage(QWidget):
         p = self._job_p                    # the project the job was started for (you may have opened another one)
         here = p is self.p
         an_all = dict(self.an) if here else {}
-        if "results" in r:   # sync finished
+        if "cams" in r:      # XML imported
+            p["files"], p["infos"] = r["files"], r["infos"]
+            p["sync"] = dict(masters=r["masters"], clips=r["results"], when=datetime.now().isoformat(timespec="seconds"),
+                             note="Imported from XML: positions taken as they are, no sync was done here.")
+            p["cams"], p["source"] = r["cams"], "xml"
+            if here:
+                self.refresh_files()
+                self.status.setText(f"XML imported: {len(r['results'])} clips on {len(r['cams'])} cameras. "
+                                    "Press Auto Edit to build the edit, or Export XML.")
+        elif "results" in r:   # sync finished
             p["infos"] = r["infos"]
             p["sync"] = dict(masters=r["masters"], clips=r["results"], note=r["note"], when=datetime.now().isoformat(timespec="seconds"))
             cams = sync.auto_cameras(p["files"], r["infos"], r["results"], p.get("cams"))
@@ -1978,7 +2014,7 @@ class MulticamPage(QWidget):
                 if not c.get("user"):
                     c["role"] = director.detect_role([an_all.get(x) for x in c["clips"]])
             if here:
-                self.status.setText("Auto edit ready. Tweak it on the right, then Export to Premiere.")
+                self.status.setText("Auto edit ready. Tweak it on the right, then Export XML.")
         self.job_status, self.job_progress = "Done", 1.0
         self._finish()
         self.store.save()
@@ -2010,7 +2046,7 @@ class MulticamPage(QWidget):
         if s:
             res = s["clips"]
             cnt = {k: sum(1 for r in res.values() if r["conf"] == k) for k in CONF_NAME}
-            m = ", ".join(Path(x["path"]).name for x in s["masters"])
+            m = ", ".join(Path(x["path"]).name for x in s["masters"] if x.get("path")) or "none (timeline from XML)"
             rates = sorted({i.get("fps") for i in self.p.get("infos", {}).values() if i.get("video") and i.get("fps")})
             mixed = (f"Mixed frame rates ({', '.join(f'{r:g}' for r in rates)} fps): handled in the export, "
                      f"the sequence uses the first camera's rate.  ") if len(rates) > 1 else ""
@@ -2115,7 +2151,8 @@ class MulticamPage(QWidget):
         for r, (camname, path) in enumerate(rows):
             res = s["clips"][path]
             ok = res["conf"] != "fail"
-            cells = [camname, Path(path).name, Path(s["masters"][res["master"]]["path"]).name if ok else "–",
+            mp = s["masters"][res["master"]].get("path")
+            cells = [camname, Path(path).name, (Path(mp).name if mp else "XML timeline") if ok else "–",
                      fmt_t(res["offset"]) if ok else "–", f"{int(res['dur'] // 60)}:{res['dur'] % 60:04.1f}",
                      f"{res['drift_ppm']:+.0f} ppm" if res["n"] >= 3 and ok else "–",
                      CONF_NAME[res["conf"]] + (" (manual)" if res.get("manual") else "") + (f" · {res['error']}" if res.get("error") else ""),
@@ -2144,14 +2181,16 @@ class MulticamPage(QWidget):
         s = self.p.get("sync")
         if not s:
             return
-        d = str(Path(s["masters"][0]["path"]).parent / f"{self.p['name']}.xml")
+        first = next((m["path"] for m in s["masters"] if m.get("path")), None) or self.p["files"][0]["path"]
+        d = str(Path(first).parent / f"{self.p['name']}.xml")
         out, _ = QFileDialog.getSaveFileName(self, "Save XML for Premiere", d, "XML (*.xml)")
         if not out:
             return
         try:
             r = director.export_xml(s["masters"], self.p["cams"], s["clips"], self.an, self.edits, out, self.p["name"])
             self.status.setText(f"Saved one sequence ({r['video_tracks']} video, {r['audio_tracks']} audio tracks"
-                                f"{', each camera track holds only its cuts' if r['edit'] else ', full clips (no auto edit yet)'}) to {out}. In Premiere: File > Import.")
+                                f"{', each camera track holds only its cuts' if r['edit'] else ', full clips (no auto edit yet)'}) to {out}. "
+                                f"Premiere: File > Import · DaVinci Resolve: File > Import > Timeline.")
         except Exception as e:
             self.status.setText(f"Export failed: {e}")
 

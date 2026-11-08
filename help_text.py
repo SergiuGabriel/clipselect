@@ -37,11 +37,19 @@ poze etc.) sunt ignorate automat.</li>
   </ul></li>
 <li><b>Reglezi montajul din dreapta</b>: minimum și maximum shot, ritmul tăieturilor, Static ↔ Handheld, cut on the beat,
 static doar ca rezervă. Totul se recalculează instant, fără o nouă analiză, iar pe hartă vezi imediat rezultatul.</li>
-<li><b>Export to Premiere</b>: un singur sequence, fiecare cameră pe pista ei cu doar cut-urile ei, recorderul și sunetul
+<li><b>Export XML</b>: un singur sequence, fiecare cameră pe pista ei cu doar cut-urile ei, recorderul și sunetul
 camerelor întregi.</li>
 </ol>
 <p><b>Dacă adaugi fișiere după:</b> dai din nou Sync, apoi Auto Edit. A doua oară se analizează doar clipurile noi, deci
 merge mult mai repede.</p>
+<h3>Import XML (sincronizare făcută în altă aplicație)</h3>
+<p>Dacă ai sincronizat deja materialul în <b>Syncaila</b>, Premiere Pro sau DaVinci Resolve, exportă de acolo un XML (FCP7 XML)
+cu fiecare cameră pe pista ei și apasă <b>Import XML</b>. Aplicația preia pozițiile exact cum sunt (fără să mai sincronizeze),
+fiecare pistă video devine o cameră, iar fișierele doar-audio devin recorderul. Apoi dai <b>Auto Edit</b> și <b>Export XML</b>,
+ca de obicei.</p>
+<p><b>Pista „· check sync":</b> clipurile a căror poziție nu e sigură sunt puse toate pe o singură pistă separată și nu sunt
+folosite în montajul automat. Le verifici în tab-ul Clips și le corectezi cu dublu click pe Start.</p>
+<p><b>Export XML</b> merge și în Premiere Pro (File &gt; Import), și în DaVinci Resolve (File &gt; Import &gt; Timeline).</p>
 
 <h2>Footage Selection: ce face „Analyze Footage”</h2>
 <p>„Analyze Footage” se uită la fiecare clip și dă o notă fiecărei porțiuni.</p>
@@ -95,6 +103,12 @@ doar ca indiciu, dar face sincronizarea mult mai rapidă.</li>
 cere să le reconectezi (Link Media).</li>
 <li><b>Viteză:</b> în Settings &gt; Performance alegi câte clipuri se procesează în paralel. Memoria RAM nu e limita,
 procesorul este.</li>
+<li><b>Sunet:</b> aplicația ascultă fiecare canal separat și îl alege pe cel cu sunet, deci merge și cu mono pus pe
+2 canale (chiar dacă doar unul se aude) sau cu recordere cu multe canale.</li>
+<li><b>Proxy-urile</b> camerelor (DJI .LRF, GoPro .LRV, Sony SUB/…S03.MP4) sunt ignorate automat: au același sunet ca
+originalul și ar dubla camera.</li>
+<li><b>Clipuri fără sunet</b> (de exemplu camere pe gimbal cu microfonul oprit) nu pot fi sincronizate pe sunet. Apar ca
+„Failed: no usable sound”; le poți pune de mână (dublu click pe Start) sau folosești Import XML din Syncaila.</li>
 <li><b>Formate:</b> orice citește FFmpeg (MXF, MP4, MOV, MKV, AVI etc.). BRAW (Blackmagic) și R3D (RED) nu sunt suportate.</li>
 <li><b>Analysis Queue</b> îți arată ce rulează acum (analize, Sync, Auto Edit) și te duce înapoi la ele.</li>
 <li><b>Proiectele se salvează singure</b> pe calculator. Ștergerea unui proiect nu șterge clipurile tale.</li>
@@ -137,11 +151,19 @@ are skipped automatically.</li>
   </ul></li>
 <li><b>Tune the edit on the right</b>: minimum and maximum shot, cut pace, Static ↔ Handheld, cut on the beat, static only
 as backup. Everything updates instantly without a new analysis, and the map shows the result right away.</li>
-<li><b>Export to Premiere</b>: one sequence, every camera on its own track with only its cuts, the recorder and the camera
+<li><b>Export XML</b>: one sequence, every camera on its own track with only its cuts, the recorder and the camera
 sound uncut.</li>
 </ol>
 <p><b>If you add files later:</b> press Sync again, then Auto Edit. The second time only the new clips are analysed, so it
 is much faster.</p>
+<h3>Import XML (synced in another app)</h3>
+<p>If your footage is already synced in <b>Syncaila</b>, Premiere Pro or DaVinci Resolve, export an XML (FCP7 XML) from there
+with every camera on its own track and press <b>Import XML</b>. The app takes the positions exactly as they are (it does not
+sync again), every video track becomes a camera and audio-only files become the recorder. Then press <b>Auto Edit</b> and
+<b>Export XML</b> as usual.</p>
+<p><b>The "· check sync" track:</b> clips whose position is not certain all go on one separate track and are not used in the
+auto edit. Check them in the Clips tab and fix them by double-clicking Start.</p>
+<p><b>Export XML</b> works in Premiere Pro (File &gt; Import) and in DaVinci Resolve (File &gt; Import &gt; Timeline).</p>
 
 <h2>Footage Selection: what "Analyze Footage" does</h2>
 <p>"Analyze Footage" looks at every clip and gives every part of it a score.</p>
@@ -195,6 +217,12 @@ accurate: it is only used as a hint, but it makes syncing much faster.</li>
 Premiere asks you to reconnect them (Link Media).</li>
 <li><b>Speed:</b> in Settings &gt; Performance you choose how many clips are processed in parallel. RAM is not the limit,
 the processor is.</li>
+<li><b>Sound:</b> the app listens to every channel separately and uses the one with sound, so mono recorded on 2 channels
+(even if only one is audible) and multi-channel recorders both work.</li>
+<li><b>Camera proxies</b> (DJI .LRF, GoPro .LRV, Sony SUB/…S03.MP4) are skipped automatically: they carry the same sound as
+the original and would duplicate the camera.</li>
+<li><b>Clips without sound</b> (e.g. gimbal cameras with the mic off) cannot be synced by sound. They show as
+"Failed: no usable sound"; place them by hand (double-click Start) or use Import XML from Syncaila.</li>
 <li><b>Formats:</b> anything FFmpeg reads (MXF, MP4, MOV, MKV, AVI and more). BRAW (Blackmagic) and R3D (RED) are not
 supported.</li>
 <li><b>Analysis Queue</b> shows what is running right now (analyses, Sync, Auto Edit) and takes you back to it.</li>

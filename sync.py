@@ -21,25 +21,97 @@ Z_MIN = 7.0               # minimum z-score for a window to count as a match
 AUDIO_EXT = {".wav", ".bwf", ".w64", ".mp3", ".flac", ".aif", ".aiff", ".m4a", ".aac", ".ogg", ".opus", ".wma", ".mka"}
 
 
+def _audio_streams(path):
+    """Channel count of every audio stream in the file."""
+    r = subprocess.run([core.ffmpeg_exe(), "-hide_banner", "-i", path], capture_output=True, text=True, errors="replace", **core._NOWIN)
+    out = []
+    for m in re.finditer(r"Stream #\d+:\d+.*?: Audio:.*?(\d+) Hz, ([^,\n]+)", r.stderr):
+        lay = m.group(2).strip()
+        mm = re.match(r"(\d+) channels?", lay)
+        mm2 = re.match(r"(\d+)\.(\d+)", lay)
+        out.append(1 if lay == "mono" else 2 if lay == "stereo" else int(mm.group(1)) if mm else
+                   int(mm2.group(1)) + int(mm2.group(2)) if mm2 else 2)
+    if not out and re.search(r"Stream #\d+:\d+.*?: Audio:", r.stderr):
+        out = [2]
+    return out
+
+
 def audio_pcm(path, sr=SR):
-    """Mono float32 audio at `sr`. All audio streams of the file are mixed (FX6 MXF has one stream per channel)."""
+    """Mono float32 audio at `sr`, taken from the LOUDEST single channel of the file.
+    Channels are never mixed together: a mono sound recorded on 2 channels with one channel empty or inverted,
+    poly-WAVs from field recorders and Sony MXF with one mono stream per channel all work."""
     exe = core.ffmpeg_exe()
-    r = subprocess.run([exe, "-hide_banner", "-i", path], capture_output=True, text=True, errors="replace", **core._NOWIN)
-    n = len(re.findall(r"Stream #\d+:\d+.*?: Audio:", r.stderr))
-    if n == 0:
+    streams = _audio_streams(path)
+    if not streams:
         raise ValueError("No audio stream")
-    n = min(n, 8)
-    if n == 1:
-        args = ["-map", "0:a:0", "-ac", "1"]
-    else:
-        ins = "".join(f"[0:a:{i}]" for i in range(n))
-        args = ["-filter_complex", f"{ins}amix=inputs={n}[a]", "-map", "[a]", "-ac", "1"]
-    cmd = [exe, "-v", "error", "-nostdin", "-i", path, *args, "-vn", "-ar", str(sr), "-f", "f32le", "-"]
-    out = subprocess.run(cmd, capture_output=True, **core._NOWIN).stdout
-    x = np.frombuffer(out, np.float32)
-    if len(x) < sr:
-        raise ValueError("Audio too short or unreadable")
-    return x
+    best, err = None, ""
+    if 1 < len(streams) <= 8 and sum(streams) <= 8:
+        # several streams (Sony MXF: one mono stream per channel): ONE pass over the file writes every stream to its own
+        # small temporary file (a 4K MXF is several GB, reading it once per channel made Sync slow)
+        import tempfile
+        with tempfile.TemporaryDirectory() as td:
+            cmd = [exe, "-v", "error", "-nostdin", "-i", path]
+            outs = []
+            for i in range(len(streams)):
+                o = str(Path(td) / f"a{i}.raw")
+                cmd += ["-map", f"0:a:{i}", "-vn", "-ar", str(sr), "-f", "f32le", o]
+                outs.append(o)
+            r = subprocess.run(cmd, capture_output=True, **core._NOWIN)
+            cands = []
+            for o, ch in zip(outs, streams):
+                try:
+                    x = np.fromfile(o, np.float32)
+                except Exception:
+                    continue
+                if len(x) < sr * ch:
+                    continue
+                x = x[:len(x) // ch * ch].reshape(-1, ch)
+                rms = np.sqrt((x.astype(np.float64) ** 2).mean(0))
+                k = int(np.argmax(rms))
+                cands.append((float(rms[k]), np.ascontiguousarray(x[:, k])))
+            if cands:
+                best = max(cands, key=lambda c: c[0])
+                if best[0] >= 1e-6:
+                    return best[1]
+            err = (r.stderr.decode(errors="replace").strip().splitlines() or [""])[-1]
+            best = None
+        # anything unusual -> fall back to reading stream by stream below
+    for i, ch in enumerate(streams[:8]):
+        base = [exe, "-v", "error", "-nostdin", "-i", path, "-map", f"0:a:{i}", "-vn", "-ar", str(sr)]
+        if ch <= 2:   # small enough: read both channels at once and keep the louder one
+            r = subprocess.run(base + ["-f", "f32le", "-"], capture_output=True, **core._NOWIN)
+            x = np.frombuffer(r.stdout, np.float32)
+            if len(x) < sr * ch:
+                err = (r.stderr.decode(errors="replace").strip().splitlines() or [""])[-1]
+                continue
+            x = x[:len(x) // ch * ch].reshape(-1, ch)
+            rms = np.sqrt((x.astype(np.float64) ** 2).mean(0))
+            k = int(np.argmax(rms))
+            cand = (float(rms[k]), np.ascontiguousarray(x[:, k]))
+        else:         # many channels (poly WAV): measure every channel while streaming, then extract only the best
+            p = subprocess.Popen(base + ["-f", "f32le", "-"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, **core._NOWIN)
+            acc, n = np.zeros(ch), 0
+            while True:
+                buf = p.stdout.read(sr * ch * 4 * 10)
+                if not buf:
+                    break
+                y = np.frombuffer(buf[:len(buf) // (4 * ch) * 4 * ch], np.float32).reshape(-1, ch).astype(np.float64)
+                acc += (y ** 2).sum(0)
+                n += len(y)
+            p.wait()
+            if n < sr:
+                err = (p.stderr.read().decode(errors="replace").strip().splitlines() or [""])[-1]
+                continue
+            k = int(np.argmax(acc))
+            r = subprocess.run(base + ["-af", f"pan=mono|c0=c{k}", "-f", "f32le", "-"], capture_output=True, **core._NOWIN)
+            cand = (float(np.sqrt(acc[k] / n)), np.frombuffer(r.stdout, np.float32))
+        if best is None or cand[0] > best[0]:
+            best = cand
+    if best is None:
+        raise ValueError("Could not read the audio" + (f" ({err})" if err else ""))
+    if best[0] < 1e-6:
+        raise ValueError("The audio is silent on every channel")
+    return best[1]
 
 
 def audio_info(path):
@@ -158,14 +230,32 @@ def _decide(cands):
         o0, d = float(np.median([c[1] for c in best])), 0.0
     zm = float(np.mean([c[2] for c in best]))
     n = len(best)
-    conf = "high" if (n >= 3 or (n == 2 and zm >= 12)) else "medium" if (n == 2 or zm >= 15) else "low"
+    single = len(cands) == 1          # very short clip: only one window exists
+    conf = ("high" if (n >= 3 or (n == 2 and zm >= 12)) else
+            "medium" if (n == 2 or (single and zm >= 15)) else "low")   # 1 of several windows agreeing = unsure
     if any(c[2] >= 10 and c not in best for c in good):   # strong windows disagree -> downgrade one level
         conf = {"high": "medium", "medium": "low", "low": "low"}[conf]
     return dict(conf=conf, z=zm, n=n, k=len(cands), offset=float(o0), drift_ppm=float(d * 1e6))
 
 
+def usable_sound(x, sr=SR):
+    """False for clips without real sound (gimbal cameras with the mic off: digital silence or only hiss).
+    Such clips would 'stick' to any loud click in the recorder and pile up at one wrong position."""
+    if len(x) < sr:
+        return False
+    hop = sr // 10
+    n = len(x) // hop
+    e = np.sqrt((x[:n * hop].reshape(n, hop).astype(np.float64) ** 2).mean(1)) + 1e-9
+    db = 20 * np.log10(e)
+    level = 20 * np.log10(float(np.sqrt((x.astype(np.float64) ** 2).mean())) + 1e-9)
+    dynamics = float(np.percentile(db, 95) - np.percentile(db, 10))
+    return not (level < -50 and dynamics < 12) and level > -70
+
+
 def sync_clip(indexes, x, preds=None, win=90.0):
     """preds: {master_index: predicted offset (s)} -> only those masters, only +-win seconds around the prediction."""
+    weak = not usable_sound(x)        # very quiet / hiss only: accepted only when every check agrees
+    dur = len(x) / SR
     x = _prep(x)
     starts, wn = _pick_windows(x)
     best = None
@@ -186,9 +276,12 @@ def sync_clip(indexes, x, preds=None, win=90.0):
         if best is None or rank > best[0]:
             best = (rank, r)
     if best is None:
-        return dict(conf="fail", z=0.0, n=0, k=0, offset=0.0, drift_ppm=0.0, master=0, dur=len(x) / SR)
+        return dict(conf="fail", z=0.0, n=0, k=0, offset=0.0, drift_ppm=0.0, master=0, dur=dur)
     r = best[1]
-    r["dur"] = len(x) / SR
+    r["dur"] = dur
+    if weak and r["conf"] != "high":
+        return dict(conf="fail", z=r["z"], n=r["n"], k=r["k"], offset=0.0, drift_ppm=0.0, master=0, dur=dur,
+                    error="No usable sound in this clip (camera mic off?)")
     return r
 
 
@@ -248,6 +341,12 @@ def run_sync(masters, clips, progress=None, cancel=None, clocks=None, groups=Non
                 full += 1
                 r = sync_clip(indexes, x)
             r["manual"] = False
+            try:   # container duration only if it agrees with the real sound length (some MP4 data tracks inflate it)
+                pd = core.probe(c).duration
+                if pd and abs(pd - r["dur"]) < max(2.0, 0.02 * r["dur"]):
+                    r["dur"] = pd
+            except Exception:
+                pass
             if r["conf"] == "high" and ck is not None and info[r["master"]]["clock"] is not None:
                 delta[g] = _tod_diff(ck, info[r["master"]]["clock"]) - r["offset"]   # this camera's clock error
             results[c] = r
@@ -271,6 +370,8 @@ def master_starts(info):
     otherwise lays the files out one after another."""
     if not info:
         return []
+    if all(m.get("start") is not None for m in info):     # imported XML: the positions are already known
+        return [float(m["start"]) for m in info]
     starts, ok = [0.0], all(m.get("clock") is not None for m in info)
     for k in range(1, len(info)):
         prev = info[k - 1]
@@ -428,11 +529,14 @@ def auto_cameras(files, infos, results, old_cams=None):
     """Group synced video clips into cameras: same card folder + same format fingerprint + same file-name pattern.
     Clips of one group that overlap in time cannot be one camera, so they are split into separate cameras.
     Names/roles the user edited before are kept for the clips they cover."""
-    groups = {}
+    groups, unsure = {}, {}
     for f in files:
         p = f["path"]
         r = results.get(p)
         if not infos[p]["video"] or not r or r["conf"] == "fail":
+            continue
+        if r["conf"] == "low" and not r.get("manual"):   # unsure position: never let it explode into extra tracks
+            unsure.setdefault(f["group"] or "Camera", []).append(p)
             continue
         i = infos[p]
         # frame rate / resolution are NOT part of the fingerprint: one camera may switch to 50p for slow motion
@@ -453,6 +557,9 @@ def auto_cameras(files, infos, results, old_cams=None):
         for k, lane in enumerate(lanes):
             base = key[0] or "Camera"
             cams.append(dict(name=base + (f" {k + 1}" if len(lanes) > 1 else ""), role="Handheld", clips=lane[1], user=False))
+    for g, paths in sorted(unsure.items()):
+        cams.append(dict(name=f"{g} · check sync", role="Handheld", clips=sorted(paths, key=lambda q: results[q]["offset"]),
+                         user=False, check=True))
     seen = {}
     for c in cams:   # unique names
         n = seen.get(c["name"], 0)

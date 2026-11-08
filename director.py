@@ -134,7 +134,7 @@ def build(cams, results, analyses, masters, st):
         for ci, c in enumerate(cams):
             for p in c["clips"]:
                 r, a = results.get(p), analyses.get(p)
-                if r and r["conf"] != "fail" and r["master"] == mi and a is not None and a.fs:
+                if r and r["conf"] not in ("fail", "low") and r["master"] == mi and a is not None and a.fs:
                     mem.append((ci, p, r["offset"], a.duration, a))
         if not mem:
             out.append(None)
@@ -285,7 +285,7 @@ def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=N
 
     lab = lambda ci: sync.CAM_LABELS[ci % len(sync.CAM_LABELS)]
     flag = lambda p: " [CHECK SYNC]" if results[p]["conf"] == "low" else ""
-    dur = lambda p: vinfo(p).duration or results[p].get("dur", 0)
+    dur = lambda p: results[p].get("dur") or vinfo(p).duration   # checked against the real sound length
     v_tracks, a_tracks = [], []
     # video: if there is an auto edit, every camera's track holds ONLY its cuts (like a multicam edit already
     # flattened), so a wrong cut is fixed by trimming / swapping on that camera's track. Without an auto edit
@@ -316,12 +316,15 @@ def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=N
                    for c, p, g in sorted(placed, key=lambda x: x[2]) if c == ci]
         v_tracks.append(track(its))
     edit_items = has_edit
-    # recorder
-    arate, ach = ai(masters[0]["path"])
-    ach = max(1, min(2, ach))
+    # recorder (an imported XML may have none: the timeline itself was the reference)
+    real = [mi for mi, m in enumerate(masters) if m.get("path")]
+    arate, ach = ai(masters[real[0]]["path"]) if real else (48000, 0)
+    ach = max(1, min(2, ach)) if real else 0
     for ch in range(1, ach + 1):
         its = []
         for mi, m in enumerate(masters):
+            if not m.get("path"):
+                continue
             key = "m:" + m["path"]
             mdur = int(np.ceil(m["duration"] * fps))
             if key in defined:
