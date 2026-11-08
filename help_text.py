@@ -65,6 +65,8 @@ alb-negru. Nu are nevoie de mai mult ca să judece calitatea, și așa merge mul
   <li><b>Auto</b> păstrează ce trece de prag, taie mișcările dintre subiecte și aruncă bucățile mai scurte decât
   „Minimum cut length”. Exportă totul pe o singură pistă.</li>
   <li><b>Custom</b> împarte în Poor / Fair / Good după slidere și procente. Exportă pe 3 piste.</li>
+  <li>În ambele cazuri, <b>fiecare cut are sunetul lui</b> (pe A1/A2), legat de imagine: îl muți sau îl tai împreună cu
+  cadrul.</li>
   </ul></li>
 </ol>
 <p>Analiza se face o singură dată. După ea, sliderele și comutatoarele doar recalculează pe datele deja măsurate, deci se
@@ -162,6 +164,8 @@ black and white. That is all it needs to judge quality, and it is much faster th
   <li><b>Auto</b> keeps what passes the threshold, cuts out the moves between subjects and drops pieces shorter than
   "Minimum cut length". Everything is exported on one track.</li>
   <li><b>Custom</b> splits into Poor / Fair / Good using the sliders and percentages. Exported on 3 tracks.</li>
+  <li>Either way, <b>every cut carries its own sound</b> (on A1/A2), linked to the picture: it moves and trims together
+  with the shot.</li>
   </ul></li>
 </ol>
 <p>The analysis runs only once. After that, sliders and switches just recalculate on the data already measured, so they

@@ -461,27 +461,83 @@ def export_xmeml(items, out_path, name="MoneyMakingMachine", seq=None, single=Fa
         offset += round(a.duration * seq_fps)
     total = offset
 
-    defined, nclip, tracks = set(), 0, []
-    for lvl in ((2,) if single else (0, 1, 2)):
+    # ---- every cut gets its own sound, LINKED to the picture (moves / trims together in Premiere)
+    lay = {fi: audio_layout(files[fi][0].path) for fi in files}          # (sample rate, total channels)
+    levels = (2,) if single else (0, 1, 2)
+    vt = {lvl: sorted((e for e in entries if e[0] == lvl), key=lambda e: e[1]) for lvl in levels}
+    # stereo files -> A1 + A2; files with more than 2 channels (Sony MXF: 4 mono channels) -> channel 1 only, mono
+    use = {fi: (1 if ch > 2 else ch) for fi, (_, ch) in lay.items()}
+    nach = max(list(use.values()) + [0])
+    at = {k: sorted((e for e in entries if use[e[5]] >= k), key=lambda e: e[1]) for k in range(1, nach + 1)}
+    ids, n = {}, 0
+    for t_i, lvl in enumerate(levels, 1):
+        for c_i, e in enumerate(vt[lvl], 1):
+            n += 1
+            ids[("v", id(e))] = (f"clipitem-{n}", t_i, c_i)
+    for k in range(1, nach + 1):
+        for c_i, e in enumerate(at[k], 1):
+            n += 1
+            ids[("a", k, id(e))] = (f"clipitem-{n}", k, c_i)
+
+    def links(e):
         out = []
-        for _, st, en, fin, fout, fi in sorted((e for e in entries if e[0] == lvl), key=lambda e: e[1]):
-            inf, frate, fdur = files[fi]
-            if fi in defined:
-                file_xml = f'<file id="file-{fi}"/>'
-            else:
-                defined.add(fi)
-                file_xml = (f'<file id="file-{fi}"><name>{escape(Path(inf.path).name)}</name>'
-                            f'<pathurl>{escape(_url(inf.path))}</pathurl>{frate}<duration>{fdur}</duration>'
-                            f'<media><video>{_sc(frate, inf.width, inf.height, "none")}</video></media></file>')
-            nclip += 1
-            out.append(
-                f'<clipitem id="clipitem-{nclip}"><name>{escape(Path(inf.path).stem)}</name>'
+        v = ids[("v", id(e))]
+        out.append(f"<link><linkclipref>{v[0]}</linkclipref><mediatype>video</mediatype><trackindex>{v[1]}</trackindex>"
+                   f"<clipindex>{v[2]}</clipindex></link>")
+        for k in range(1, nach + 1):
+            a = ids.get(("a", k, id(e)))
+            if a:
+                out.append(f"<link><linkclipref>{a[0]}</linkclipref><mediatype>audio</mediatype><trackindex>{a[1]}</trackindex>"
+                           f"<clipindex>{a[2]}</clipindex><groupindex>1</groupindex></link>")
+        return "".join(out) if len(out) > 1 else ""
+
+    defined, tracks = set(), []
+
+    def fxml(fi):
+        inf, frate, fdur = files[fi]
+        if fi in defined:
+            return f'<file id="file-{fi}"/>'
+        defined.add(fi)
+        rate, ch = lay[fi]
+        aud = (f'<audio><samplecharacteristics><depth>16</depth><samplerate>{rate}</samplerate></samplecharacteristics>'
+               f'<channelcount>{ch}</channelcount></audio>') if ch else ""
+        return (f'<file id="file-{fi}"><name>{escape(Path(inf.path).name)}</name>'
+                f'<pathurl>{escape(_url(inf.path))}</pathurl>{frate}<duration>{fdur}</duration>'
+                f'<media><video>{_sc(frate, inf.width, inf.height, "none")}</video>{aud}</media></file>')
+
+    def head(e, cid):
+        lvl, st, en, fin, fout, fi = e
+        inf = files[fi][0]
+        return (f'<clipitem id="{cid}"><name>{escape(Path(inf.path).stem)}</name>'
                 f'<duration>{max(1, int(round(inf.duration * seq_fps)))}</duration>{seq_rate}<start>{st}</start><end>{en}</end>'
-                f'<in>{fin}</in><out>{fout}</out><labels><label2>{LABELS[lvl]}</label2></labels>'
-                f'{file_xml}</clipitem>')
+                f'<in>{fin}</in><out>{fout}</out><labels><label2>{LABELS[lvl]}</label2></labels>')
+
+    for lvl in levels:
+        out = [head(e, ids[("v", id(e))][0]) + fxml(e[5]) + links(e) + "</clipitem>" for e in vt[lvl]]
         tracks.append(f'<track>{"".join(out)}<enabled>TRUE</enabled><locked>FALSE</locked></track>')
+    atracks = []
+    for k in range(1, nach + 1):
+        out = [head(e, ids[("a", k, id(e))][0]) + fxml(e[5]) +
+               f'<sourcetrack><mediatype>audio</mediatype><trackindex>{k}</trackindex></sourcetrack>' + links(e) + "</clipitem>"
+               for e in at[k]]
+        atracks.append(f'<track>{"".join(out)}<enabled>TRUE</enabled><locked>FALSE</locked></track>')
+    arate = next((r for r, ch in lay.values() if ch), 48000)
+    audio = (f'<audio><numOutputChannels>2</numOutputChannels><format><samplecharacteristics><depth>16</depth>'
+             f'<samplerate>{arate}</samplerate></samplecharacteristics></format>{"".join(atracks)}</audio>') if atracks else ""
     xml = (f'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4">'
            f'<sequence id="sequence-1"><name>{escape(name)}</name><duration>{total}</duration>{seq_rate}'
-           f'<media><video><format>{_sc(seq_rate, sw, sh, fd)}</format>{"".join(tracks)}</video></media></sequence></xmeml>')
+           f'<media><video><format>{_sc(seq_rate, sw, sh, fd)}</format>{"".join(tracks)}</video>{audio}</media></sequence></xmeml>')
     Path(out_path).write_text(xml, encoding="utf-8")
-    return nclip
+    return len(entries)
+
+
+def audio_layout(path):
+    """(sample rate, total number of audio channels) of a file. Sony MXF stores one mono stream per channel."""
+    r = subprocess.run([ffmpeg_exe(), "-hide_banner", "-i", path], capture_output=True, text=True, errors="replace", **_NOWIN)
+    total, rate = 0, 48000
+    for m in re.finditer(r"Stream #\d+:\d+.*?: Audio:.*?(\d+) Hz, ([^,\n]+)", r.stderr):
+        rate = int(m.group(1))
+        lay = m.group(2).strip()
+        mm = re.match(r"(\d+) channels?", lay)
+        total += 1 if lay == "mono" else 2 if lay == "stereo" else int(mm.group(1)) if mm else 6 if lay.startswith("5.1") else 2
+    return rate, total

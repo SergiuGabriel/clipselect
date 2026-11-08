@@ -23,7 +23,7 @@ import director
 import help_text
 import sync
 
-APP, VER = "MoneyMakingMachine", "v2.0.0"
+APP, VER = "MoneyMakingMachine", "v2.1.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 C = dict(BG="#1d1d1d", PANEL="#232323", CARD="#2a2a2a", BORDER="#3a3a3a", TEXT="#d6d6d6", MUTED="#8f8f8f",
          BLUE="#1473e6", HOT="#4b9cf5", GOOD="#4cc38a", FAIR="#e6b93a", POOR="#e5534b")   # Premiere Pro look
@@ -372,6 +372,57 @@ class PreviewTimeline(QWidget):
             p.drawText(QRectF(min(left + W * i / 4 - 20, self.width() - 40), 98, 40, 16), Qt.AlignCenter, t)
 
 
+class AutoPreview(QWidget):
+    """AUTO mode preview: all the footage on top, the kept shots flowing down into 'Your edit' (packed back to back,
+    same time scale), so you see at a glance how much survives and where it comes from."""
+
+    def __init__(self):
+        super().__init__()
+        self.blocks, self.total = [], 1.0
+        self.setFixedHeight(150)
+
+    def set_data(self, blocks, total):
+        self.blocks, self.total = blocks, max(1e-6, total)   # blocks: [(x0, x1, keep)] as fractions of the footage
+        self.update()
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        left, W = 72, self.width() - 78
+        y1, y2, h = 8, 104, 24
+        for y, t in ((y1, "Footage"), (y2, "Your edit")):
+            p.setPen(QColor(C["MUTED"]))
+            p.drawText(QRectF(0, y, left - 6, h), Qt.AlignVCenter | Qt.AlignLeft, t)
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor("#262626"))
+            p.drawRoundedRect(QRectF(left, y, W, h), 3, 3)
+        x = 0.0
+        greens = (QColor("#4cc38a"), QColor("#3a9e70"))
+        k = 0
+        for x0, x1, keep in self.blocks:
+            if not keep:
+                p.setBrush(QColor("#3a3a3a"))
+                p.drawRect(QRectF(left + x0 * W, y1 + 8, max(1.0, (x1 - x0) * W), h - 16))
+                continue
+            w = (x1 - x0) * W
+            fan = QColor("#4cc38a")
+            fan.setAlpha(38)
+            p.setBrush(fan)
+            from PySide6.QtGui import QPolygonF
+            p.drawPolygon(QPolygonF([QPointF(left + x0 * W, y1 + h), QPointF(left + x1 * W, y1 + h),
+                                     QPointF(left + x + w, y2), QPointF(left + x, y2)]))
+            p.setBrush(greens[k % 2])
+            p.drawRoundedRect(QRectF(left + x0 * W, y1, max(2.0, w), h), 2, 2)
+            p.drawRoundedRect(QRectF(left + x, y2, max(2.0, w), h), 2, 2)
+            x += w
+            k += 1
+        if k:
+            secs = sum(b[1] - b[0] for b in self.blocks if b[2]) * self.total
+            p.setPen(QColor("#ececec"))
+            p.drawText(QRectF(left + x + 8, y2, 200, h), Qt.AlignVCenter | Qt.AlignLeft,
+                       f"{int(secs // 60)}:{int(secs % 60):02d}  ·  {secs / self.total:.0%} kept")
+
+
 class DropZone(QFrame):
     dropped = Signal(list)
     clicked = Signal()
@@ -626,33 +677,60 @@ class NewProjectDialog(QDialog):
         return self.edit.text().strip()
 
 
+def nice_date(iso):
+    try:
+        return datetime.fromisoformat(iso).strftime("%d %b %Y, %H:%M")
+    except Exception:
+        return "never"
+
+
 class ProjectCard(QFrame):
+    """Compact card: 4 per row on the dashboard."""
     opened = Signal(str)
     deleted = Signal(str)
 
     def __init__(self, p):
         super().__init__()
-        self.pid = p["id"]
+        self.pid, self.pname = p["id"], p["name"]
         self.setObjectName("card")
         self.setCursor(Qt.PointingHandCursor)
-        self.setMinimumHeight(110)
+        self.setFixedHeight(104)
         v = QVBoxLayout(self)
-        v.setContentsMargins(16, 14, 16, 14)
+        v.setContentsMargins(12, 10, 8, 10)
+        v.setSpacing(3)
         top = QHBoxLayout()
-        top.addWidget(lbl(p["name"], "h2"), 1)
-        d = btn("Delete", "del", lambda: self.deleted.emit(self.pid))
+        multi = p.get("type") == "multicam"
+        badge = QLabel("MULTICAM" if multi else "FOOTAGE")
+        col = "#7c5cff" if multi else C["BLUE"]
+        badge.setStyleSheet(f"background:{col};color:white;font-size:9px;font-weight:700;border-radius:3px;padding:1px 6px")
+        top.addWidget(badge)
+        top.addStretch()
+        d = btn("✕", "del", self.ask_delete)
+        d.setToolTip("Delete project")
+        d.setFixedSize(22, 22)
         top.addWidget(d)
         v.addLayout(top)
-        if p.get("type") == "multicam":
-            n = sum(len(c["clips"]) for c in p["cams"])
-            v.addWidget(lbl(f"Multicam · {len(p.get('files', []))} files · {len(p['cams'])} cameras", "muted"))
-            when = (p.get("sync") or {}).get("when", "")[:16].replace("T", " ")
-            v.addWidget(lbl(f"Last sync: {when or 'never'}", "muted"))
+        name = QLabel()
+        name.setStyleSheet("font-size:13px;font-weight:700;color:#ececec")
+        name.setText(name.fontMetrics().elidedText(p["name"], Qt.ElideRight, 230))
+        name.setToolTip(p["name"])
+        v.addWidget(name)
+        if multi:
+            v.addWidget(lbl(f"{len(p.get('files', []))} files · {len(p['cams'])} cameras", "muted"))
+            v.addWidget(lbl(f"Synced {nice_date((p.get('sync') or {}).get('when', ''))}", "muted"))
         else:
-            v.addWidget(lbl(f"{len(p['videos'])} videos · {len(p['history'])} analyses", "muted"))
-            last = p["history"][-1]["ts"][:16].replace("T", " ") if p["history"] else "never"
-            v.addWidget(lbl(f"Last analysis: {last}", "muted"))
+            nh = len(p["history"])
+            v.addWidget(lbl(f"{len(p['videos'])} videos · {nh} {'analysis' if nh == 1 else 'analyses'}", "muted"))
+            last = p["history"][-1]["ts"] if p["history"] else ""
+            v.addWidget(lbl(f"Analysed {nice_date(last)}", "muted"))
         v.addStretch()
+
+    def ask_delete(self):
+        from PySide6.QtWidgets import QMessageBox
+        r = QMessageBox.question(self, "Delete project",
+                                 f"Delete \"{self.pname}\"?\nYour video files are not touched, only the project is removed.")
+        if r == QMessageBox.Yes:
+            self.deleted.emit(self.pid)
 
     def mousePressEvent(self, _):
         self.opened.emit(self.pid)
@@ -710,8 +788,8 @@ class Dashboard(QWidget):
             c = ProjectCard(p)
             c.opened.connect(self.open_project)
             c.deleted.connect(self.delete_project)
-            g.addWidget(c, i // 3, i % 3)
-        for col in range(3):
+            g.addWidget(c, i // 4, i % 4)
+        for col in range(4):
             g.setColumnStretch(col, 1)
         self.scroll.setWidget(w)
         self.stack.setCurrentIndex(1)
@@ -863,6 +941,8 @@ class ProjectPage(QWidget):
         mv.addLayout(ph)
         self.pv = PreviewTimeline()
         mv.addWidget(self.pv)
+        self.apv = AutoPreview()
+        mv.addWidget(self.apv)
         self.bar = DistBar(order=(0, 1, 2), height=8)
         mv.addWidget(self.bar)
         self.actual = lbl("", "muted")
@@ -1066,8 +1146,22 @@ class ProjectPage(QWidget):
         for x0, x1, g in merged:
             dur[g] += x1 - x0
         tot = sum(dur) or 1
-        self.bar.set_values(*dur)
-        self.actual.setText(f"Result: Poor {dur[0] / tot * 100:.0f}%  ·  Fair {dur[1] / tot * 100:.0f}%  ·  Good {dur[2] / tot * 100:.0f}%")
+        auto = s["mode"] == "auto"
+        self.pv.setVisible(not auto)
+        self.bar.setVisible(not auto)
+        self.apv.setVisible(auto)
+        if auto:
+            total = sum(a.duration for a in self.an) if self.an else 600.0
+            shots = sum(1 for b in merged if b[2] == 2)
+            if self.an:
+                shots = sum(1 for segs in core.grade_segments(self.an, s) for x in segs if x[2] == 2)
+            self.apv.set_data([(x0, x1, g == 2) for x0, x1, g in merged], total)
+            kept = dur[2] / tot * total
+            self.actual.setText(f"Keeps {shots} shots: {int(kept // 60)}:{int(kept % 60):02d} of {int(total // 60)}:{int(total % 60):02d} "
+                                f"of footage. Everything else is left out of the export." + ("" if self.an else "  (sample data)"))
+        else:
+            self.bar.set_values(*dur)
+            self.actual.setText(f"Result: Poor {dur[0] / tot * 100:.0f}%  ·  Fair {dur[1] / tot * 100:.0f}%  ·  Good {dur[2] / tot * 100:.0f}%")
         self.pv.set_blocks(merged)
 
 class AnalyzingPage(QWidget):
@@ -2234,27 +2328,32 @@ class Main(QMainWindow):
         h.setSpacing(0)
         side = QFrame()
         side.setObjectName("sidebar")
-        side.setFixedWidth(222)
+        side.setFixedWidth(236)
         sv = QVBoxLayout(side)
         sv.setContentsMargins(12, 16, 12, 12)
         sv.setSpacing(2)
         top = QHBoxLayout()
-        top.setSpacing(8)
-        pm = app_icon(28)
+        top.setSpacing(10)
+        pm = app_icon(46)
         if pm:
             ic = QLabel()
             ic.setPixmap(pm)
             top.addWidget(ic, 0, Qt.AlignVCenter)
-        t = lbl(APP, "h2")
-        t.setStyleSheet("font-size:13px")
-        top.addWidget(t, 1, Qt.AlignVCenter)
+        col = QVBoxLayout()
+        col.setSpacing(1)
+        name = QLabel('<span style="font-weight:400">MoneyMaking</span><span style="font-weight:800">Machine</span>')
+        name.setStyleSheet("font-size:14px;color:#ececec")
+        handle = QLabel(f'<a href="{AUTHOR_URL}" style="color:{C["HOT"]};text-decoration:none">{AUTHOR}</a>')
+        handle.setOpenExternalLinks(True)
+        handle.setCursor(Qt.PointingHandCursor)
+        handle.setToolTip("Instagram")
+        handle.setStyleSheet("font-size:12px")
+        ver = QLabel(VER)
+        ver.setStyleSheet(f"font-size:10px;color:{C['MUTED']}")
+        for w_ in (name, handle, ver):
+            col.addWidget(w_)
+        top.addLayout(col, 1)
         sv.addLayout(top)
-        sv.addWidget(lbl(VER, "muted"))
-        by = QLabel(f'<a href="{AUTHOR_URL}" style="color:{C["HOT"]};text-decoration:none">by {AUTHOR}</a>')
-        by.setOpenExternalLinks(True)
-        by.setCursor(Qt.PointingHandCursor)
-        by.setStyleSheet("font-size:11px")
-        sv.addWidget(by)
         sv.addSpacing(14)
         self.nav = {"dash": btn("Dashboard", "nav", lambda: self.go("dash")),
                     "queue": btn("Analysis Queue", "nav", lambda: self.go("queue")),

@@ -11,6 +11,10 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
      absolute threshold, kept if score >= thr), now per 1 s inside "holds": camera moves between subjects (robust shift
      > MOVE_PX or whole-frame change) are cut out, so 3 people filmed 2 s each become 3 shots. Exports ONE track with
      the kept shots back to back (owner's explicit wish). Kept shots shorter than "minimum cut" are dropped.
+     Its preview (AutoPreview) shows the footage on top and the kept shots flowing into "Your edit" (no red row).
+   - Footage export: every cut carries its own sound on A1/A2 (source channels 1-2; files with more than 2 channels, e.g. FX6 MXF, use channel 1 only, mono), LINKED to the picture with
+     xmeml <link> elements (trackindex / clipindex must match the real position of each clipitem).
+   - Dashboard: compact project cards, 4 per row, badge FOOTAGE / MULTICAM, delete asks for confirmation.
    - **Custom** mode = per-criterion on/off switches + weights, percentile distribution (p1/p2), "Protect good frames".
    - "Minimum cut length" (default 3 s) merges short segments into the neighbour with the closest level.
 2. **Multicam** projects: the owner dumps EVERYTHING (cards, recorder files, folders) like in Syncaila.
@@ -36,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header: app icon, name, version (v2.0.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.1.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
