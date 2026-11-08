@@ -232,39 +232,67 @@ def _url(p):
 
 
 LABELS = {0: "Rose", 1: "Yellow", 2: "Forest"}   # Poor / Fair / Good
+FIELDS = {"lower": "lower", "upper": "upper"}
 
 
-def export_xmeml(items, out_path, name="MoneyMakingMachine"):
-    """items = [(Analysis, [(t0, t1, level), ...]), ...]  -> one timeline with every segment, colour-labelled."""
+def _sc(rate, w, h, fields):
+    # pixelaspectratio MUST be explicit: without it Premiere guesses a PAL 4:3 pixel aspect (1.094) -> "Scale Width 109.4".
+    return (f"<samplecharacteristics>{rate}<width>{w}</width><height>{h}</height><anamorphic>FALSE</anamorphic>"
+            f"<pixelaspectratio>square</pixelaspectratio><fielddominance>{fields}</fielddominance></samplecharacteristics>")
+
+
+def export_xmeml(items, out_path, name="MoneyMakingMachine", seq=None):
+    """items = [(Analysis, [(t0, t1, level), ...]), ...]
+
+    One sequence, THREE video tracks: V1 = Poor, V2 = Fair, V3 = Good (Good on top, like the preview).
+    Every segment keeps its original position in the footage timeline (clips follow each other).
+    seq = {"width": int|None, "height": int|None, "fps": float|None, "fields": "lower"|"upper"|"none"}
+    """
+    seq = seq or {}
     items = [i for i in items if i[1]]
     if not items:
         raise ValueError("Nothing to export.")
-    seq_rate, seq_fps = _rate(items[0][0].info.fps)
-    w0, h0 = items[0][0].info.width, items[0][0].info.height
-    out, cursor, nclip = [], 0, 0
+    first = items[0][0].info
+    sw, sh = seq.get("width") or first.width, seq.get("height") or first.height
+    seq_rate, seq_fps = _rate(seq.get("fps") or first.fps)
+    fd = FIELDS.get(seq.get("fields", "lower"), "none")
+
+    entries, offset, files = [], 0, {}
     for fi, (a, segs) in enumerate(items, 1):
         inf = a.info
         frate, ffps = _rate(inf.fps)
         fdur = int(inf.duration * ffps)
-        file_full = (f'<file id="file-{fi}"><name>{escape(Path(inf.path).name)}</name>'
-                     f'<pathurl>{escape(_url(inf.path))}</pathurl>{frate}<duration>{fdur}</duration>'
-                     f'<media><video><samplecharacteristics><width>{inf.width}</width><height>{inf.height}</height>'
-                     f'</samplecharacteristics></video></media></file>')
-        for k, (s, e, lvl) in enumerate(segs):
-            nclip += 1
+        files[fi] = (inf, frate, fdur)
+        for s, e, lvl in segs:
+            st = offset + round(s * seq_fps)
+            en = max(st + 1, offset + round(e * seq_fps))
             fin = max(0, round(s * ffps))
-            fout = min(fdur, round(e * ffps))
-            ln = max(1, round((fout - fin) / ffps * seq_fps))
-            file_xml = file_full if k == 0 else f'<file id="file-{fi}"/>'
+            fout = min(fdur, fin + max(1, round((en - st) / seq_fps * ffps)))
+            entries.append((lvl, st, en, fin, fout, fi))
+        offset += round(a.duration * seq_fps)
+    total = offset
+
+    defined, nclip, tracks = set(), 0, []
+    for lvl in (0, 1, 2):
+        out = []
+        for _, st, en, fin, fout, fi in sorted((e for e in entries if e[0] == lvl), key=lambda e: e[1]):
+            inf, frate, fdur = files[fi]
+            if fi in defined:
+                file_xml = f'<file id="file-{fi}"/>'
+            else:
+                defined.add(fi)
+                file_xml = (f'<file id="file-{fi}"><name>{escape(Path(inf.path).name)}</name>'
+                            f'<pathurl>{escape(_url(inf.path))}</pathurl>{frate}<duration>{fdur}</duration>'
+                            f'<media><video>{_sc(frate, inf.width, inf.height, "none")}</video></media></file>')
+            nclip += 1
             out.append(
                 f'<clipitem id="clipitem-{nclip}"><name>{escape(Path(inf.path).stem)}</name>'
-                f'<duration>{fdur}</duration>{frate}<start>{cursor}</start><end>{cursor + ln}</end>'
+                f'<duration>{fdur}</duration>{frate}<start>{st}</start><end>{en}</end>'
                 f'<in>{fin}</in><out>{fout}</out><labels><label2>{LABELS[lvl]}</label2></labels>'
                 f'{file_xml}</clipitem>')
-            cursor += ln
+        tracks.append(f'<track>{"".join(out)}<enabled>TRUE</enabled><locked>FALSE</locked></track>')
     xml = (f'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4">'
-           f'<sequence id="sequence-1"><name>{escape(name)}</name><duration>{cursor}</duration>{seq_rate}'
-           f'<media><video><format><samplecharacteristics>{seq_rate}<width>{w0}</width><height>{h0}</height>'
-           f'</samplecharacteristics></format><track>{"".join(out)}</track></video></media></sequence></xmeml>')
+           f'<sequence id="sequence-1"><name>{escape(name)}</name><duration>{total}</duration>{seq_rate}'
+           f'<media><video><format>{_sc(seq_rate, sw, sh, fd)}</format>{"".join(tracks)}</video></media></sequence></xmeml>')
     Path(out_path).write_text(xml, encoding="utf-8")
     return nclip
