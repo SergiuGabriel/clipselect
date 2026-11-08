@@ -1,0 +1,45 @@
+name: build
+on: [push, workflow_dispatch]
+env:
+  PYI: >-
+    pyinstaller --noconfirm --windowed --name MoneyMakingMachine --collect-all imageio_ffmpeg
+    --exclude-module PySide6.QtWebEngineCore --exclude-module PySide6.QtQml --exclude-module PySide6.QtQuick
+    --exclude-module PySide6.Qt3DCore --exclude-module PySide6.QtMultimedia
+jobs:
+  mac:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-latest, name: "Apple-Silicon-M1-M2-M3-M4" }
+          - { runner: macos-15-intel, name: "Mac-Intel" }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt pyinstaller
+      - run: ${{ env.PYI }} --icon icon.icns --add-data "icon.png:." --osx-bundle-identifier com.moneymakingmachine.app app.py
+      - name: Check bundled FFmpeg and ad-hoc sign
+        run: |
+          find dist/MoneyMakingMachine.app -name 'ffmpeg*' -type f
+          chmod +x dist/MoneyMakingMachine.app/Contents/Resources/imageio_ffmpeg/binaries/ffmpeg* || true
+          codesign --force --deep -s - dist/MoneyMakingMachine.app
+      - name: Create DMG
+        run: |
+          mkdir stage && cp -R dist/MoneyMakingMachine.app stage/ && ln -s /Applications stage/Applications
+          hdiutil create -volname MoneyMakingMachine -srcfolder stage -ov -format UDZO MoneyMakingMachine-${{ matrix.name }}.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MoneyMakingMachine-${{ matrix.name }}
+          path: MoneyMakingMachine-${{ matrix.name }}.dmg
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt pyinstaller
+      - run: ${{ env.PYI }} --icon icon.ico --add-data "icon.png;." app.py
+      - uses: actions/upload-artifact@v4
+        with: { name: MoneyMakingMachine-Windows, path: dist/MoneyMakingMachine }
