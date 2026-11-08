@@ -32,12 +32,19 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
    camera, not frame accurate) + camera labels + "Create Multi-Camera Source Sequence", then a manual audio re-sync.
    Video analyses of multicam projects live in `<project id>.analysis.json` next to projects.json (cached by size+mtime).
 
+## Pages (sidebar)
+Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
+is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
+languages in sync when features change). Sidebar header: app icon, name, version (v2.0.0), "by @sergiugabrielcg"
+linking to https://www.instagram.com/sergiugabrielcg/.
+
 ## Files
 - `app.py` — whole UI (dashboard, projects, footage pages, analysing page, results, multicam page). Data in
   `projects.json` under the OS app-data folder (`MMM_DATA` env var overrides it, used in tests).
 - `core.py` — video analysis via FFmpeg (any format: MXF, MOV, MP4...), grading, xmeml export.
 - `sync.py` — media detection, audio sync engine, camera grouping, onsets.
 - `director.py` — multicam auto director + XML export.
+- `help_text.py` — Info / How to use page (HTML, Romanian + English).
 - `make_icons.py` — builds icon.icns / icon.ico / icon.png from `icon_source.png` (run in CI before PyInstaller).
 - `.github/workflows/build.yml` — builds macOS DMGs (Apple Silicon + Intel) and a Windows folder with PyInstaller on every push.
 

@@ -12,7 +12,7 @@ from pathlib import Path
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, QStandardPaths, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPen, QPixmap
-from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QDialog, QFileDialog, QFrame,
+from PySide6.QtWidgets import (QTextBrowser, QAbstractItemView, QApplication, QComboBox, QDialog, QFileDialog, QFrame,
                                QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
                                QMainWindow, QProgressBar, QPushButton, QScrollArea, QSlider, QStackedWidget,
                                QTabWidget, QVBoxLayout, QWidget, QSizePolicy, QTableWidget, QTableWidgetItem,
@@ -20,9 +20,11 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QDial
 
 import core
 import director
+import help_text
 import sync
 
-APP, VER = "MoneyMakingMachine", "v1.0.0"
+APP, VER = "MoneyMakingMachine", "v2.0.0"
+AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 C = dict(BG="#1d1d1d", PANEL="#232323", CARD="#2a2a2a", BORDER="#3a3a3a", TEXT="#d6d6d6", MUTED="#8f8f8f",
          BLUE="#1473e6", HOT="#4b9cf5", GOOD="#4cc38a", FAIR="#e6b93a", POOR="#e5534b")   # Premiere Pro look
 LV_COL = [C["POOR"], C["FAIR"], C["GOOD"]]
@@ -146,6 +148,14 @@ def repolish(w):
 def hms(sec):
     sec = int(round(sec))
     return f"{sec // 3600:02d}:{sec % 3600 // 60:02d}:{sec % 60:02d}"
+
+
+def app_icon(size=26):
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).parent))
+    for n in ("icon.png", "icon_source.png"):
+        if (base / n).exists():
+            return QPixmap(str(base / n)).scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    return None
 
 
 def icon_pix(kind, s=56):
@@ -1341,24 +1351,55 @@ class ResultsPage(QWidget):
 
 
 class QueuePage(QWidget):
-    open_job = Signal()
+    """Everything that is running right now: footage analyses, multicam Sync and Auto Edit."""
+    open_job = Signal(str)
 
     def __init__(self):
         super().__init__()
         v = QVBoxLayout(self)
         v.setContentsMargins(28, 22, 28, 22)
+        v.setSpacing(10)
         v.addWidget(lbl("Analysis Queue", "h1"))
-        self.body = lbl("Nothing in the queue.", "muted")
-        v.addWidget(self.body)
-        self.b = btn("Open running analysis", "primary", self.open_job.emit)
-        self.b.hide()
-        v.addWidget(self.b, 0, Qt.AlignLeft)
+        v.addWidget(lbl("Everything that is running right now. Jobs keep running while you work on other pages.", "muted"))
+        self.box = QVBoxLayout()
+        self.box.setSpacing(10)
+        v.addLayout(self.box)
+        self.empty = lbl("Nothing is running right now.", "muted")
+        v.addWidget(self.empty)
         v.addStretch()
+        self.cards = {}
 
-    def set_job(self, text):
-        self.body.setText(text or "Nothing in the queue.")
-        self.b.setVisible(bool(text))
+    def set_job(self, text):   # kept for compatibility, the main window refreshes the queue itself
+        pass
 
+    def set_jobs(self, jobs):
+        """jobs: {key: (title, status, progress 0..1)}"""
+        for k in list(self.cards):
+            if k not in jobs:
+                self.cards.pop(k)[0].deleteLater()
+        for k, (title, status, prog) in jobs.items():
+            if k not in self.cards:
+                c = QFrame()
+                c.setObjectName("card")
+                cv = QVBoxLayout(c)
+                top = QHBoxLayout()
+                t = lbl(title, "h2")
+                top.addWidget(t, 1)
+                top.addWidget(btn("Open", slot=lambda k=k: self.open_job.emit(k)))
+                cv.addLayout(top)
+                s = lbl("", "muted", True)
+                cv.addWidget(s)
+                b = QProgressBar()
+                b.setRange(0, 1000)
+                b.setTextVisible(False)
+                cv.addWidget(b)
+                self.box.addWidget(c)
+                self.cards[k] = (c, t, s, b)
+            c, t, s, b = self.cards[k]
+            t.setText(title)
+            s.setText(status)
+            b.setValue(int(prog * 1000))
+        self.empty.setVisible(not jobs)
 
 # ---------------------------------------------------------------- multicam
 
@@ -1540,6 +1581,7 @@ class MulticamPage(QWidget):
     def __init__(self, store):
         super().__init__()
         self.store, self.p, self.worker, self.an, self.edits, self._paths = store, None, None, {}, [], []
+        self._job_p, self.job_status, self.job_progress = None, "", 0.0
         self.timer = QTimer(singleShot=True, interval=200)
         self.timer.timeout.connect(self.recompute)
         v = QVBoxLayout(self)
@@ -1726,8 +1768,7 @@ class MulticamPage(QWidget):
         self.small.setVisible(has)
         self.count.setVisible(has)
         self.count.setText(f"{len(self.p['files'])} files. Select and press Delete to remove.")
-        self.b_run.setEnabled(has or bool(self.worker and self.worker.isRunning()))
-        self.b_auto.setEnabled(bool(self.p.get("sync")))
+        self._sync_buttons()
 
     def add(self, paths):
         have = {f["path"] for f in self.p["files"]}
@@ -1757,28 +1798,40 @@ class MulticamPage(QWidget):
     def _busy(self):
         return bool(self.worker and self.worker.isRunning())
 
+    def _sync_buttons(self):
+        busy = self._busy()
+        mine = busy and self.p is getattr(self, "_job_p", None)
+        mode = self.worker.mode if busy else ""
+        self.b_run.setText("Cancel" if mine and mode == "sync" else "Sync")
+        self.b_auto.setText("Cancel" if mine and mode == "analyze" else "Auto Edit")
+        self.b_run.setEnabled((not busy and bool(self.p["files"])) or (mine and mode == "sync"))
+        self.b_auto.setEnabled((not busy and bool(self.p.get("sync"))) or (mine and mode == "analyze"))
+        self.pbar.setVisible(bool(mine))
+        if busy and not mine:
+            self.status.setText(f"Another job is running ({self._job_p['name']}). See Analysis Queue.")
+
     def _start(self, worker, button):
+        self._job_p, self.job_status, self.job_progress = self.p, "Starting…", 0.0
         self.worker = worker
         worker.progress.connect(self.on_progress)
         worker.done.connect(self.on_done)
         worker.failed.connect(self.on_failed)
         self._button = button
-        button.setText("Cancel")
-        for b in (self.b_run, self.b_auto):
-            b.setEnabled(b is button)
-        self.pbar.show()
         worker.start()
+        self._sync_buttons()
 
     def toggle_run(self):
         if self._busy():
-            self.worker.cancel()
+            if self.p is self._job_p:
+                self.worker.cancel()
             return
         if self.p["files"]:
             self._start(MCWorker("sync", list(self.p["files"]), jobs=self.store.app["jobs"]), self.b_run)
 
     def run_auto(self):
         if self._busy():
-            self.worker.cancel()
+            if self.p is self._job_p:
+                self.worker.cancel()
             return
         s = self.p.get("sync")
         if not s:
@@ -1787,46 +1840,56 @@ class MulticamPage(QWidget):
         self._start(MCWorker("analyze", None, self.store.load_blob(self.p["id"]), todo, self.store.app["jobs"]), self.b_auto)
 
     def on_progress(self, text, f):
-        self.status.setText(text)
-        self.pbar.setValue(int(f * 1000))
+        self.job_status, self.job_progress = text, f
+        if self.p is self._job_p:
+            self.status.setText(text)
+            self.pbar.setValue(int(f * 1000))
 
     def _finish(self):
-        self.b_run.setText("Sync")
-        self.b_auto.setText("Auto Edit")
-        self.b_run.setEnabled(bool(self.p["files"]))
-        self.b_auto.setEnabled(bool(self.p.get("sync")))
-        self.pbar.hide()
+        if self.worker:
+            self.worker.wait(2000)
+        self._sync_buttons()
 
     def on_failed(self, msg):
         self._finish()
-        self.status.setText("Stopped: " + msg)
+        if self.p is self._job_p:
+            self.status.setText("Stopped: " + msg)
 
     def on_done(self, r):
-        p = self.p
+        p = self._job_p                    # the project the job was started for (you may have opened another one)
+        here = p is self.p
+        an_all = dict(self.an) if here else {}
         if "results" in r:   # sync finished
             p["infos"] = r["infos"]
             p["sync"] = dict(masters=r["masters"], clips=r["results"], note=r["note"], when=datetime.now().isoformat(timespec="seconds"))
             cams = sync.auto_cameras(p["files"], r["infos"], r["results"], p.get("cams"))
             for c in cams:
                 if not c.get("user"):
-                    have = [self.an.get(x) for x in c["clips"]]
+                    have = [an_all.get(x) for x in c["clips"]]
                     c["role"] = director.detect_role(have) if all(h is not None for h in have) else "Handheld"
             p["cams"] = cams
             ok = sum(1 for x in r["results"].values() if x["conf"] != "fail")
-            self.status.setText(f"Sync finished: {ok} of {len(r['results'])} clips synced. You can export now, "
+            msg = (f"Sync finished: {ok} of {len(r['results'])} clips synced. You can export now, "
                                 f"or press Auto Edit to let the program build the edit (this analyses the video and takes longer).")
+            if here:
+                self.status.setText(msg)
         else:                 # analysis finished
-            self.an.update(r["analyses"])
+            an_all.update(r["analyses"])
+            if here:
+                self.an.update(r["analyses"])
             blob = self.store.load_blob(p["id"])
             blob.update({k: dict(key=r["keys"].get(k, ""), a=a.to_json()) for k, a in r["analyses"].items()})
             self.store.save_blob(p["id"], blob)
             for c in p["cams"]:
                 if not c.get("user"):
-                    c["role"] = director.detect_role([self.an.get(x) for x in c["clips"]])
-            self.status.setText("Auto edit ready. Tweak it on the right, then Export to Premiere.")
+                    c["role"] = director.detect_role([an_all.get(x) for x in c["clips"]])
+            if here:
+                self.status.setText("Auto edit ready. Tweak it on the right, then Export to Premiere.")
+        self.job_status, self.job_progress = "Done", 1.0
         self._finish()
         self.store.save()
-        self.recompute()
+        if here:
+            self.recompute()
 
     # ---- director
     def set_d(self, k, v):
@@ -2110,6 +2173,46 @@ class SettingsPage(QWidget):
             self.top.setItem(r, 1, QTableWidgetItem(gb(b)))
 
 
+# ---------------------------------------------------------------- info / how to use
+
+class InfoPage(QWidget):
+    def __init__(self, store):
+        super().__init__()
+        self.store = store
+        v = QVBoxLayout(self)
+        v.setContentsMargins(28, 22, 28, 22)
+        top = QHBoxLayout()
+        top.addWidget(lbl("Info / How to use", "h1"))
+        top.addStretch()
+        self.b_ro = btn("RO", "seg", lambda: self.set_lang("ro"))
+        self.b_en = btn("EN", "seg", lambda: self.set_lang("en"))
+        for b in (self.b_ro, self.b_en):
+            b.setFixedWidth(48)
+            top.addWidget(b)
+        v.addLayout(top)
+        self.view = QTextBrowser()
+        self.view.setOpenExternalLinks(True)
+        self.view.setStyleSheet(f"QTextBrowser{{background:{C['BG']};border:none;color:#c9c9c9;font-size:13px}}")
+        self.view.document().setDefaultStyleSheet(
+            "h1{font-size:20px;color:#ececec;margin-bottom:6px} h2{font-size:16px;color:#ececec;margin-top:18px}"
+            "h3{font-size:13px;color:#d6d6d6;margin-top:10px} li{margin-bottom:4px} b{color:#ececec}")
+        v.addWidget(self.view, 1)
+        v.addWidget(QLabel(f'<span style="color:{C["MUTED"]}">{APP} {VER} · </span>'
+                           f'<a href="{AUTHOR_URL}" style="color:{C["HOT"]};text-decoration:none">by {AUTHOR}</a>'),
+                    0, Qt.AlignLeft)
+        self.findChildren(QLabel)[-1].setOpenExternalLinks(True)
+        self.set_lang(store.app.get("lang", "ro"), save=False)
+
+    def set_lang(self, lang, save=True):
+        for b, on in ((self.b_ro, lang == "ro"), (self.b_en, lang == "en")):
+            b.setProperty("active", on)
+            repolish(b)
+        self.view.setHtml(help_text.HELP[lang])
+        if save:
+            self.store.app["lang"] = lang
+            self.store.save_app()
+
+
 # ---------------------------------------------------------------- main window
 
 class Main(QMainWindow):
@@ -2127,16 +2230,32 @@ class Main(QMainWindow):
         h.setSpacing(0)
         side = QFrame()
         side.setObjectName("sidebar")
-        side.setFixedWidth(200)
+        side.setFixedWidth(222)
         sv = QVBoxLayout(side)
         sv.setContentsMargins(12, 16, 12, 12)
+        sv.setSpacing(2)
+        top = QHBoxLayout()
+        top.setSpacing(8)
+        pm = app_icon(28)
+        if pm:
+            ic = QLabel()
+            ic.setPixmap(pm)
+            top.addWidget(ic, 0, Qt.AlignVCenter)
         t = lbl(APP, "h2")
-        sv.addWidget(t)
+        t.setStyleSheet("font-size:13px")
+        top.addWidget(t, 1, Qt.AlignVCenter)
+        sv.addLayout(top)
         sv.addWidget(lbl(VER, "muted"))
+        by = QLabel(f'<a href="{AUTHOR_URL}" style="color:{C["HOT"]};text-decoration:none">by {AUTHOR}</a>')
+        by.setOpenExternalLinks(True)
+        by.setCursor(Qt.PointingHandCursor)
+        by.setStyleSheet("font-size:11px")
+        sv.addWidget(by)
         sv.addSpacing(14)
         self.nav = {"dash": btn("Dashboard", "nav", lambda: self.go("dash")),
                     "queue": btn("Analysis Queue", "nav", lambda: self.go("queue")),
-                    "settings": btn("Settings", "nav", lambda: self.go("settings"))}
+                    "settings": btn("Settings", "nav", lambda: self.go("settings")),
+                    "info": btn("Info / How to use", "nav", lambda: self.go("info"))}
         for b in self.nav.values():
             sv.addWidget(b)
         sv.addStretch()
@@ -2150,7 +2269,8 @@ class Main(QMainWindow):
         self.anl, self.res, self.queue = AnalyzingPage(), ResultsPage(self.store), QueuePage()
         self.mc = MulticamPage(self.store)
         self.settings = SettingsPage(self.store)
-        for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings):
+        self.info = InfoPage(self.store)
+        for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info):
             self.stack.addWidget(w)
         self.dash.new_project.connect(self.new_project)
         self.dash.open_project.connect(self.open_project)
@@ -2163,8 +2283,23 @@ class Main(QMainWindow):
         self.anl.pause.connect(lambda on: self.worker and self.worker.pause(on))
         self.anl.cancel.connect(lambda: self.worker and self.worker.cancel())
         self.res.back.connect(lambda: self.show_page(self.proj))
-        self.queue.open_job.connect(lambda: self.show_page(self.anl))
+        self.queue.open_job.connect(lambda k: self.show_page(self.anl if k == "footage" else self.mc))
+        self.qtimer = QTimer(interval=700)
+        self.qtimer.timeout.connect(self.refresh_queue)
+        self.qtimer.start()
         self.go("dash")
+
+    def refresh_queue(self):
+        jobs = {}
+        if self.worker and self.worker.isRunning() and self.job:
+            jobs["footage"] = (f"Analyze Footage · {self.job['p']['name']}", self.anl.count.text(), self.anl.bar.value() / 1000)
+        mw = self.mc.worker
+        if mw and mw.isRunning():
+            jp = getattr(self.mc, "_job_p", None) or self.mc.p
+            jobs["multicam"] = (f"{'Sync' if mw.mode == 'sync' else 'Auto Edit'} · {jp['name']}", self.mc.job_status,
+                                self.mc.job_progress)
+        self.queue.set_jobs(jobs)
+        self.nav["queue"].setText(f"Analysis Queue ({len(jobs)})" if jobs else "Analysis Queue")
 
     def closeEvent(self, e):
         self.store.flush()
@@ -2175,7 +2310,7 @@ class Main(QMainWindow):
         self.stack.setCurrentWidget(w)
         for k, b in self.nav.items():
             b.setProperty("active", (k == "dash" and w in (self.dash, self.proj, self.res, self.mc)) or (k == "queue" and w in (self.queue, self.anl))
-                          or (k == "settings" and w is self.settings))
+                          or (k == "settings" and w is self.settings) or (k == "info" and w is self.info))
             repolish(b)
 
     def go(self, where):
@@ -2184,6 +2319,8 @@ class Main(QMainWindow):
             self.show_page(self.dash)
         elif where == "settings":
             self.show_page(self.settings)
+        elif where == "info":
+            self.show_page(self.info)
         else:
             self.show_page(self.queue)
 

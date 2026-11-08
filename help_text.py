@@ -1,0 +1,201 @@
+"""Info / How to use page content (HTML), Romanian and English."""
+
+RO = """
+<h1>Cum se folosește MoneyMakingMachine</h1>
+<p>Aplicația are două tipuri de proiecte: <b>Footage Selection</b> (alege cadrele bune dintr-un set de clipuri) și
+<b>Multicam</b> (sincronizează mai multe camere cu recorderul de la mixer și face montajul).</p>
+
+<h2>Multicam: Sync și Auto Edit</h2>
+<p>Întâi dai <b>Sync</b>, apoi <b>Auto Edit</b>. Auto Edit nu face sincronizarea, iar butonul lui nu se poate apăsa până nu
+există o sincronizare. Sunt doi pași separați, făcuți așa intenționat: sincronizarea e rapidă, iar analiza video e partea
+lentă, deci o rulezi doar dacă vrei montajul automat.</p>
+<h3>Procesul complet</h3>
+<ol>
+<li><b>Arunci tot materialul în Footage</b>: carduri, recorder, foldere întregi. Fișierele auxiliare (XML-urile Sony,
+poze etc.) sunt ignorate automat.</li>
+<li><b>Sync</b> (rapid):
+  <ul>
+  <li>citește fiecare fișier și găsește masterul audio (fișierele doar-audio de la recorder);</li>
+  <li>sincronizează fiecare clip pe sunet, folosind timecode-ul camerelor ca indiciu ca să caute mai repede;</li>
+  <li>grupează clipurile pe camere și așază toate fișierele de recorder pe un singur timeline.</li>
+  <li>După el ai harta, tab-urile Cameras și Clips, și poți deja da <b>Export</b>: în Premiere primești fiecare cameră pe
+  pista ei, cu clipurile întregi sincronizate, plus recorderul. Dacă vrei să montezi singur, te poți opri aici.</li>
+  </ul></li>
+<li><b>Verifici și corectezi</b>, dacă e cazul:
+  <ul>
+  <li><b>Clips</b>: clipurile marcate „Check” sau „Failed”. Pe cele cu decalaj greșit le corectezi cu dublu click pe valoarea
+  din coloana Start.</li>
+  <li><b>Cameras</b>: dacă două camere detectate sunt de fapt una, le dai același nume și se unesc. Tot aici schimbi rolul
+  (Static / Handheld) dacă programul l-a ghicit greșit.</li>
+  </ul></li>
+<li><b>Auto Edit</b> (lent, opțional):
+  <ul>
+  <li>analizează video-ul fiecărui clip sincronizat (claritate, tremur, expunere, mișcări de cameră);</li>
+  <li>stabilește rolul camerelor, dacă nu l-ai schimbat tu;</li>
+  <li>regizorul automat construiește montajul.</li>
+  <li>Analiza se salvează. Dacă mai apeși o dată, clipurile deja analizate nu se mai procesează.</li>
+  </ul></li>
+<li><b>Reglezi montajul din dreapta</b>: minimum și maximum shot, ritmul tăieturilor, Static ↔ Handheld, cut on the beat,
+static doar ca rezervă. Totul se recalculează instant, fără o nouă analiză, iar pe hartă vezi imediat rezultatul.</li>
+<li><b>Export to Premiere</b>: un singur sequence, fiecare cameră pe pista ei cu doar cut-urile ei, recorderul și sunetul
+camerelor întregi.</li>
+</ol>
+<p><b>Dacă adaugi fișiere după:</b> dai din nou Sync, apoi Auto Edit. A doua oară se analizează doar clipurile noi, deci
+merge mult mai repede.</p>
+
+<h2>Footage Selection: ce face „Analyze Footage”</h2>
+<p>„Analyze Footage” se uită la fiecare clip și dă o notă fiecărei porțiuni.</p>
+<h3>Ce face, pas cu pas</h3>
+<ol>
+<li><b>Citește video-ul</b> cu FFmpeg (orice format, inclusiv MXF). Ia 8 cadre pe secundă, micșorate la 320×180 și
+alb-negru. Nu are nevoie de mai mult ca să judece calitatea, și așa merge mult mai repede.</li>
+<li><b>Măsoară pe fiecare cadru:</b>
+  <ul>
+  <li><b>claritatea</b>: cât de multe detalii fine are imaginea (un cadru neclar are puține);</li>
+  <li><b>expunerea</b>: dacă e prea întunecat sau are zone „arse”;</li>
+  <li><b>contrastul</b>: dacă imaginea e spălată sau prea dură;</li>
+  <li><b>mișcarea camerei</b>: cât s-a deplasat imaginea față de cadrul anterior. Așa deosebește tremurul (sacadat, încoace
+  și încolo) de o mișcare lină, și prinde mutările rapide de la o persoană la alta;</li>
+  <li><b>activitatea din cadru</b>: cât se schimbă imaginea (oameni care se mișcă). Asta e „Visual Importance”.</li>
+  </ul></li>
+<li><b>Dă note pe porțiuni:</b> în Auto, pe fiecare secundă dintre două mișcări de cameră; în Custom, pe ferestre de
+2 secunde.</li>
+<li><b>Împarte rezultatul:</b>
+  <ul>
+  <li><b>Auto</b> păstrează ce trece de prag, taie mișcările dintre subiecte și aruncă bucățile mai scurte decât
+  „Minimum cut length”. Exportă totul pe o singură pistă.</li>
+  <li><b>Custom</b> împarte în Poor / Fair / Good după slidere și procente. Exportă pe 3 piste.</li>
+  </ul></li>
+</ol>
+<p>Analiza se face o singură dată. După ea, sliderele și comutatoarele doar recalculează pe datele deja măsurate, deci se
+schimbă instant. Rezultatul rămâne salvat în History, ca să-l poți redeschide.</p>
+<h3>Ce nu face</h3>
+<ul>
+<li><b>Nu modifică fișierele tale.</b> Doar le citește și generează XML-ul pentru Premiere.</li>
+<li><b>Nu ascultă sunetul.</b> În Footage Selection, alegerea e doar pe imagine.</li>
+<li><b>Nu recunoaște oameni sau fețe.</b> „Importance” înseamnă doar „se mișcă ceva în cadru”, nu „e mireasa în cadru”.</li>
+</ul>
+<p>În proiectele Multicam, butonul Auto Edit face exact aceeași analiză pe clipurile fiecărei camere. Rezultatul îl
+folosește apoi regizorul automat ca să aleagă camera pentru fiecare moment.</p>
+
+<h2>Sfaturi utile</h2>
+<ul>
+<li><b>Auto sau Custom?</b> Auto este varianta clasică: păstrează cadrele bune și le pune pe o singură pistă. Custom îți dă
+control pe fiecare criteriu și împarte totul în Poor / Fair / Good, pe 3 piste.</li>
+<li><b>Mutări rapide între persoane.</b> Dacă stai cam 2 secunde pe fiecare om, pune „Minimum cut length” pe 2 s. Pe 3 s,
+cadrele mai scurte sunt eliminate.</li>
+<li><b>Camera statică apare prea des?</b> Trage „Static ↔ Handheld” spre dreapta sau pornește „Static cameras only as
+backup". Programul judecă doar calitatea tehnică, iar camera statică nu tremură niciodată, de aceea o preferă.</li>
+<li><b>Timecode.</b> Setează timecode-ul camerelor cât mai aproape de ora reală. Nu trebuie să fie exact la cadru: e folosit
+doar ca indiciu, dar face sincronizarea mult mai rapidă.</li>
+<li><b>Import în Premiere:</b> File &gt; Import și alegi fișierul XML. Apare un sequence nou în proiect.</li>
+<li><b>Nu muta și nu redenumi fișierele</b> după export. XML-ul arată spre locul lor de pe disc; dacă le muți, Premiere îți
+cere să le reconectezi (Link Media).</li>
+<li><b>Viteză:</b> în Settings &gt; Performance alegi câte clipuri se procesează în paralel. Memoria RAM nu e limita,
+procesorul este.</li>
+<li><b>Formate:</b> orice citește FFmpeg (MXF, MP4, MOV, MKV, AVI etc.). BRAW (Blackmagic) și R3D (RED) nu sunt suportate.</li>
+<li><b>Analysis Queue</b> îți arată ce rulează acum (analize, Sync, Auto Edit) și te duce înapoi la ele.</li>
+<li><b>Proiectele se salvează singure</b> pe calculator. Ștergerea unui proiect nu șterge clipurile tale.</li>
+</ul>
+"""
+
+EN = """
+<h1>How to use MoneyMakingMachine</h1>
+<p>The app has two kinds of projects: <b>Footage Selection</b> (picks the good shots from a set of clips) and
+<b>Multicam</b> (syncs several cameras to the mixer recorder and builds the edit).</p>
+
+<h2>Multicam: Sync and Auto Edit</h2>
+<p>Press <b>Sync</b> first, then <b>Auto Edit</b>. Auto Edit does not sync, and its button stays disabled until a sync
+exists. They are two separate steps on purpose: syncing is fast, while the video analysis is the slow part, so you only
+run it when you want the automatic edit.</p>
+<h3>The full process</h3>
+<ol>
+<li><b>Drop all your material into Footage</b>: cards, recorder, whole folders. Side files (Sony XMLs, photos and so on)
+are skipped automatically.</li>
+<li><b>Sync</b> (fast):
+  <ul>
+  <li>reads every file and finds the audio master (the audio-only recorder files);</li>
+  <li>syncs every clip by its sound, using the cameras' timecode as a hint to search faster;</li>
+  <li>groups the clips by camera and lays all recorder files out on one timeline.</li>
+  <li>Afterwards you have the map, the Cameras and Clips tabs, and you can already <b>Export</b>: in Premiere you get every
+  camera on its own track with its full clips synced, plus the recorder. If you want to edit yourself, you can stop here.</li>
+  </ul></li>
+<li><b>Check and correct</b> if needed:
+  <ul>
+  <li><b>Clips</b>: clips marked "Check" or "Failed". Fix a wrong offset by double-clicking its value in the Start column.</li>
+  <li><b>Cameras</b>: if two detected cameras are really one, give them the same name and they merge. This is also where you
+  change the role (Static / Handheld) if the app guessed it wrong.</li>
+  </ul></li>
+<li><b>Auto Edit</b> (slow, optional):
+  <ul>
+  <li>analyses the video of every synced clip (sharpness, shake, exposure, camera moves);</li>
+  <li>sets the camera roles, unless you changed them yourself;</li>
+  <li>the automatic director builds the edit.</li>
+  <li>The analysis is saved. If you press it again, clips that were already analysed are not processed again.</li>
+  </ul></li>
+<li><b>Tune the edit on the right</b>: minimum and maximum shot, cut pace, Static ↔ Handheld, cut on the beat, static only
+as backup. Everything updates instantly without a new analysis, and the map shows the result right away.</li>
+<li><b>Export to Premiere</b>: one sequence, every camera on its own track with only its cuts, the recorder and the camera
+sound uncut.</li>
+</ol>
+<p><b>If you add files later:</b> press Sync again, then Auto Edit. The second time only the new clips are analysed, so it
+is much faster.</p>
+
+<h2>Footage Selection: what "Analyze Footage" does</h2>
+<p>"Analyze Footage" looks at every clip and gives every part of it a score.</p>
+<h3>Step by step</h3>
+<ol>
+<li><b>Reads the video</b> with FFmpeg (any format, MXF included). It takes 8 frames per second, scaled down to 320×180 in
+black and white. That is all it needs to judge quality, and it is much faster this way.</li>
+<li><b>Measures on every frame:</b>
+  <ul>
+  <li><b>sharpness</b>: how much fine detail the image has (a blurred frame has little);</li>
+  <li><b>exposure</b>: whether it is too dark or has blown-out areas;</li>
+  <li><b>contrast</b>: whether the image is washed out or too harsh;</li>
+  <li><b>camera movement</b>: how far the image moved since the previous frame. This tells shake (jerky, back and forth)
+  apart from a smooth move, and catches quick moves from one person to another;</li>
+  <li><b>activity in the frame</b>: how much the image changes (people moving). This is "Visual Importance".</li>
+  </ul></li>
+<li><b>Scores the parts:</b> in Auto, every second between two camera moves; in Custom, 2-second windows.</li>
+<li><b>Splits the result:</b>
+  <ul>
+  <li><b>Auto</b> keeps what passes the threshold, cuts out the moves between subjects and drops pieces shorter than
+  "Minimum cut length". Everything is exported on one track.</li>
+  <li><b>Custom</b> splits into Poor / Fair / Good using the sliders and percentages. Exported on 3 tracks.</li>
+  </ul></li>
+</ol>
+<p>The analysis runs only once. After that, sliders and switches just recalculate on the data already measured, so they
+change instantly. The result stays saved in History so you can reopen it.</p>
+<h3>What it does not do</h3>
+<ul>
+<li><b>It does not change your files.</b> It only reads them and writes the XML for Premiere.</li>
+<li><b>It does not listen to the sound.</b> In Footage Selection the choice is based on the image only.</li>
+<li><b>It does not recognise people or faces.</b> "Importance" only means "something moves in the frame", not "the bride is
+in the frame".</li>
+</ul>
+<p>In Multicam projects, the Auto Edit button runs exactly the same analysis on every camera's clips. The automatic
+director then uses it to choose the camera for every moment.</p>
+
+<h2>Useful tips</h2>
+<ul>
+<li><b>Auto or Custom?</b> Auto is the classic version: it keeps the good shots and puts them on one track. Custom gives you
+control over every criterion and splits everything into Poor / Fair / Good on 3 tracks.</li>
+<li><b>Quick moves between people.</b> If you stay about 2 seconds on each person, set "Minimum cut length" to 2 s. At 3 s,
+shorter shots are dropped.</li>
+<li><b>Static camera used too often?</b> Drag "Static ↔ Handheld" to the right or turn on "Static cameras only as backup".
+The app only judges technical quality, and a static camera never shakes, which is why it likes it.</li>
+<li><b>Timecode.</b> Set the cameras' timecode as close to the real time of day as you can. It does not have to be frame
+accurate: it is only used as a hint, but it makes syncing much faster.</li>
+<li><b>Importing into Premiere:</b> File &gt; Import and choose the XML file. A new sequence appears in the project.</li>
+<li><b>Do not move or rename the files</b> after exporting. The XML points to where they are on disk; if you move them,
+Premiere asks you to reconnect them (Link Media).</li>
+<li><b>Speed:</b> in Settings &gt; Performance you choose how many clips are processed in parallel. RAM is not the limit,
+the processor is.</li>
+<li><b>Formats:</b> anything FFmpeg reads (MXF, MP4, MOV, MKV, AVI and more). BRAW (Blackmagic) and R3D (RED) are not
+supported.</li>
+<li><b>Analysis Queue</b> shows what is running right now (analyses, Sync, Auto Edit) and takes you back to it.</li>
+<li><b>Projects save themselves</b> on your computer. Deleting a project does not delete your clips.</li>
+</ul>
+"""
+
+HELP = {"ro": RO, "en": EN}
