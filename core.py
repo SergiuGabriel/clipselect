@@ -106,6 +106,23 @@ def _contrast_score(s):
     return 1.0 if s <= 85 else max(0.0, 1 - (s - 85) / 60)
 
 
+def _robust_shift(ff, prev):
+    """Whole-frame shift (original estimate) + robust shift = median of whole frame and 4 quadrants.
+    The median ignores a moving subject that dominates one region of the frame."""
+    h, w = ff.shape
+    g = _shift(ff, prev)
+    cands = [g]
+    for y0, y1, x0, x1 in ((0, h // 2, 0, w // 2), (0, h // 2, w // 2, w), (h // 2, h, 0, w // 2), (h // 2, h, w // 2, w)):
+        cands.append(_shift(ff[y0:y1, x0:x1], prev[y0:y1, x0:x1]))
+    c = np.array(cands, float)
+    return (float(np.median(c[:, 0])), float(np.median(c[:, 1]))), g
+
+
+def _accel(sh, a, b):
+    acc = np.linalg.norm(np.diff(sh[a:b], axis=0), axis=1)
+    return float(acc.mean()) if len(acc) else 0.0
+
+
 def analyze(path, progress=None, cancel=None):
     info = probe(path)
     cmd = [ffmpeg_exe(), "-v", "error", "-nostdin", "-i", path, "-map", "0:v:0", "-an", "-sn", "-dn",
@@ -113,7 +130,7 @@ def analyze(path, progress=None, cancel=None):
            "-f", "rawvideo", "-"]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **_NOWIN)
     size = AW * AH
-    sharp, csharp, mean, bright, std, diff, shifts = [], [], [], [], [], [], []
+    sharp, csharp, mean, bright, std, diff, shifts, shifts_g = [], [], [], [], [], [], [], []
     prev = None
     try:
         while True:
@@ -130,7 +147,12 @@ def analyze(path, progress=None, cancel=None):
             std.append(float(ff.std()))
             bright.append(float((f > 250).mean()))
             diff.append(float(np.abs(ff - prev).mean()) if prev is not None else 0.0)
-            shifts.append(_shift(ff, prev) if prev is not None else (0, 0))
+            if prev is not None:
+                r, g = _robust_shift(ff, prev)
+            else:
+                r = g = (0, 0)
+            shifts.append(r)
+            shifts_g.append(g)
             prev = ff
             if progress and info.duration and len(sharp) % 16 == 0:
                 progress(min(0.99, len(sharp) / SAMPLE_FPS / info.duration))
@@ -142,6 +164,7 @@ def analyze(path, progress=None, cancel=None):
         raise ValueError("Could not decode any frame (unsupported codec? BRAW/R3D need the vendor SDK).")
     sharp, csharp, mean, std, bright, diff = map(np.array, (sharp, csharp, mean, std, bright, diff))
     sh = np.array(shifts, dtype=np.float32)
+    shg = np.array(shifts_g, dtype=np.float32)
     dur = info.duration or n / SAMPLE_FPS
     info.duration = dur
 
@@ -151,17 +174,17 @@ def analyze(path, progress=None, cancel=None):
         idx.pop()
     bounds = idx + [n]
     t0, t1 = [], []
-    comp = {k: [] for k in KEYS}
+    comp = {k: [] for k in KEYS + ['stability_v1']}
     for a, b in zip(bounds[:-1], bounds[1:]):
         m = float(mean[a:b].mean())
         pen = max(0, (45 - m) / 45, (m - 210) / 45) + max(0, float(bright[a:b].mean()) - 0.15) * 2
-        acc = np.linalg.norm(np.diff(sh[a:b], axis=0), axis=1)
-        accel = float(acc.mean()) if len(acc) else 0.0
+        accel, accel_g = _accel(sh, a, b), _accel(shg, a, b)
         act = float(np.clip(diff[a:b].mean() / 10, 0, 1))
         comp["focus"].append(_focus_score(float(np.median(sharp[a:b]))))
         comp["contrast"].append(_contrast_score(float(std[a:b].mean())))
         comp["exposure"].append(float(np.clip(1 - pen, 0, 1)))
         comp["stability"].append(float(np.clip(1 - (accel - 1.5) / 8, 0, 1)))
+        comp["stability_v1"].append(float(np.clip(1 - (accel_g - 1.5) / 8, 0, 1)))
         comp["importance"].append(0.6 * act + 0.4 * _focus_score(float(np.median(csharp[a:b]))))
         t0.append(a / SAMPLE_FPS)
         t1.append(min(b / SAMPLE_FPS, dur))
@@ -172,36 +195,74 @@ def analyze(path, progress=None, cancel=None):
 
 # ---------------- Grading: Poor(0) / Fair(1) / Good(2) ----------------
 
+def auto_scores(a):
+    """AUTO mode = the original algorithm: focus, stability (whole-frame estimate), exposure. Absolute 0-100 score."""
+    F, E = a.comp["focus"], a.comp["exposure"]
+    S = a.comp.get("stability_v1", a.comp["stability"])
+    return 100 * (0.6 * (0.4 * F + 0.3 * S + 0.3 * E) + 0.4 * np.minimum(np.minimum(F, S), E))
+
+
 def window_scores(a, weights):
-    """weights: dict key -> 0..1. Returns 0..100 score per window."""
+    """CUSTOM mode. weights: key -> 0..1 (0 = switched off). Returns 0..100 per window.
+    'importance' is a soft criterion: it contributes to the average but never drags the score down as 'worst defect'."""
     w = np.array([weights.get(k, 0) for k in KEYS], float)
     M = np.vstack([a.comp[k] for k in KEYS])
     if w.sum() <= 0:
         return np.full(M.shape[1], 50.0)
     mean = (w[:, None] * M).sum(0) / w.sum()
-    return 100 * (0.6 * mean + 0.4 * M[w > 0].min(0))
+    defects = [i for i, k in enumerate(KEYS) if w[i] > 0 and k != "importance"]
+    mn = M[defects].min(0) if defects else mean
+    return 100 * (0.6 * mean + 0.4 * mn)
 
 
-def grade(analyses, weights, p_poor, p_good):
-    """Lowest p_poor% of all windows -> Poor, up to p_good% -> Fair, the rest -> Good.
-    Returns one int array (0/1/2) per analysis."""
-    scores = [window_scores(a, weights) for a in analyses]
-    if not scores:
-        return []
-    allv = np.concatenate(scores)
-    lo, hi = np.percentile(allv, [p_poor, p_good])
-    return [np.where(s < lo, 0, np.where(s < hi, 1, 2)) for s in scores]
-
-
-def level_segments(a, lv):
-    """Merge consecutive windows with the same level -> [(t0, t1, level)]"""
+def _merge(segs):
     out = []
-    for i in range(len(lv)):
-        if out and out[-1][2] == lv[i]:
-            out[-1] = (out[-1][0], float(a.t1[i]), int(lv[i]))
+    for s in segs:
+        if out and out[-1][2] == s[2]:
+            out[-1][1] = s[1]
         else:
-            out.append((float(a.t0[i]), float(a.t1[i]), int(lv[i])))
+            out.append(list(s))
     return out
+
+
+def apply_min_cut(a, lv, min_len):
+    """Merge consecutive windows of the same level, then absorb every segment shorter than min_len into the
+    neighbour with the closest level (ties: the longer neighbour). Result: [(t0, t1, level)]"""
+    segs = _merge([[float(a.t0[i]), float(a.t1[i]), int(lv[i])] for i in range(len(lv))])
+    while len(segs) > 1:
+        short = [i for i, s in enumerate(segs) if s[1] - s[0] < min_len - 1e-6]
+        if not short:
+            break
+        i = min(short, key=lambda k: segs[k][1] - segs[k][0])
+        cands = [j for j in (i - 1, i + 1) if 0 <= j < len(segs)]
+        j = min(cands, key=lambda j: (abs(segs[j][2] - segs[i][2]), -(segs[j][1] - segs[j][0])))
+        segs[j][0] = min(segs[j][0], segs[i][0])
+        segs[j][1] = max(segs[j][1], segs[i][1])
+        del segs[i]
+        segs = _merge(segs)
+    return [(s[0], s[1], s[2]) for s in segs]
+
+
+PROTECT_POOR, PROTECT_FAIR = 65, 85   # "Protect good frames": above these scores a window can't be Poor / Fair
+
+
+def grade_segments(analyses, s):
+    """s = project settings. Returns, per analysis, a list of (t0, t1, level)."""
+    if not analyses:
+        return []
+    if s.get("mode", "auto") == "auto":
+        thr = s.get("thr", 60)
+        lvs = [np.where(sc >= thr + 10, 2, np.where(sc >= thr - 10, 1, 0)) for sc in map(auto_scores, analyses)]
+    else:
+        on = s.get("on", {})
+        weights = {k: (s.get(k, 50) / 100 if on.get(k, True) else 0) for k in KEYS}
+        scores = [window_scores(a, weights) for a in analyses]
+        lo, hi = np.percentile(np.concatenate(scores), [s.get("p1", 25), s.get("p2", 65)])
+        if s.get("protect", True):
+            lo, hi = min(lo, PROTECT_POOR), min(hi, PROTECT_FAIR)
+        lvs = [np.where(sc < lo, 0, np.where(sc < hi, 1, 2)) for sc in scores]
+    mc = float(s.get("mincut", 3))
+    return [apply_min_cut(a, lv, mc) for a, lv in zip(analyses, lvs)]
 
 
 def frame_jpeg(path, t, width=640):
