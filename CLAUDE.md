@@ -59,6 +59,8 @@ bottleneck, decoding is: explain this if asked again.
 - Sony sidecar files (M01.XML etc.) must be skipped when adding clips.
 - Keep FFmpeg bundled via imageio-ffmpeg (owner does not want to install anything).
 - Untested in real Premiere so far: audio tracks in the sync XML, colour labels in DaVinci Resolve.
+- In every xmeml clipitem, rate, duration, start, end, in and out are all in SEQUENCE frames; only <file> keeps the
+  camera's own rate. Mixing them made 50p/59.94p cameras drift and show 'no media' stripes in a 25p sequence.
 
 ## Testing
 No real footage in CI. Generate synthetic clips with FFmpeg (testsrc2 + blur / dark / shaky crop / pan; synthetic music

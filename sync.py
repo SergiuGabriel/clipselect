@@ -242,7 +242,7 @@ def run_sync(masters, clips, progress=None, cancel=None, clocks=None, groups=Non
                         preds[mi] = d
                 if preds:
                     r = sync_clip(indexes, x, preds)
-                    if r["conf"] not in ("high", "medium"):
+                    if r["conf"] != "high":       # a repeated chorus inside the window must not win: else full search
                         r = None
             if r is None:
                 full += 1
@@ -435,7 +435,8 @@ def auto_cameras(files, infos, results, old_cams=None):
         if not infos[p]["video"] or not r or r["conf"] == "fail":
             continue
         i = infos[p]
-        key = (f["group"], i["model"], i["codec"], i["size"], i["fps"], re.sub(r"\d+", "#", Path(p).stem))
+        # frame rate / resolution are NOT part of the fingerprint: one camera may switch to 50p for slow motion
+        key = (f["group"], i["model"], re.sub(r"\d+", "#", Path(p).stem))
         groups.setdefault(key, []).append(p)
     cams = []
     for key, paths in sorted(groups.items(), key=lambda kv: kv[0]):

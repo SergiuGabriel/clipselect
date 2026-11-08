@@ -262,15 +262,17 @@ def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=N
                 f'<channelcount>{ch}</channelcount></audio></media></file>')
 
     def item(p, cin, cout, g_start, label, title, audio_ch=None):
+        # Every number of a clipitem is in SEQUENCE frames (like Premiere's own XML); only the <file> keeps the
+        # camera's real frame rate. Mixing the two made 50p / 59.94p cameras drift in a 25p sequence.
         inf = vinfo(p)
-        frate, ffps = core._rate(inf.fps)
-        fdur = int(inf.duration * ffps)
+        sdur = max(1, int(round(inf.duration * fps)))
         st = round((g_start - T0) * fps)
         en = st + max(1, round((cout - cin) * fps))
-        fin = max(0, round(cin * ffps))
-        fout = min(fdur, fin + max(1, round((en - st) / fps * ffps)))
+        fin = max(0, round(cin * fps))
+        fout = min(sdur, fin + (en - st))
+        en = st + (fout - fin)
         src = (f'<sourcetrack><mediatype>audio</mediatype><trackindex>{audio_ch}</trackindex></sourcetrack>' if audio_ch else "")
-        return (f'<clipitem id="{nid("clip")}"><name>{escape(title)}</name><duration>{fdur}</duration>{frate}'
+        return (f'<clipitem id="{nid("clip")}"><name>{escape(title)}</name><duration>{sdur}</duration>{rate_xml}'
                 f'<start>{st}</start><end>{en}</end><in>{fin}</in><out>{fout}</out>'
                 f'<labels><label2>{label}</label2></labels>{file_xml(p)}{src}</clipitem>')
 

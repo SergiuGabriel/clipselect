@@ -441,22 +441,23 @@ def export_xmeml(items, out_path, name="MoneyMakingMachine", seq=None, single=Fa
             for s, e, lvl in segs:
                 if lvl != 2:
                     continue
-                ln = max(1, round((e - s) * seq_fps))
-                fin = max(0, round(s * ffps))
-                entries.append((2, offset, offset + ln, fin, min(fdur, fin + max(1, round(ln / seq_fps * ffps))), fi))
-                offset += ln
+                sdur = max(1, int(round(inf.duration * seq_fps)))
+                fin = max(0, round(s * seq_fps))
+                fout = min(sdur, fin + max(1, round((e - s) * seq_fps)))
+                entries.append((2, offset, offset + (fout - fin), fin, fout, fi))
+                offset += fout - fin
         items = []
     for fi, (a, segs) in enumerate(items, 1):
         inf = a.info
         frate, ffps = _rate(inf.fps)
         fdur = int(inf.duration * ffps)
         files[fi] = (inf, frate, fdur)
+        sdur = max(1, int(round(inf.duration * seq_fps)))
         for s, e, lvl in segs:
             st = offset + round(s * seq_fps)
-            en = max(st + 1, offset + round(e * seq_fps))
-            fin = max(0, round(s * ffps))
-            fout = min(fdur, fin + max(1, round((en - st) / seq_fps * ffps)))
-            entries.append((lvl, st, en, fin, fout, fi))
+            fin = max(0, round(s * seq_fps))
+            fout = min(sdur, fin + max(1, round((e - s) * seq_fps)))
+            entries.append((lvl, st, st + (fout - fin), fin, fout, fi))
         offset += round(a.duration * seq_fps)
     total = offset
 
@@ -475,7 +476,7 @@ def export_xmeml(items, out_path, name="MoneyMakingMachine", seq=None, single=Fa
             nclip += 1
             out.append(
                 f'<clipitem id="clipitem-{nclip}"><name>{escape(Path(inf.path).stem)}</name>'
-                f'<duration>{fdur}</duration>{frate}<start>{st}</start><end>{en}</end>'
+                f'<duration>{max(1, int(round(inf.duration * seq_fps)))}</duration>{seq_rate}<start>{st}</start><end>{en}</end>'
                 f'<in>{fin}</in><out>{fout}</out><labels><label2>{LABELS[lvl]}</label2></labels>'
                 f'{file_xml}</clipitem>')
         tracks.append(f'<track>{"".join(out)}<enabled>TRUE</enabled><locked>FALSE</locked></track>')

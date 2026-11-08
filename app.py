@@ -1663,8 +1663,8 @@ class MulticamPage(QWidget):
         self.cam_t.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.cam_t.itemChanged.connect(self.cam_renamed)
         self.tabs.addTab(self.cam_t, "Cameras")
-        self.table = QTableWidget(0, 7)
-        self.table.setHorizontalHeaderLabels(["Camera", "Clip", "Master", "Start in master", "Duration", "Drift", "Sync"])
+        self.table = QTableWidget(0, 8)
+        self.table.setHorizontalHeaderLabels(["Camera", "Clip", "Master", "Start in master", "Duration", "Drift", "Sync", "FPS"])
         self.table.verticalHeader().hide()
         self.table.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.DoubleClicked | QAbstractItemView.EditKeyPressed)
@@ -1917,7 +1917,10 @@ class MulticamPage(QWidget):
             res = s["clips"]
             cnt = {k: sum(1 for r in res.values() if r["conf"] == k) for k in CONF_NAME}
             m = ", ".join(Path(x["path"]).name for x in s["masters"])
-            self.note.setText((s.get("note") + "  " if s.get("note") else "") +
+            rates = sorted({i.get("fps") for i in self.p.get("infos", {}).values() if i.get("video") and i.get("fps")})
+            mixed = (f"Mixed frame rates ({', '.join(f'{r:g}' for r in rates)} fps): handled in the export, "
+                     f"the sequence uses the first camera's rate.  ") if len(rates) > 1 else ""
+            self.note.setText(mixed + (s.get("note") + "  " if s.get("note") else "") +
                               f"Audio master: {m}  ·  {len(self.p['cams'])} cameras  ·  {cnt['high'] + cnt['medium']} clips synced, "
                               f"{cnt['low']} to check, {cnt['fail']} failed.")
         self.refresh_map()
@@ -2021,7 +2024,8 @@ class MulticamPage(QWidget):
             cells = [camname, Path(path).name, Path(s["masters"][res["master"]]["path"]).name if ok else "–",
                      fmt_t(res["offset"]) if ok else "–", f"{int(res['dur'] // 60)}:{res['dur'] % 60:04.1f}",
                      f"{res['drift_ppm']:+.0f} ppm" if res["n"] >= 3 and ok else "–",
-                     CONF_NAME[res["conf"]] + (" (manual)" if res.get("manual") else "") + (f" · {res['error']}" if res.get("error") else "")]
+                     CONF_NAME[res["conf"]] + (" (manual)" if res.get("manual") else "") + (f" · {res['error']}" if res.get("error") else ""),
+                     f"{self.p.get('infos', {}).get(path, {}).get('fps', 0):g}"]
             for c, t in enumerate(cells):
                 it = QTableWidgetItem(t)
                 if c == 6:
