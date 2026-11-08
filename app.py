@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, QStandardPaths, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QColor, QImage, QPainter, QPen, QPixmap
+from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QAbstractItemView, QApplication, QComboBox, QDialog, QFileDialog, QFrame,
                                QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
                                QMainWindow, QProgressBar, QPushButton, QScrollArea, QSlider, QStackedWidget,
@@ -30,6 +30,10 @@ SLIDERS = [("contrast", "Contrast", "Detect low/high contrast frames"),
            ("importance", "Visual Importance", "Scene significance scoring"),
            ("stability", "Shakiness / Stability", "Camera shake detection")]
 PRESETS = {"Lenient": (15, 50), "Normal": (25, 65), "Strict": (35, 75)}
+SEQ_SIZES = ["Match footage", "1920 x 1080", "3840 x 2160", "4096 x 2160", "1080 x 1920"]
+SEQ_RATES = ["Match footage", "23.976", "24", "25", "29.97", "30", "50", "59.94", "60"]
+SEQ_FIELDS = {"Lower Field First": "lower", "Upper Field First": "upper", "None (Progressive)": "none"}
+SEQ_DEFAULT = dict(size="Match footage", rate="Match footage", fields="Lower Field First")
 DEFAULTS = dict(contrast=50, exposure=50, focus=60, importance=40, stability=50, preset="Normal", p1=25, p2=65)
 
 STYLE = """
@@ -143,15 +147,24 @@ def icon_pix(kind, s=56):
     return pm
 
 
+SKIP_EXT = {".xml", ".txt", ".json", ".bim", ".xmp", ".pdf", ".jpg", ".jpeg", ".png", ".gif", ".csv", ".db", ".plist",
+            ".cpf", ".ppn", ".sif", ".smi", ".thm", ".bup", ".ifo", ".srt", ".ini", ".log", ".md", ".html", ".ds_store"}
+
+
 def scan_paths(paths):
-    out = []
+    """Returns (video_files, skipped_count). Folders: known video extensions only. Files picked by hand: anything
+    except obvious sidecars (Sony M01.XML, thumbnails...)."""
+    out, skipped = [], 0
     for p in map(Path, paths):
         if p.is_dir():
             out += sorted(str(f) for f in p.rglob("*")
                           if f.is_file() and f.suffix.lower() in core.VIDEO_EXT and not f.name.startswith("."))
         elif p.is_file():
-            out.append(str(p))  # picked manually -> accepted whatever the extension
-    return out
+            if p.suffix.lower() in SKIP_EXT or p.name.startswith("."):
+                skipped += 1
+            else:
+                out.append(str(p))  # picked manually -> accepted whatever the extension
+    return out, skipped
 
 
 def weights_of(s):
@@ -176,7 +189,7 @@ class Store:
 
     def new(self, name):
         p = dict(id=uuid.uuid4().hex, name=name, created=datetime.now().isoformat(timespec="seconds"),
-                 videos=[], settings=dict(DEFAULTS), history=[], out_dir="", out_name="", out_sw="Premiere Pro")
+                 videos=[], settings=dict(DEFAULTS), history=[], out_dir="", out_name="", out_sw="Premiere Pro", seq=dict(SEQ_DEFAULT))
         self.projects.append(p)
         self.save()
         return p
@@ -738,7 +751,11 @@ class ProjectPage(QWidget):
     # --- video list
     def add(self, paths):
         have = set(self.p["videos"])
-        for f in scan_paths(paths):
+        found, skipped = scan_paths(paths)
+        if skipped:
+            self.hint.setText(f"Skipped {skipped} non-video file(s) (e.g. XML sidecars).")
+            QTimer.singleShot(5000, lambda: self.hint.setText("Select videos and press Delete to remove them."))
+        for f in found:
             if f not in have:
                 self.p["videos"].append(f)
                 have.add(f)
@@ -833,7 +850,7 @@ class AnalyzingPage(QWidget):
         v.addWidget(ic, 0, Qt.AlignHCenter)
         t = lbl("Analyzing Your Footage", "h2")
         v.addWidget(t, 0, Qt.AlignHCenter)
-        v.addWidget(lbl("Now we play the waiting game", "muted"), 0, Qt.AlignHCenter)
+        v.addWidget(lbl("Now we play the waiting game...", "muted"), 0, Qt.AlignHCenter)
         v.addSpacing(8)
         box = QWidget()
         box.setMaximumWidth(520)
@@ -859,9 +876,9 @@ class AnalyzingPage(QWidget):
         br.addWidget(self.b_pause)
         br.addWidget(btn("Cancel", slot=self.cancel.emit))
         v.addLayout(br)
-        note = lbl("This analysis will continue in the background. You can safely return to your project and check progress from the Queue or History tab.", "muted", True)
-        note.setFixedWidth(560)
+        note = lbl("This analysis will continue in the background.\nYou can safely return to your project and check progress from the Queue or History tab.", "muted")
         note.setAlignment(Qt.AlignCenter)
+        note.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         v.addWidget(note, 0, Qt.AlignHCenter)
         v.addWidget(btn("←  Return to project", "link", self.back.emit), 0, Qt.AlignHCenter)
         cols = QHBoxLayout()
@@ -995,6 +1012,16 @@ class ResultsPage(QWidget):
         sr.addWidget(self.b_pp)
         sr.addWidget(self.b_dr)
         rv.addLayout(sr)
+        rv.addWidget(lbl("Sequence Settings", "muted"))
+        self.c_size, self.c_rate, self.c_fields = QComboBox(), QComboBox(), QComboBox()
+        self.c_size.addItems(SEQ_SIZES)
+        self.c_rate.addItems(SEQ_RATES)
+        self.c_fields.addItems(list(SEQ_FIELDS))
+        for w, t in ((self.c_size, "Frame size"), (self.c_rate, "Frame rate"), (self.c_fields, "Fields")):
+            row = QHBoxLayout()
+            row.addWidget(lbl(t, "muted"))
+            row.addWidget(w, 1)
+            rv.addLayout(row)
         rv.addSpacing(6)
         rv.addWidget(btn("Generate Result File", "primary", self.generate))
         self.msg = lbl("", "ok", True)
@@ -1044,17 +1071,27 @@ class ResultsPage(QWidget):
         self.dir.setText(p["out_dir"] or str(Path(an[0].info.path).parent))
         self.name.setText(p["out_name"] or p["name"])
         self.set_sw(p["out_sw"])
+        sq = {**SEQ_DEFAULT, **p.get("seq", {})}
+        self.c_size.setCurrentText(sq["size"])
+        self.c_rate.setCurrentText(sq["rate"])
+        self.c_fields.setCurrentText(sq["fields"])
 
     def generate(self):
         name = self.name.text().strip() or "MoneyMakingMachine"
         out = Path(self.dir.text()) / (name + ".xml")
         try:
-            n = core.export_xmeml(self.items, str(out), name)
+            seq = {"fields": SEQ_FIELDS[self.c_fields.currentText()]}
+            if self.c_size.currentIndex() > 0:
+                seq["width"], seq["height"] = (int(x) for x in self.c_size.currentText().split(" x "))
+            if self.c_rate.currentIndex() > 0:
+                seq["fps"] = float(self.c_rate.currentText())
+            n = core.export_xmeml(self.items, str(out), name, seq)
         except Exception as e:
             self.msg.setStyleSheet(f"color:{C['POOR']}")
             self.msg.setText(f"Error: {e}")
             return
         self.p["out_dir"], self.p["out_name"] = self.dir.text(), name
+        self.p["seq"] = dict(size=self.c_size.currentText(), rate=self.c_rate.currentText(), fields=self.c_fields.currentText())
         self.store.save()
         self.msg.setStyleSheet(f"color:{C['GOOD']}")
         self.msg.setText(f"Saved {n} segments to\n{out}")
@@ -1220,6 +1257,9 @@ class Main(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP)
+    ic = Path(getattr(sys, "_MEIPASS", Path(__file__).parent)) / "icon.png"
+    if ic.exists():
+        app.setWindowIcon(QIcon(str(ic)))
     app.setStyleSheet(STYLE)
     w = Main()
     w.show()
