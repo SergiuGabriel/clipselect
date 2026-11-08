@@ -18,7 +18,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install -r requirements.txt pyinstaller
+      - run: pip install -r requirements.txt pyinstaller pillow
+      - run: python make_icons.py
       - run: ${{ env.PYI }} --icon icon.icns --add-data "icon.png:." --osx-bundle-identifier com.moneymakingmachine.app app.py
       - name: Check bundled FFmpeg and ad-hoc sign
         run: |
@@ -39,7 +40,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install -r requirements.txt pyinstaller
+      - run: pip install -r requirements.txt pyinstaller pillow
+      - run: python make_icons.py
       - run: ${{ env.PYI }} --icon icon.ico --add-data "icon.png;." app.py
       - uses: actions/upload-artifact@v4
         with: { name: MoneyMakingMachine-Windows, path: dist/MoneyMakingMachine }
