@@ -1,0 +1,45 @@
+name: build
+on: [push, workflow_dispatch]
+env:
+  PYI: >-
+    pyinstaller --noconfirm --windowed --name ClipSelect --collect-all imageio_ffmpeg
+    --exclude-module PySide6.QtWebEngineCore --exclude-module PySide6.QtQml --exclude-module PySide6.QtQuick
+    --exclude-module PySide6.Qt3DCore --exclude-module PySide6.QtMultimedia
+jobs:
+  mac:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: macos-latest, name: "Apple-Silicon-M1-M2-M3-M4" }
+          - { runner: macos-15-intel, name: "Mac-Intel" }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt pyinstaller
+      - run: ${{ env.PYI }} --osx-bundle-identifier ro.clipselect.app app.py
+      - name: Verifică FFmpeg inclus și semnează ad-hoc
+        run: |
+          find dist/ClipSelect.app -name 'ffmpeg*' -type f
+          chmod +x dist/ClipSelect.app/Contents/Resources/imageio_ffmpeg/binaries/ffmpeg* || true
+          codesign --force --deep -s - dist/ClipSelect.app
+      - name: Creează DMG
+        run: |
+          mkdir stage && cp -R dist/ClipSelect.app stage/ && ln -s /Applications stage/Applications
+          hdiutil create -volname ClipSelect -srcfolder stage -ov -format UDZO ClipSelect-${{ matrix.name }}.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ClipSelect-${{ matrix.name }}
+          path: ClipSelect-${{ matrix.name }}.dmg
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements.txt pyinstaller
+      - run: ${{ env.PYI }} app.py
+      - uses: actions/upload-artifact@v4
+        with: { name: ClipSelect-Windows, path: dist/ClipSelect }
