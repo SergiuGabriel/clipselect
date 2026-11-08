@@ -27,7 +27,8 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
    clips are searched only +-90 s around the prediction (~18x faster), with fallback to a full search.
    Export = ONE sequence (owner's wish): V1..Vn one track per camera holding ONLY that camera's cuts of the auto edit
    (no overlaps, so it plays as the edit; full clips when there is no auto edit yet), A1(/A2) = all recorder files,
-   uncut, on one common timeline (`sync.master_starts`), then one (disabled) audio track per camera, uncut. Renaming a camera to an existing name merges them.
+   uncut, on one common timeline (`sync.master_starts`), then one audio track per camera, uncut and NOT muted
+   (owner's wish: only the track mute was unwanted). Renaming a camera to an existing name merges them.
    The owner's usual Premiere workflow for reference: Premiere audio sync, or timecode sync (TC set by hand on each
    camera, not frame accurate) + camera labels + "Create Multi-Camera Source Sequence", then a manual audio re-sync.
    Video analyses of multicam projects live in `<project id>.analysis.json` next to projects.json (cached by size+mtime).
@@ -59,8 +60,11 @@ bottleneck, decoding is: explain this if asked again.
 - Sony sidecar files (M01.XML etc.) must be skipped when adding clips.
 - Keep FFmpeg bundled via imageio-ffmpeg (owner does not want to install anything).
 - Untested in real Premiere so far: audio tracks in the sync XML, colour labels in DaVinci Resolve.
-- In every xmeml clipitem, rate, duration, start, end, in and out are all in SEQUENCE frames; only <file> keeps the
-  camera's own rate. Mixing them made 50p/59.94p cameras drift and show 'no media' stripes in a 25p sequence.
+- In every xmeml clipitem, rate, duration, start, end, in and out are all in SEQUENCE frames; only <file> keeps
+  the camera's own rate.
+- Multicam cut boundaries are converted to frames once for the whole edit; touching pieces share the same
+  boundary frame, and each piece's source in-frame is derived from its timeline frame.
+- Camera audio tracks in the multicam export must NOT be muted (no <enabled>FALSE</enabled>).
 
 ## Testing
 No real footage in CI. Generate synthetic clips with FFmpeg (testsrc2 + blur / dark / shaky crop / pan; synthetic music

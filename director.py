@@ -211,7 +211,7 @@ def build(cams, results, analyses, masters, st):
 # V1..Vn  = one track per camera. With an auto edit: only that camera's cuts (nothing overlaps, so it plays as the edit).
 #           Sync only (no auto edit yet): the full clips.
 # A1(/A2) = recorder (all recorder files, one after another on the common timeline)
-# then one audio track per camera (camera sound, synced, track disabled so only the recorder plays)
+# then one audio track per camera (camera sound, synced, uncut, NOT muted)
 
 def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=None):
     starts = starts or sync.master_starts(masters)
@@ -261,14 +261,18 @@ def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=N
                 f'<audio><samplecharacteristics><depth>16</depth><samplerate>{rate}</samplerate></samplecharacteristics>'
                 f'<channelcount>{ch}</channelcount></audio></media></file>')
 
-    def item(p, cin, cout, g_start, label, title, audio_ch=None):
+    def item(p, cin, cout, g_start, label, title, audio_ch=None, frames=None):
         # Every number of a clipitem is in SEQUENCE frames (like Premiere's own XML); only the <file> keeps the
         # camera's real frame rate. Mixing the two made 50p / 59.94p cameras drift in a 25p sequence.
         inf = vinfo(p)
         sdur = max(1, int(round(inf.duration * fps)))
-        st = round((g_start - T0) * fps)
-        en = st + max(1, round((cout - cin) * fps))
-        fin = max(0, round(cin * fps))
+        clip0 = (g_start - cin - T0) * fps   # where the clip's first frame sits on the timeline (may be sub-frame)
+        if frames:                           # cut boundaries computed once for the whole edit (shared by neighbours)
+            st, en = frames
+        else:
+            st = round((g_start - T0) * fps)
+            en = st + max(1, round((cout - cin) * fps))
+        fin = max(0, round(st - clip0))      # source frame derived from the timeline frame: picture stays in sync
         fout = min(sdur, fin + (en - st))
         en = st + (fout - fin)
         src = (f'<sourcetrack><mediatype>audio</mediatype><trackindex>{audio_ch}</trackindex></sourcetrack>' if audio_ch else "")
@@ -286,16 +290,27 @@ def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=N
     # video: if there is an auto edit, every camera's track holds ONLY its cuts (like a multicam edit already
     # flattened), so a wrong cut is fixed by trimming / swapping on that camera's track. Without an auto edit
     # (sync only) every camera track holds its full clips.
-    cuts = {ci: [] for ci in range(len(cams))}
+    # All cut boundaries are turned into frames ONCE for the whole edit: when one piece ends where the next begins,
+    # both get exactly the same frame, so there is never a 1-frame gap or overlap between cameras.
+    allp = []
     for e in edits or []:
         if e:
             g0 = starts[e["master"]]
-            for ci, p, a, b, s0 in e["pieces"]:
-                cuts[ci].append((g0 + s0, p, a, b))
+            allp += [[g0 + s0, g0 + s0 + (b - a), ci, p, a, b] for ci, p, a, b, s0 in e["pieces"]]
+    allp.sort(key=lambda x: x[0])
+    fr = lambda t: round((t - T0) * fps)
+    frames = [[fr(x[0]), fr(x[1])] for x in allp]
+    for k in range(len(allp) - 1):
+        if abs(allp[k][1] - allp[k + 1][0]) < 0.1:      # touching pieces share the boundary frame
+            frames[k][1] = frames[k + 1][0]
+    cuts = {ci: [] for ci in range(len(cams))}
+    for (g, gend, ci, p, a, b), f in zip(allp, frames):
+        if f[1] > f[0]:
+            cuts[ci].append((g, p, a, b, tuple(f)))
     has_edit = any(cuts.values())
     for ci, cam in enumerate(cams):
         if has_edit:
-            its = [item(p, a, b, g, lab(ci), f"{cam['name']} · {Path(p).stem}{flag(p)}") for g, p, a, b in sorted(cuts[ci])]
+            its = [item(p, a, b, g, lab(ci), f"{cam['name']} · {Path(p).stem}{flag(p)}", frames=f) for g, p, a, b, f in cuts[ci]]
         else:
             its = [item(p, 0.0, dur(p), g, lab(ci), f"{cam['name']} · {Path(p).stem}{flag(p)}")
                    for c, p, g in sorted(placed, key=lambda x: x[2]) if c == ci]
@@ -327,7 +342,7 @@ def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=N
         its = [item(p, 0.0, dur(p), g, lab(ci), f"{cam['name']} audio · {Path(p).stem}", audio_ch=1)
                for c, p, g in sorted(placed, key=lambda x: x[2]) if c == ci and ai(p)[1] > 0]
         if its:
-            a_tracks.append(track(its, enabled=False))
+            a_tracks.append(track(its))            # not muted (owner's wish)
     end = max([g + dur(p) for _, p, g in placed] + [starts[i] + m["duration"] for i, m in enumerate(masters)])
     total = int(np.ceil((end - T0) * fps))
     xml = (f'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4"><sequence id="sequence-1">'
