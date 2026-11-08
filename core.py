@@ -1,19 +1,20 @@
-"""ClipSelect core: analiză video (orice format citit de FFmpeg) + export XML (xmeml) pentru Premiere Pro."""
+"""MoneyMakingMachine core: video analysis (any format FFmpeg can read), 3-level grading, XML export."""
 import os
 import re
 import shutil
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from pathlib import Path
 from xml.sax.saxutils import escape
 
 import numpy as np
 
-SAMPLE_FPS = 8          # câte cadre/secundă analizăm
-WIN_SEC = 2.0           # lungimea unei ferestre de scorare
-AW, AH = 320, 180       # rezoluția de analiză (cadrele sunt redimensionate)
+SAMPLE_FPS = 8
+WIN_SEC = 2.0
+AW, AH = 320, 180
+KEYS = ["contrast", "exposure", "focus", "importance", "stability"]
 
-# Extensii folosite doar la scanarea folderelor. Fișierele adăugate manual sunt acceptate ORICARE ar fi.
+# Used only when scanning folders. Files picked manually are accepted whatever their extension.
 VIDEO_EXT = {
     ".mxf", ".mov", ".mp4", ".m4v", ".mkv", ".avi", ".mts", ".m2ts", ".ts", ".mpg", ".mpeg", ".m2v",
     ".wmv", ".webm", ".flv", ".3gp", ".mj2", ".dv", ".vob", ".ogv", ".gxf", ".r3d", ".braw", ".ari",
@@ -45,23 +46,20 @@ class Analysis:
     info: Info
     t0: np.ndarray
     t1: np.ndarray
-    sharp: np.ndarray    # 0-100
-    stab: np.ndarray     # 0-100
-    expo: np.ndarray     # 0-100
-    total: np.ndarray    # 0-100
+    comp: dict  # key -> np.ndarray of 0..1 scores, one per window
 
     @property
     def duration(self):
         return float(self.t1[-1]) if len(self.t1) else 0.0
 
-    @property
-    def score(self):
-        w = self.t1 - self.t0
-        return float((self.total * w).sum() / max(w.sum(), 1e-6)) if len(w) else 0.0
+    def to_json(self):
+        return {"info": asdict(self.info), "t0": self.t0.round(2).tolist(), "t1": self.t1.round(2).tolist(),
+                "comp": {k: v.round(3).tolist() for k, v in self.comp.items()}}
 
-    def mean(self, arr):
-        w = self.t1 - self.t0
-        return float((arr * w).sum() / max(w.sum(), 1e-6)) if len(w) else 0.0
+    @staticmethod
+    def from_json(d):
+        return Analysis(Info(**d["info"]), np.array(d["t0"]), np.array(d["t1"]),
+                        {k: np.array(v) for k, v in d["comp"].items()})
 
 
 def probe(path):
@@ -70,7 +68,7 @@ def probe(path):
     txt = r.stderr
     vline = next((l for l in txt.splitlines() if " Video:" in l and "attached pic" not in l), None)
     if not vline:
-        raise ValueError("Fișierul nu conține flux video (sau formatul nu e suportat de FFmpeg).")
+        raise ValueError("No video stream found (or format not supported by FFmpeg).")
     body = vline.split("Video:", 1)[1]
     m = re.search(r",\s*(\d{2,5})x(\d{2,5})", body)
     w, h = (int(m.group(1)), int(m.group(2))) if m else (1920, 1080)
@@ -98,6 +96,16 @@ def _shift(a, b):
     return (x - w if x > w // 2 else x), (y - h if y > h // 2 else y)
 
 
+def _focus_score(v):
+    return float(np.clip((np.log10(v + 1) - 0.7) / 1.6, 0, 1))
+
+
+def _contrast_score(s):
+    if s < 35:
+        return s / 35
+    return 1.0 if s <= 85 else max(0.0, 1 - (s - 85) / 60)
+
+
 def analyze(path, progress=None, cancel=None):
     info = probe(path)
     cmd = [ffmpeg_exe(), "-v", "error", "-nostdin", "-i", path, "-map", "0:v:0", "-an", "-sn", "-dn",
@@ -105,21 +113,25 @@ def analyze(path, progress=None, cancel=None):
            "-f", "rawvideo", "-"]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **_NOWIN)
     size = AW * AH
-    sharp, mean, bright, shifts = [], [], [], []
+    sharp, csharp, mean, bright, std, diff, shifts = [], [], [], [], [], [], []
     prev = None
     try:
         while True:
             if cancel and cancel():
-                raise InterruptedError("Anulat")
+                raise InterruptedError("Cancelled")
             buf = p.stdout.read(size)
             if len(buf) < size:
                 break
             f = np.frombuffer(buf, np.uint8).reshape(AH, AW)
+            ff = f.astype(np.float32)
             sharp.append(_lap_var(f))
-            mean.append(float(f.mean()))
+            csharp.append(_lap_var(f[45:135, 80:240]))
+            mean.append(float(ff.mean()))
+            std.append(float(ff.std()))
             bright.append(float((f > 250).mean()))
-            shifts.append(_shift(f.astype(np.float32), prev) if prev is not None else (0, 0))
-            prev = f.astype(np.float32)
+            diff.append(float(np.abs(ff - prev).mean()) if prev is not None else 0.0)
+            shifts.append(_shift(ff, prev) if prev is not None else (0, 0))
+            prev = ff
             if progress and info.duration and len(sharp) % 16 == 0:
                 progress(min(0.99, len(sharp) / SAMPLE_FPS / info.duration))
     finally:
@@ -127,9 +139,8 @@ def analyze(path, progress=None, cancel=None):
         p.wait()
     n = len(sharp)
     if n == 0:
-        raise ValueError("Nu s-a putut decoda niciun cadru (codec nesuportat? ex. BRAW/R3D cer SDK propriu).")
-
-    sharp, mean, bright = np.array(sharp), np.array(mean), np.array(bright)
+        raise ValueError("Could not decode any frame (unsupported codec? BRAW/R3D need the vendor SDK).")
+    sharp, csharp, mean, std, bright, diff = map(np.array, (sharp, csharp, mean, std, bright, diff))
     sh = np.array(shifts, dtype=np.float32)
     dur = info.duration or n / SAMPLE_FPS
     info.duration = dur
@@ -139,40 +150,58 @@ def analyze(path, progress=None, cancel=None):
     if len(idx) > 1 and n - idx[-1] < per // 2:
         idx.pop()
     bounds = idx + [n]
-    t0, t1, S, T, E = [], [], [], [], []
+    t0, t1 = [], []
+    comp = {k: [] for k in KEYS}
     for a, b in zip(bounds[:-1], bounds[1:]):
-        v = float(np.median(sharp[a:b]))
-        s_sharp = np.clip((np.log10(v + 1) - 0.7) / 1.6, 0, 1)
         m = float(mean[a:b].mean())
         pen = max(0, (45 - m) / 45, (m - 210) / 45) + max(0, float(bright[a:b].mean()) - 0.15) * 2
-        s_exp = float(np.clip(1 - pen, 0, 1))
         acc = np.linalg.norm(np.diff(sh[a:b], axis=0), axis=1)
         accel = float(acc.mean()) if len(acc) else 0.0
-        s_stab = float(np.clip(1 - (accel - 1.5) / 8, 0, 1))
+        act = float(np.clip(diff[a:b].mean() / 10, 0, 1))
+        comp["focus"].append(_focus_score(float(np.median(sharp[a:b]))))
+        comp["contrast"].append(_contrast_score(float(std[a:b].mean())))
+        comp["exposure"].append(float(np.clip(1 - pen, 0, 1)))
+        comp["stability"].append(float(np.clip(1 - (accel - 1.5) / 8, 0, 1)))
+        comp["importance"].append(0.6 * act + 0.4 * _focus_score(float(np.median(csharp[a:b]))))
         t0.append(a / SAMPLE_FPS)
         t1.append(min(b / SAMPLE_FPS, dur))
-        S.append(s_sharp * 100); T.append(s_stab * 100); E.append(s_exp * 100)
-    S, T, E = map(np.array, (S, T, E))
-    total = 0.6 * (0.4 * S + 0.3 * T + 0.3 * E) + 0.4 * np.minimum(np.minimum(S, T), E)
     if progress:
         progress(1.0)
-    return Analysis(info, np.array(t0), np.array(t1), S, T, E, total)
+    return Analysis(info, np.array(t0), np.array(t1), {k: np.array(v) for k, v in comp.items()})
 
 
-def segments(a, thr, min_len):
-    segs, cur = [], None
-    for i in range(len(a.total)):
-        if a.total[i] >= thr:
-            cur = [a.t0[i], a.t1[i]] if cur is None else [cur[0], a.t1[i]]
-        elif cur:
-            segs.append(tuple(cur)); cur = None
-    if cur:
-        segs.append(tuple(cur))
-    return [s for s in segs if s[1] - s[0] >= min_len]
+# ---------------- Grading: Poor(0) / Fair(1) / Good(2) ----------------
+
+def window_scores(a, weights):
+    """weights: dict key -> 0..1. Returns 0..100 score per window."""
+    w = np.array([weights.get(k, 0) for k in KEYS], float)
+    M = np.vstack([a.comp[k] for k in KEYS])
+    if w.sum() <= 0:
+        return np.full(M.shape[1], 50.0)
+    mean = (w[:, None] * M).sum(0) / w.sum()
+    return 100 * (0.6 * mean + 0.4 * M[w > 0].min(0))
 
 
-def rating(score, thr):
-    return "green" if score >= thr + 10 else "yellow" if score >= thr - 10 else "red"
+def grade(analyses, weights, p_poor, p_good):
+    """Lowest p_poor% of all windows -> Poor, up to p_good% -> Fair, the rest -> Good.
+    Returns one int array (0/1/2) per analysis."""
+    scores = [window_scores(a, weights) for a in analyses]
+    if not scores:
+        return []
+    allv = np.concatenate(scores)
+    lo, hi = np.percentile(allv, [p_poor, p_good])
+    return [np.where(s < lo, 0, np.where(s < hi, 1, 2)) for s in scores]
+
+
+def level_segments(a, lv):
+    """Merge consecutive windows with the same level -> [(t0, t1, level)]"""
+    out = []
+    for i in range(len(lv)):
+        if out and out[-1][2] == lv[i]:
+            out[-1] = (out[-1][0], float(a.t1[i]), int(lv[i]))
+        else:
+            out.append((float(a.t0[i]), float(a.t1[i]), int(lv[i])))
+    return out
 
 
 def frame_jpeg(path, t, width=640):
@@ -181,7 +210,16 @@ def frame_jpeg(path, t, width=640):
     return subprocess.run(cmd, capture_output=True, **_NOWIN).stdout
 
 
-# ---------------- Export xmeml (Final Cut Pro XML v4 - se importă în Premiere: File > Import) ----------------
+def thumb_jpeg(path, t=1.0, height=120):
+    cmd = [ffmpeg_exe(), "-v", "error", "-nostdin", "-ss", f"{t:.3f}", "-i", path, "-frames:v", "1",
+           "-vf", f"scale=-2:{height}", "-f", "image2pipe", "-vcodec", "mjpeg", "-"]
+    out = subprocess.run(cmd, capture_output=True, **_NOWIN).stdout
+    if not out and t > 0:
+        return thumb_jpeg(path, 0, height)
+    return out
+
+
+# ---------------- Export (xmeml / FCP7 XML: imported by Premiere Pro and DaVinci Resolve) ----------------
 
 def _rate(fps):
     tb = round(fps)
@@ -193,18 +231,18 @@ def _url(p):
     return Path(p).resolve().as_uri().replace("file:///", "file://localhost/", 1)
 
 
-LABELS = {"green": "Forest", "yellow": "Mango", "red": "Rose"}
+LABELS = {0: "Rose", 1: "Yellow", 2: "Forest"}   # Poor / Fair / Good
 
 
-def export_xmeml(items, out_path, name="ClipSelect"):
-    """items = [(Analysis, [(t0,t1),...], 'green'|'yellow'|'red'), ...]"""
+def export_xmeml(items, out_path, name="MoneyMakingMachine"):
+    """items = [(Analysis, [(t0, t1, level), ...]), ...]  -> one timeline with every segment, colour-labelled."""
     items = [i for i in items if i[1]]
     if not items:
-        raise ValueError("Nicio selecție de exportat.")
+        raise ValueError("Nothing to export.")
     seq_rate, seq_fps = _rate(items[0][0].info.fps)
     w0, h0 = items[0][0].info.width, items[0][0].info.height
     out, cursor, nclip = [], 0, 0
-    for fi, (a, segs, rate_name) in enumerate(items, 1):
+    for fi, (a, segs) in enumerate(items, 1):
         inf = a.info
         frate, ffps = _rate(inf.fps)
         fdur = int(inf.duration * ffps)
@@ -212,7 +250,7 @@ def export_xmeml(items, out_path, name="ClipSelect"):
                      f'<pathurl>{escape(_url(inf.path))}</pathurl>{frate}<duration>{fdur}</duration>'
                      f'<media><video><samplecharacteristics><width>{inf.width}</width><height>{inf.height}</height>'
                      f'</samplecharacteristics></video></media></file>')
-        for k, (s, e) in enumerate(segs):
+        for k, (s, e, lvl) in enumerate(segs):
             nclip += 1
             fin = max(0, round(s * ffps))
             fout = min(fdur, round(e * ffps))
@@ -221,7 +259,7 @@ def export_xmeml(items, out_path, name="ClipSelect"):
             out.append(
                 f'<clipitem id="clipitem-{nclip}"><name>{escape(Path(inf.path).stem)}</name>'
                 f'<duration>{fdur}</duration>{frate}<start>{cursor}</start><end>{cursor + ln}</end>'
-                f'<in>{fin}</in><out>{fout}</out><labels><label2>{LABELS[rate_name]}</label2></labels>'
+                f'<in>{fin}</in><out>{fout}</out><labels><label2>{LABELS[lvl]}</label2></labels>'
                 f'{file_xml}</clipitem>')
             cursor += ln
     xml = (f'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4">'
