@@ -47,6 +47,7 @@ class Analysis:
     t0: np.ndarray
     t1: np.ndarray
     comp: dict  # key -> np.ndarray of 0..1 scores, one per window
+    fs: dict = None  # per-sample (8/s) raw measurements: lap, mean, bright, diff, sx, sy (robust shift), gx, gy (global)
 
     @property
     def duration(self):
@@ -54,12 +55,14 @@ class Analysis:
 
     def to_json(self):
         return {"info": asdict(self.info), "t0": self.t0.round(2).tolist(), "t1": self.t1.round(2).tolist(),
-                "comp": {k: v.round(3).tolist() for k, v in self.comp.items()}}
+                "comp": {k: v.round(3).tolist() for k, v in self.comp.items()},
+                "fs": {k: np.asarray(v).round(2).tolist() for k, v in self.fs.items()} if self.fs else None}
 
     @staticmethod
     def from_json(d):
         return Analysis(Info(**d["info"]), np.array(d["t0"]), np.array(d["t1"]),
-                        {k: np.array(v) for k, v in d["comp"].items()})
+                        {k: np.array(v) for k, v in d["comp"].items()},
+                        {k: np.array(v, float) for k, v in d["fs"].items()} if d.get("fs") else None)
 
 
 def probe(path):
@@ -190,10 +193,99 @@ def analyze(path, progress=None, cancel=None):
         t1.append(min(b / SAMPLE_FPS, dur))
     if progress:
         progress(1.0)
-    return Analysis(info, np.array(t0), np.array(t1), {k: np.array(v) for k, v in comp.items()})
+    fs = dict(lap=sharp, mean=mean, bright=bright, diff=diff, sx=sh[:, 0], sy=sh[:, 1], gx=shg[:, 0], gy=shg[:, 1])
+    return Analysis(info, np.array(t0), np.array(t1), {k: np.array(v) for k, v in comp.items()},
+                    {k: np.asarray(v, float) for k, v in fs.items()})
 
 
 # ---------------- Grading: Poor(0) / Fair(1) / Good(2) ----------------
+
+MOVE_PX = 8.0   # robust shift per sample (1/8 s, 320 px wide) above which the camera is "moving" between subjects
+
+
+def focus_vec(lap):
+    return np.clip((np.log10(np.asarray(lap) + 1) - 0.7) / 1.6, 0, 1)
+
+
+def exposure_vec(mean, bright):
+    mean, bright = np.asarray(mean), np.asarray(bright)
+    pen = np.maximum.reduce([np.zeros_like(mean), (45 - mean) / 45, (mean - 210) / 45]) + np.maximum(0, bright - 0.15) * 2
+    return np.clip(1 - pen, 0, 1)
+
+
+def jitter_vec(fs):
+    """Per-sample change of the global shift (the original stability measure), 0 for the first sample."""
+    g = np.stack([fs["gx"], fs["gy"]], 1)
+    j = np.zeros(len(g))
+    j[1:] = np.linalg.norm(np.diff(g, axis=0), axis=1)
+    return j
+
+
+def moving_mask(fs):
+    sp = np.hypot(fs["sx"], fs["sy"])
+    if len(sp) >= 3:
+        sp = np.median(np.vstack([np.r_[sp[:1], sp[:-1]], sp, np.r_[sp[1:], sp[-1:]]]), axis=0)
+    m = sp > MOVE_PX
+    df = np.asarray(fs["diff"])            # whip pans alias the shift estimate but change the whole frame at once
+    m |= df > max(15.0, 3 * float(np.median(df)) if len(df) else 15.0)
+    d = m.copy()
+    d[1:] |= m[:-1]
+    d[:-1] |= m[1:]
+    return d
+
+
+def _v1_score(fs, a, b, jit):
+    F = float(focus_vec([np.median(fs["lap"][a:b])])[0])
+    E = float(exposure_vec([np.mean(fs["mean"][a:b])], [np.mean(fs["bright"][a:b])])[0])
+    acc = jit[a + 1:b]
+    S = float(np.clip(1 - ((acc.mean() if len(acc) else 0.0) - 1.5) / 8, 0, 1))
+    return 100 * (0.6 * (0.4 * F + 0.3 * S + 0.3 * E) + 0.4 * min(F, S, E))
+
+
+def auto_segments(a, thr, min_len, cut_moves=True):
+    """AUTO mode (the original algorithm, finer): the clip is split into 'holds' between camera moves; every second of
+    a hold is scored like the first version; kept parts (level 2) shorter than min_len are dropped (level 0)."""
+    dur = a.duration
+    if not a.fs:   # analyses made before per-sample data existed
+        lv = np.where(auto_scores(a) >= thr, 2, 0)
+        segs = _merge([[float(a.t0[i]), float(a.t1[i]), int(lv[i])] for i in range(len(lv))])
+    else:
+        fs, sr = a.fs, SAMPLE_FPS
+        n = len(fs["lap"])
+        mv = moving_mask(fs) if cut_moves else np.zeros(n, bool)
+        jit = jitter_vec(fs)
+        sel = np.zeros(n, bool)
+        i = 0
+        while i < n:
+            if mv[i]:
+                i += 1
+                continue
+            j = i
+            while j < n and not mv[j]:
+                j += 1
+            b = list(range(i, j, sr))
+            if len(b) > 1 and j - b[-1] < sr // 2:
+                b.pop()
+            b.append(j)
+            for x0, x1 in zip(b[:-1], b[1:]):
+                if x1 - x0 >= 2 and _v1_score(fs, x0, x1, jit) >= thr:
+                    sel[x0:x1] = True
+            i = j
+        segs = []
+        k = 0
+        while k < n:
+            m = k
+            while m < n and sel[m] == sel[k]:
+                m += 1
+            segs.append([k / sr, min(m / sr, dur), 2 if sel[k] else 0])
+            k = m
+        if segs:
+            segs[-1][1] = dur
+    for sg in segs:
+        if sg[2] == 2 and sg[1] - sg[0] < min_len - 1e-6:
+            sg[2] = 0
+    return [tuple(x) for x in _merge(segs)]
+
 
 def auto_scores(a):
     """AUTO mode = the original algorithm: focus, stability (whole-frame estimate), exposure. Absolute 0-100 score."""
@@ -251,8 +343,7 @@ def grade_segments(analyses, s):
     if not analyses:
         return []
     if s.get("mode", "auto") == "auto":
-        thr = s.get("thr", 60)
-        lvs = [np.where(sc >= thr + 10, 2, np.where(sc >= thr - 10, 1, 0)) for sc in map(auto_scores, analyses)]
+        return [auto_segments(a, s.get("thr", 60), float(s.get("mincut", 3)), s.get("cutmoves", True)) for a in analyses]
     else:
         on = s.get("on", {})
         weights = {k: (s.get(k, 50) / 100 if on.get(k, True) else 0) for k in KEYS}
@@ -302,7 +393,7 @@ def _sc(rate, w, h, fields):
             f"<pixelaspectratio>square</pixelaspectratio><fielddominance>{fields}</fielddominance></samplecharacteristics>")
 
 
-def export_xmeml(items, out_path, name="MoneyMakingMachine", seq=None):
+def export_xmeml(items, out_path, name="MoneyMakingMachine", seq=None, single=False):
     """items = [(Analysis, [(t0, t1, level), ...]), ...]
 
     One sequence, THREE video tracks: V1 = Poor, V2 = Fair, V3 = Good (Good on top, like the preview).
@@ -319,6 +410,20 @@ def export_xmeml(items, out_path, name="MoneyMakingMachine", seq=None):
     fd = FIELDS.get(seq.get("fields", "lower"), "none")
 
     entries, offset, files = [], 0, {}
+    if single:   # AUTO: only the kept shots, back to back on one track (like the first version)
+        for fi, (a, segs) in enumerate(items, 1):
+            inf = a.info
+            frate, ffps = _rate(inf.fps)
+            fdur = int(inf.duration * ffps)
+            files[fi] = (inf, frate, fdur)
+            for s, e, lvl in segs:
+                if lvl != 2:
+                    continue
+                ln = max(1, round((e - s) * seq_fps))
+                fin = max(0, round(s * ffps))
+                entries.append((2, offset, offset + ln, fin, min(fdur, fin + max(1, round(ln / seq_fps * ffps))), fi))
+                offset += ln
+        items = []
     for fi, (a, segs) in enumerate(items, 1):
         inf = a.info
         frate, ffps = _rate(inf.fps)
@@ -334,7 +439,7 @@ def export_xmeml(items, out_path, name="MoneyMakingMachine", seq=None):
     total = offset
 
     defined, nclip, tracks = set(), 0, []
-    for lvl in (0, 1, 2):
+    for lvl in ((2,) if single else (0, 1, 2)):
         out = []
         for _, st, en, fin, fout, fi in sorted((e for e in entries if e[0] == lvl), key=lambda e: e[1]):
             inf, frate, fdur = files[fi]

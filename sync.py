@@ -186,7 +186,7 @@ def run_sync(masters, clips, progress=None, cancel=None):
         if progress:
             progress(f"Reading master {i + 1} of {len(masters)}", 0.0)
         x = audio_pcm(m)
-        info.append(dict(path=m, duration=len(x) / SR))
+        info.append(dict(path=m, duration=len(x) / SR, onsets=onsets(x)))
         indexes.append(MasterIndex(x))
     results = {}
     for i, c in enumerate(clips):
@@ -284,3 +284,104 @@ def export_sync_xml(masters, cams, results, out_path, name="Sync"):
     Path(out_path).write_text('<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4">' + "".join(seqs) + "</xmeml>",
                               encoding="utf-8")
     return len(seqs)
+
+
+# ---------------- automatic ingest: "dump everything" ----------------
+
+def media_info(path):
+    """What is this file? video/audio presence, duration, format fingerprint and camera model tags."""
+    r = subprocess.run([core.ffmpeg_exe(), "-hide_banner", "-i", path], capture_output=True, text=True,
+                       errors="replace", **core._NOWIN)
+    t = r.stderr
+    vline = next((l for l in t.splitlines() if " Video:" in l and "attached pic" not in l), None)
+    has_a = bool(re.search(r"Stream #\d+:\d+.*?: Audio:", t))
+    m = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", t)
+    dur = int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3)) if m else 0.0
+    info = dict(video=vline is not None, audio=has_a, duration=dur, codec="", size="", fps=0.0, model="")
+    if vline:
+        body = vline.split("Video:", 1)[1]
+        info["codec"] = body.strip().split()[0].strip(",")
+        mm = re.search(r",\s*(\d{2,5})x(\d{2,5})", body)
+        info["size"] = f"{mm.group(1)}x{mm.group(2)}" if mm else ""
+        mm = re.search(r"([\d.]+)\s*fps", body)
+        info["fps"] = round(float(mm.group(1)), 2) if mm else 0.0
+    for key in ("com.apple.quicktime.model", "product_name", "model", "device_model", "make", "company_name"):
+        mm = re.search(rf"^\s*{re.escape(key)}\s*:\s*(.+)$", t, re.M)
+        if mm and not mm.group(1).strip().lower().startswith("lavf"):
+            info["model"] = mm.group(1).strip()
+            break
+    return info
+
+
+def classify(files, infos):
+    """files: [{"path","group"}]. Masters = audio-only files; if there are none, the longest file with sound.
+    Returns (masters, video_clips, note)."""
+    audio_only = [f["path"] for f in files if infos[f["path"]]["audio"] and not infos[f["path"]]["video"]]
+    videos = [f["path"] for f in files if infos[f["path"]]["video"]]
+    if audio_only:
+        return sorted(audio_only), videos, ""
+    with_sound = [p for p in videos if infos[p]["audio"]]
+    if not with_sound:
+        return [], videos, "No file with sound was found, so nothing can be synced."
+    longest = max(with_sound, key=lambda p: infos[p]["duration"])
+    return [longest], videos, f"No recorder file found: using the longest clip ({Path(longest).name}) as the audio master."
+
+
+def auto_cameras(files, infos, results, old_cams=None):
+    """Group synced video clips into cameras: same card folder + same format fingerprint + same file-name pattern.
+    Clips of one group that overlap in time cannot be one camera, so they are split into separate cameras.
+    Names/roles the user edited before are kept for the clips they cover."""
+    groups = {}
+    for f in files:
+        p = f["path"]
+        r = results.get(p)
+        if not infos[p]["video"] or not r or r["conf"] == "fail":
+            continue
+        i = infos[p]
+        key = (f["group"], i["model"], i["codec"], i["size"], i["fps"], re.sub(r"\d+", "#", Path(p).stem))
+        groups.setdefault(key, []).append(p)
+    cams = []
+    for key, paths in sorted(groups.items(), key=lambda kv: kv[0]):
+        lanes = []   # [(master, end), [paths]]
+        for p in sorted(paths, key=lambda q: (results[q]["master"], results[q]["offset"])):
+            r = results[p]
+            for lane in lanes:
+                if lane[0][0] != r["master"] or lane[0][1] <= r["offset"] + 0.5:
+                    lane[0] = (r["master"], r["offset"] + r["dur"])
+                    lane[1].append(p)
+                    break
+            else:
+                lanes.append([(r["master"], r["offset"] + r["dur"]), [p]])
+        for k, lane in enumerate(lanes):
+            base = key[0] or "Camera"
+            cams.append(dict(name=base + (f" {k + 1}" if len(lanes) > 1 else ""), role="Handheld", clips=lane[1], user=False))
+    seen = {}
+    for c in cams:   # unique names
+        n = seen.get(c["name"], 0)
+        seen[c["name"]] = n + 1
+        if n:
+            c["name"] = f"{c['name']} ({n + 1})"
+    if old_cams:     # keep what the user edited
+        owner = {p: oc for oc in old_cams if oc.get("user") for p in oc["clips"]}
+        for c in cams:
+            hits = [owner[p] for p in c["clips"] if p in owner]
+            if hits:
+                oc = max(set(map(id, hits)), key=lambda i: sum(id(h) == i for h in hits))
+                oc = next(h for h in hits if id(h) == oc)
+                c.update(name=oc["name"], role=oc["role"], user=True)
+    return cams
+
+
+def onsets(x, sr=SR):
+    """Times (s) of musical/sound onsets in the master, used to put cuts on the beat."""
+    hop = sr // 100
+    n = len(x) // hop
+    if n < 10:
+        return []
+    e = np.log1p(100 * np.sqrt((x[:n * hop].reshape(n, hop).astype(np.float64) ** 2).mean(1)))
+    flux = np.maximum(0, np.diff(e, prepend=e[0]))
+    k = np.ones(101) / 101
+    thr = np.convolve(flux, k, "same") + 1.5 * np.sqrt(np.convolve((flux - flux.mean()) ** 2, k, "same")) + 0.02
+    loc = np.maximum.reduce([np.r_[flux[i:], np.zeros(i)] for i in range(0, 6)] + [np.r_[np.zeros(i), flux[:-i]] for i in range(1, 6)])
+    idx = np.where((flux > thr) & (flux >= loc))[0]
+    return (idx * hop / sr).round(3).tolist()
