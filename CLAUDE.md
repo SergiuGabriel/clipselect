@@ -70,6 +70,8 @@ bottleneck, decoding is: explain this if asked again.
   are not used by the director (a DJI Osmo project once exploded into 59 tracks).
 
 ## Rules learned the hard way
+- Every clipitem <name> is EXACTLY the file name (e.g. RS-MAIN6210.MP4). DaVinci Resolve links timeline clips to media by
+  name: "V1 · RS CAM · RS-MAIN6210" made every clip "Media Offline". Show the camera by track and colour, never in the name.
 - Audio for sync is read channel by channel and the LOUDEST single channel is used (never a downmix): dual-mono with one
   empty or polarity-inverted channel, poly-WAVs and Sony MXF all work. Errors show FFmpeg's real message.
   Files with several audio streams (Sony MXF) are read in ONE pass (one output file per stream), never once per

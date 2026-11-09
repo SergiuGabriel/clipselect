@@ -508,7 +508,7 @@ def export_xmeml(items, out_path, name="MoneyMakingMachine", seq=None, single=Fa
     def head(e, cid):
         lvl, st, en, fin, fout, fi = e
         inf = files[fi][0]
-        return (f'<clipitem id="{cid}"><name>{escape(Path(inf.path).stem)}</name>'
+        return (f'<clipitem id="{cid}"><name>{escape(Path(inf.path).name)}</name>'
                 f'<duration>{max(1, int(round(inf.duration * seq_fps)))}</duration>{seq_rate}<start>{st}</start><end>{en}</end>'
                 f'<in>{fin}</in><out>{fout}</out><labels><label2>{LABELS[lvl]}</label2></labels>')
 

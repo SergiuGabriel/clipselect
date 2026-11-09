@@ -276,7 +276,9 @@ def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=N
         fout = min(sdur, fin + (en - st))
         en = st + (fout - fin)
         src = (f'<sourcetrack><mediatype>audio</mediatype><trackindex>{audio_ch}</trackindex></sourcetrack>' if audio_ch else "")
-        return (f'<clipitem id="{nid("clip")}"><name>{escape(title)}</name><duration>{sdur}</duration>{rate_xml}'
+        # the clip name MUST be the file name: DaVinci Resolve links timeline clips to media by name
+        # ("V1 · RS CAM · RS-MAIN6210" made every clip "Media Offline"); the camera is shown by track + colour
+        return (f'<clipitem id="{nid("clip")}"><name>{escape(Path(p).name)}</name><duration>{sdur}</duration>{rate_xml}'
                 f'<start>{st}</start><end>{en}</end><in>{fin}</in><out>{fout}</out>'
                 f'<labels><label2>{label}</label2></labels>{file_xml(p)}{src}</clipitem>')
 
@@ -336,7 +338,7 @@ def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=N
                      f'{rate_xml}<duration>{mdur}</duration><media><audio><samplecharacteristics><depth>16</depth>'
                      f'<samplerate>{r_}</samplerate></samplecharacteristics><channelcount>{c_}</channelcount></audio></media></file>')
             st = round((starts[mi] - T0) * fps)
-            its.append(f'<clipitem id="{nid("clip")}"><name>RECORDER · {escape(Path(m["path"]).name)}</name><duration>{mdur}</duration>'
+            its.append(f'<clipitem id="{nid("clip")}"><name>{escape(Path(m["path"]).name)}</name><duration>{mdur}</duration>'
                        f'{rate_xml}<start>{st}</start><end>{st + mdur}</end><in>0</in><out>{mdur}</out>{f}'
                        f'<sourcetrack><mediatype>audio</mediatype><trackindex>{min(ch, c_ if (c_ := ai(m["path"])[1]) else 1)}</trackindex></sourcetrack></clipitem>')
         a_tracks.append(track(its))

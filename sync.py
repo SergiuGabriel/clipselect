@@ -440,7 +440,7 @@ def export_sync_xml(masters, cams, results, out_path, name="Sync"):
                     fx = (f'<file id="file-{fid}"><name>{escape(Path(p).name)}</name><pathurl>{escape(core._url(p))}</pathurl>{frate}'
                           f'<duration>{fdur}</duration><media><video>{core._sc(frate, inf.width, inf.height, "none")}</video></media></file>')
                 flag = " [CHECK SYNC]" if r["conf"] == "low" else ""
-                out.append(f'<clipitem id="clipitem-{cid}"><name>{escape(Path(p).stem + flag)}</name><duration>{fdur}</duration>{frate}'
+                out.append(f'<clipitem id="clipitem-{cid}"><name>{escape(Path(p).name)}</name><duration>{fdur}</duration>{frate}'
                            f'<start>{st}</start><end>{st + ln}</end><in>0</in><out>{fdur}</out>'
                            f'<labels><label2>{CAM_LABELS[ci % len(CAM_LABELS)]}</label2></labels>{fx}</clipitem>')
             v_tracks.append(f'<track>{"".join(out)}<enabled>TRUE</enabled><locked>FALSE</locked></track>')
