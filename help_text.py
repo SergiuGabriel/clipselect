@@ -102,7 +102,7 @@ schimbă instant. Rezultatul rămâne salvat în History, ca să-l poți redesch
 <p>În proiectele Multicam, butonul Auto Edit face exact aceeași analiză pe clipurile fiecărei camere. Rezultatul îl
 folosește apoi regizorul automat ca să aleagă camera pentru fiecare moment.</p>
 
-<h2>Teaser Studio (protejat cu parolă)</h2>
+<h2>Teaser Studio</h2>
 <ol>
 <li><b>Footage:</b> în Premiere pui clipurile etichetate pe culori într-un sequence (selects) și dai Export XML. Culori:
 Rose mireasă, Blue mire, Purple cuplu, Brown biserică, Yellow sală, Iris petrecere, Violet dronă. Tan, Forest și Lavender
@@ -120,6 +120,10 @@ schimbările de melodie).</li>
   </ul>
   Dacă dai muzica ca XML, granițele dintre melodii sunt luate exact de acolo. Timpii trebuie să meargă înainte, în
   ordinea de mai sus.</li>
+<li><b>Selecțiile tale:</b> poți da selecții mai lungi (de exemplu 10 s de petrecere). La import, aplicația se uită la fiecare
+selecție o singură dată (claritate, stabilitate, expunere, mișcare) și folosește partea cea mai bună din ea: cu mișcare pe
+drop și la petrecere, mai calmă la pregătiri și la biserică. Folosește întâi câte o bucată din fiecare selecție, apoi a
+doua. Clipurile interpretate în Premiere la alt frame rate (de exemplu 50p ca 25p) sunt citite corect.</li>
 <li><b>Reguli de alegere:</b> un moment nu e folosit niciodată de două ori (nici în teaser și apoi în film), același
 clip nu apare de două ori la rând, biserica și sala încep cu cadrul de dronă filmat cel mai aproape de ele, iar
 petrecerea folosește doar cadrele Iris filmate după biserică (cele de dimineață sunt first look). Dacă nu ajunge
@@ -132,6 +136,13 @@ petrecere alternată cu cuplu), pregătiri mireasă/mire, biserica cu cuplul la 
 cade pe beat. <b>Shuffle</b> alege alte cadre; <b>Export XML</b> are markere pentru fiecare parte, ca să pui testimonialele și
 jurămintele în Premiere (markere: Teaser, DROP, Getting ready, Church, Couple + vows, Party: venue, Party).</li>
 </ol>
+<h2>Update-uri și probleme</h2>
+<ul>
+<li>Aplicația verifică singură la pornire dacă există o versiune nouă și te anunță. În <b>Settings &gt; Check for updates</b>
+o poți verifica oricând, iar <b>Download</b> deschide pagina cu fișierele noi.</li>
+<li>Când ceva nu merge: <b>Settings &gt; Save error report</b> și trimite fișierul lui Claude. Conține ce a făcut aplicația și
+erorile, fără video.</li>
+</ul>
 <h2>Sfaturi utile</h2>
 <ul>
 <li><b>Auto sau Custom?</b> Auto este varianta clasică: păstrează cadrele bune și le pune pe o singură pistă. Custom îți dă
@@ -259,7 +270,7 @@ in the frame".</li>
 <p>In Multicam projects, the Auto Edit button runs exactly the same analysis on every camera's clips. The automatic
 director then uses it to choose the camera for every moment.</p>
 
-<h2>Teaser Studio (password protected)</h2>
+<h2>Teaser Studio</h2>
 <ol>
 <li><b>Footage:</b> in Premiere put your colour-labelled clips in a sequence (selects) and Export XML. Colours: Rose bride,
 Blue groom, Purple couple, Brown church, Yellow venue, Iris party, Violet drone. Tan, Forest and Lavender are ignored.</li>
@@ -276,6 +287,10 @@ each song starts).</li>
   </ul>
   If you give the music as an XML, the song changes are taken from it exactly. The times must go forward, in the order
   above.</li>
+<li><b>Your selections:</b> you can give longer selections (for example 10 s of party). On import the app looks at every
+selection once (sharpness, steadiness, exposure, movement) and uses its best part: with movement on the drop and in the
+party, calmer in getting ready and church. It uses one bit of every selection before a second one. Clips interpreted at
+another frame rate in Premiere (e.g. 50p as 25p) are read correctly.</li>
 <li><b>Shot rules:</b> a moment is never used twice (not even in the teaser and then in the film), the same clip never
 appears twice in a row, church and venue open with the drone shot recorded closest to them, and the party only uses Iris
 shots recorded after the church (the morning ones are the first look). If there is not enough footage, the app tells you
@@ -288,6 +303,13 @@ alternating with the couple), bride/groom getting ready, the church ending with 
 Every cut lands on a beat. <b>Shuffle</b> picks other shots; <b>Export XML</b> has a marker for every part, so you can add
 testimonials and vows in Premiere (markers: Teaser, DROP, Getting ready, Church, Couple + vows, Party: venue, Party).</li>
 </ol>
+<h2>Updates and problems</h2>
+<ul>
+<li>At start the app checks by itself for a new version and tells you. <b>Settings &gt; Check for updates</b> checks any time,
+and <b>Download</b> opens the page with the new files.</li>
+<li>When something does not work: <b>Settings &gt; Save error report</b> and send the file to Claude. It contains what the app
+did and the errors, no video.</li>
+</ul>
 <h2>Useful tips</h2>
 <ul>
 <li><b>Auto or Custom?</b> Auto is the classic version: it keeps the good shots and puts them on one track. Custom gives you

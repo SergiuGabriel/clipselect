@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.4.4), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.5.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -79,8 +79,7 @@ bottleneck, decoding is: explain this if asked again.
   sources: synced like clips, cams with role "Audio", exported on their own audio tracks.
 - place_by_time(): clips without usable sound (drone, mic off) get conf "approx" from their clock corrected by the
   folder's (else median) clock error; own "<group> · by time" camera, full clips in the export, never in the auto edit.
-- Teaser Studio (teaser.py + TeaserPage), v2.4: PASSWORD protected (only its SHA-256 is in teaser.py, never write the
-  password in code, docs or commits; unlock is remembered per computer in settings.json). Built from the owner's 5
+- Teaser Studio (teaser.py + TeaserPage): the password was REMOVED in v2.5.0 (owner's decision). Built from the owner's 5
   shortmovies: TEASER (~1 min, song with a drop: before the drop bride/groom/church/couple/drone, after it party +
   couple), PREGĂTIRI (calm song, bride/groom alternating, ends with couple), BISERICA (church, last quarter couple),
   PETRECERE (venue + drone first, then the party shots he selected). Categories = his Premiere label colours: Rose bride,
@@ -120,6 +119,17 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   venue OPEN WITH THE DRONE shot recorded closest in time (no stand-in from another place); the teaser only uses drone
   when there are more than 2 drone clips; 'before'/'after' the church by recording time: morning couple / first look
   -> getting ready, couple after church -> couple part, Iris after church -> party; no rest < 0.35 s at part ends.
+
+## v2.5.0
+- Teaser Studio: every selection is analysed once on import (core.analyze_range, 4 samples/s: quality + movement,
+  cached in teaser_cache.json); the best part of a selection is used (movement preferred on the drop / party, calmer
+  in getting ready / church: teaser.ENERGY); one bit of every selection before a second one; footage interpreted at
+  another frame rate in Premiere (50p as 25p: clip <duration> longer than the real file) is converted back to real
+  time (else the export points past the end of the file = striped clips); touching shots share the boundary frame.
+- No slow motion (owner's decision). Static <-> Handheld slider stays as it is.
+- Updates: the build workflow publishes a GitHub Release named after VER (app.py) with the DMGs + Windows zip; the
+  app checks releases/latest at start and in Settings (repo must stay public). Bump VER for every release.
+- Error log: app.log (rotating) in the data folder; crashes are logged and shown; Settings > Save error report.
 
 ## Rules learned the hard way
 - Every clipitem <name> is EXACTLY the file name (e.g. RS-MAIN6210.MP4). DaVinci Resolve links timeline clips to media by

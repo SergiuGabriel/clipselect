@@ -1,5 +1,7 @@
 name: build
 on: [push, workflow_dispatch]
+permissions:
+  contents: write
 env:
   PYI: >-
     pyinstaller --noconfirm --windowed --name MoneyMakingMachine --collect-all imageio_ffmpeg
@@ -45,3 +47,26 @@ jobs:
       - run: ${{ env.PYI }} --icon icon.ico --add-data "icon.png;." app.py
       - uses: actions/upload-artifact@v4
         with: { name: MoneyMakingMachine-Windows, path: dist/MoneyMakingMachine }
+  release:
+    # every build on main is published as a GitHub Release named after the app version (VER in app.py),
+    # so the app's "Check for updates" finds it and the DMG can be downloaded without logging in
+    if: github.ref == 'refs/heads/main'
+    needs: [mac, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read the version
+        id: v
+        run: echo "ver=$(python3 -c "import re;print(re.search(r'\"(v\d+\.\d+\.\d+)\"',open('app.py').read()).group(1))")" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@v4
+        with: { path: dist }
+      - name: Pack the Windows folder
+        run: cd dist && zip -qr MoneyMakingMachine-Windows.zip MoneyMakingMachine-Windows
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.v.outputs.ver }}
+          name: MoneyMakingMachine ${{ steps.v.outputs.ver }}
+          make_latest: true
+          files: |
+            dist/**/*.dmg
+            dist/MoneyMakingMachine-Windows.zip

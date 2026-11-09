@@ -1,6 +1,9 @@
 """MoneyMakingMachine - AI-free footage pre-selection. Desktop app (PySide6)."""
 import json
+import logging
+import logging.handlers
 import os
+import platform
 import sys
 import threading
 import time
@@ -10,8 +13,8 @@ from datetime import datetime
 from pathlib import Path
 
 import numpy as np
-from PySide6.QtCore import QPoint, QPointF, QPropertyAnimation, QRectF, QRegularExpression, QStandardPaths, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPen, QPixmap, QRegularExpressionValidator
+from PySide6.QtCore import QUrl, QPoint, QPointF, QPropertyAnimation, QRectF, QRegularExpression, QStandardPaths, Qt, QThread, QTimer, Signal
+from PySide6.QtGui import QDesktopServices, QColor, QIcon, QImage, QPainter, QPen, QPixmap, QRegularExpressionValidator
 from PySide6.QtWidgets import (QTextBrowser, QAbstractItemView, QApplication, QComboBox, QDialog, QFileDialog, QFrame,
                                QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
                                QMainWindow, QProgressBar, QPushButton, QScrollArea, QSlider, QStackedWidget,
@@ -25,8 +28,26 @@ import teaser
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v2.4.4"
+APP, VER = "MoneyMakingMachine", "v2.5.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
+REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
+
+
+def _ver(v):
+    try:
+        return tuple(int(x) for x in v.lstrip("v").split("."))
+    except Exception:
+        return (0,)
+
+
+def latest_release():
+    """(tag, page url) of the newest published version, or None."""
+    import urllib.request
+    req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/releases/latest",
+                                 headers={"User-Agent": "MoneyMakingMachine", "Accept": "application/vnd.github+json"})
+    with urllib.request.urlopen(req, timeout=8) as r:
+        d = json.loads(r.read().decode("utf-8"))
+    return d.get("tag_name", ""), d.get("html_url", "")
 C = dict(BG="#1d1d1d", PANEL="#232323", CARD="#2a2a2a", BORDER="#3a3a3a", TEXT="#d6d6d6", MUTED="#8f8f8f",
          BLUE="#1473e6", HOT="#4b9cf5", GOOD="#4cc38a", FAIR="#e6b93a", POOR="#e5534b")   # Premiere Pro look
 LV_COL = [C["POOR"], C["FAIR"], C["GOOD"]]
@@ -1539,6 +1560,8 @@ class ResultsPage(QWidget):
         self.store.save()
         self.msg.setStyleSheet(f"color:{C['GOOD']}")
         self.msg.setText(f"Saved {n} segments to\n{out}")
+        if getattr(self, "export_done", None):
+            self.export_done(out.name)
 
 
 class QueuePage(QWidget):
@@ -1710,6 +1733,7 @@ class MCWorker(QThread):
         self._stop = True
 
     def run(self):
+        logging.info("multicam job '%s' started (%d files)", self.mode, len(self.files or self.todo or []))
         try:
             if self.mode == "xml":
                 self.done.emit(xmlimport.build(self.todo, lambda s, f: self.progress.emit(s, f), lambda: self._stop))
@@ -1718,6 +1742,7 @@ class MCWorker(QThread):
         except InterruptedError:
             self.failed.emit("Cancelled")
         except Exception as e:
+            logging.exception("multicam job failed")
             self.failed.emit(str(e))
 
     def _sync(self):
@@ -2076,6 +2101,7 @@ class MulticamPage(QWidget):
         self._sync_buttons()
 
     def on_failed(self, msg):
+        logging.error("multicam job stopped: %s", msg)
         self._finish()
         if self.p is self._job_p:
             self.status.setText("Stopped: " + msg)
@@ -2306,8 +2332,6 @@ class MulticamPage(QWidget):
 # ---------------------------------------------------------------- settings / performance
 
 class SettingsPage(QWidget):
-    lock_teaser = Signal()
-
     def __init__(self, store):
         super().__init__()
         self.store = store
@@ -2368,14 +2392,75 @@ class SettingsPage(QWidget):
         hw.addWidget(self.sw_hw)
         right.addLayout(hw)
         right.addSpacing(18)
-        right.addWidget(lbl("Teaser Studio", "h2"))
-        right.addWidget(lbl("Locks Teaser Studio again on this computer (the password is needed to open it).", "muted", True))
-        right.addWidget(btn("Lock Teaser Studio", slot=self.lock_teaser.emit), 0, Qt.AlignLeft)
+        right.addWidget(lbl("Updates and problems", "h2"))
+        ur = QHBoxLayout()
+        ur.addWidget(btn("Check for updates", slot=lambda: self.check_updates(False)))
+        self.b_dl = btn("Download", "primary", self.open_release)
+        self.b_dl.hide()
+        ur.addWidget(self.b_dl)
+        ur.addStretch()
+        right.addLayout(ur)
+        self.upd = lbl(f"You have {VER}.", "muted", True)
+        right.addWidget(self.upd)
+        right.addSpacing(6)
+        right.addWidget(btn("Save error report…", slot=self.save_report), 0, Qt.AlignLeft)
+        right.addWidget(lbl("When something does not work: save the report and send it to Claude. It contains the app's log "
+                            "(what it did and any errors) and basic info about your computer, no video.", "muted", True))
         right.addStretch()
         body.addLayout(right, 1)
         v.addLayout(body, 1)
         self.timer = QTimer(interval=2000)
         self.timer.timeout.connect(self.refresh)
+
+    update_found = Signal(str)
+
+    def check_updates(self, silent=True):
+        self.upd.setText("Checking…")
+        self._uw = _Runner(lambda: latest_release())
+        self._uw.done.connect(lambda r: self._update_result(r, silent))
+        self._uw.failed.connect(self._update_failed)
+        self._uw.start()
+
+    def _update_failed(self, m):
+        logging.warning("update check failed: %s", m)
+        if "404" in m:
+            why = "no version has been published on GitHub yet (the first one appears after the next build)"
+        elif "403" in m or "429" in m:
+            why = "GitHub refused the check for now (too many checks), try again later"
+        else:
+            why = "no internet connection or GitHub did not answer"
+        self.upd.setText(f"You have {VER}. Could not check for updates: {why}.")
+
+    def _update_result(self, r, silent):
+        tag, url = r or ("", "")
+        self._release_url = url
+        if tag and _ver(tag) > _ver(VER):
+            self.upd.setText(f"New version available: {tag} (you have {VER}).")
+            self.b_dl.show()
+            logging.info("update available: %s", tag)
+            self.update_found.emit(tag)
+        else:
+            self.upd.setText(f"You have the latest version ({VER}).")
+            self.b_dl.hide()
+
+    def open_release(self):
+        if getattr(self, "_release_url", ""):
+            QDesktopServices.openUrl(QUrl(self._release_url))
+
+    def save_report(self):
+        out, _ = QFileDialog.getSaveFileName(self, "Save error report", str(Path.home() / "MoneyMakingMachine report.txt"),
+                                             "Text (*.txt)")
+        if not out:
+            return
+        log = self.store.dir / "app.log"
+        try:
+            text = log.read_text("utf-8", errors="replace")[-300000:]
+        except Exception:
+            text = "(no log yet)"
+        info = (f"{APP} {VER}\n{platform.platform()}\nPython {platform.python_version()}\n"
+                f"CPU cores: {os.cpu_count()}\nSettings: {json.dumps(self.store.app)}\n\n")
+        Path(out).write_text(info + text, encoding="utf-8")
+        self.upd.setText(f"Report saved: {out}")
 
     def set_jobs(self, x):
         self.store.app["jobs"] = x
@@ -2464,11 +2549,12 @@ class InfoPage(QWidget):
             self.store.save_app()
 
 
-# ---------------------------------------------------------------- teaser studio (password protected)
+# ---------------------------------------------------------------- teaser studio
 
 class _Runner(QThread):
     done = Signal(object)
     failed = Signal(str)
+    progress = Signal(str, float)
 
     def __init__(self, fn, *args):
         super().__init__()
@@ -2476,8 +2562,15 @@ class _Runner(QThread):
 
     def run(self):
         try:
-            self.done.emit(self.fn(*self.args))
+            self.done.emit(self.fn(*self.args, progress=lambda t, f: self.progress.emit(t, f)))
+        except TypeError:
+            try:
+                self.done.emit(self.fn(*self.args))
+            except Exception as e:
+                logging.exception("teaser job failed")
+                self.failed.emit(str(e))
         except Exception as e:
+            logging.exception("teaser job failed")
             self.failed.emit(str(e))
 
 
@@ -2578,27 +2671,6 @@ class TeaserPage(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         self.stack = QStackedWidget()
         v.addWidget(self.stack)
-        # ---- locked
-        lk = QWidget()
-        lv = QVBoxLayout(lk)
-        lv.setAlignment(Qt.AlignCenter)
-        box = QFrame()
-        box.setObjectName("card")
-        box.setFixedWidth(380)
-        bv = QVBoxLayout(box)
-        bv.setContentsMargins(22, 20, 22, 20)
-        bv.addWidget(lbl("Teaser Studio", "h2"))
-        bv.addWidget(lbl("This part of the app is locked. Enter the password to open it.", "muted", True))
-        self.pw = QLineEdit()
-        self.pw.setEchoMode(QLineEdit.Password)
-        self.pw.setPlaceholderText("Password")
-        self.pw.returnPressed.connect(self.unlock)
-        bv.addWidget(self.pw)
-        self.pw_err = lbl("", "muted")
-        bv.addWidget(self.pw_err)
-        bv.addWidget(btn("Unlock", "primary", self.unlock))
-        lv.addWidget(box)
-        self.stack.addWidget(lk)
         # ---- studio
         st = QWidget()
         sv = QVBoxLayout(st)
@@ -2716,11 +2788,10 @@ class TeaserPage(QWidget):
         self.stack.addWidget(st)
         self.chrono = True
         self.set_order(store.app.get("teaser_chrono", True))
-        self.stack.setCurrentIndex(1 if store.app.get("teaser_unlocked") else 0)
+        self.stack.setCurrentIndex(0)
         self.auto_bounds = None
         self._buttons()
-        if store.app.get("teaser_unlocked"):
-            QTimer.singleShot(0, self.restore)
+        QTimer.singleShot(0, self.restore)
 
     def restore(self):
         """Reload the footage XML, the music and your six moments from last time."""
@@ -2732,22 +2803,6 @@ class TeaserPage(QWidget):
         elif then:
             then()
 
-    def lock(self):
-        self.store.app["teaser_unlocked"] = False
-        self.store.save_app()
-        self.stack.setCurrentIndex(0)
-
-    # ---- lock
-    def unlock(self):
-        if teaser.check_password(self.pw.text()):
-            self.store.app["teaser_unlocked"] = True
-            self.store.save_app()
-            self.pw.clear()
-            self.stack.setCurrentIndex(1)
-            self.restore()
-        else:
-            self.pw_err.setText("Wrong password.")
-            self.pw_err.setStyleSheet(f"color:{C['POOR']}")
 
     # ---- inputs
     def _run(self, text, fn, args, done):
@@ -2757,6 +2812,7 @@ class TeaserPage(QWidget):
         self.pp.start(text)
         self.pp.set(text, 0.3)
         self.runner = _Runner(fn, *args)
+        self.runner.progress.connect(self.pp.set)
         self.runner.done.connect(lambda r: (self.pp.hide(), done(r)))
         self.runner.failed.connect(lambda m: (self.pp.hide(), self.summary.setText("Error: " + m)))
         self.runner.start()
@@ -2773,8 +2829,20 @@ class TeaserPage(QWidget):
 
     def _load_footage(self, f, then=None):
         self._foot_path = f
-        self._run("Reading your labelled clips and their recording times…", teaser.load_footage, (f,),
+        self._run("Reading your labelled clips and their recording times…", self._read_footage, (f,),
                   lambda r: (self.footage_loaded(r), then and then()))
+
+    def _read_footage(self, f, progress=None):
+        pieces, skipped = teaser.load_footage(f)
+        cache_file = self.store.dir / "teaser_cache.json"
+        try:
+            cache = json.loads(cache_file.read_text("utf-8"))
+        except Exception:
+            cache = {}
+        n = teaser.analyse_pieces(pieces, cache, progress, self.store.app.get("jobs", 2))
+        if n:
+            cache_file.write_text(json.dumps(cache), "utf-8")
+        return pieces, skipped
 
     def footage_loaded(self, r):
         self.pieces, skipped = r
@@ -2786,6 +2854,9 @@ class TeaserPage(QWidget):
             rows.append(f'<span style="color:{teaser.CAT_COLOR[c]}">●</span> {teaser.CAT_NAME[c]}: {n} clips, '
                         f'{int(sec // 60)}:{int(sec % 60):02d}{warn}')
         ign = ", ".join(f"{k} {v}" for k, v in skipped.items())
+        looked = sum(1 for p in self.pieces if p.get("qa"))
+        rows.append(f'<span style="color:{C["MUTED"]}">{looked} of {len(self.pieces)} selections analysed: the best part of each '
+                    f'one is used</span>')
         self.foot_lbl.setText(f'<b>{Path(self._foot_path).name}</b><br>' + "<br>".join(rows) +
                               (f'<br><span style="color:{C["MUTED"]}">Ignored: {ign}</span>' if ign else ""))
         self._remember(footage=self._foot_path)
@@ -2914,6 +2985,7 @@ class TeaserPage(QWidget):
         self.summary.setText(f"{len(self.edit['shots'])} shots, every cut on a beat, no moment used twice · "
                              f"order: {self.edit['order']}<br>{bpm}{miss}")
         self.notify.emit(f"Shortmovie generated: {len(self.edit['shots'])} shots")
+        logging.info("teaser generated: %d shots, short %.1fs, bounds %s", len(self.edit["shots"]), self.edit.get("short", 0), self.bounds)
         self._buttons()
 
     def shuffle(self):
@@ -2931,6 +3003,7 @@ class TeaserPage(QWidget):
                 self.summary.setText(f"Saved {n} shots to {out}. Premiere: File > Import · DaVinci: File > Import > Timeline.")
                 self.notify.emit(f"XML saved: {Path(out).name}")
             except Exception as e:
+                logging.exception("teaser export failed")
                 self.summary.setText(f"Export failed: {e}")
 
 
@@ -2989,7 +3062,7 @@ class Main(QMainWindow):
         nb.setContentsMargins(0, 0, 8, 0)
         nb.addStretch()
         new = QLabel("NEW")
-        new.setStyleSheet(f"background:{C['POOR']};color:white;font-size:9px;font-weight:800;border-radius:7px;padding:1px 6px")
+        new.setStyleSheet(f"background:{C['POOR']};color:white;font-size:8px;font-weight:800;border-radius:5px;padding:0px 4px")
         new.setAttribute(Qt.WA_TransparentForMouseEvents)
         nb.addWidget(new)
         sv.addStretch()
@@ -3005,8 +3078,8 @@ class Main(QMainWindow):
         self.settings = SettingsPage(self.store)
         self.info = InfoPage(self.store)
         self.teaser = TeaserPage(self.store)
-        self.settings.lock_teaser.connect(self.teaser.lock)
         self.toast = Toast(self)
+        self.res.export_done = lambda name: (self.toast.show_msg(f"XML saved: {name}"), logging.info("footage export %s", name))
         self.teaser.notify.connect(self.toast.show_msg)
         for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser):
             self.stack.addWidget(w)
@@ -3139,6 +3212,25 @@ class Main(QMainWindow):
         self.show_page(self.res)
 
 
+def setup_logging(folder):
+    folder.mkdir(parents=True, exist_ok=True)
+    h = logging.handlers.RotatingFileHandler(folder / "app.log", maxBytes=2_000_000, backupCount=2, encoding="utf-8")
+    h.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    root.addHandler(h)
+    logging.info("---- %s %s started on %s", APP, VER, platform.platform())
+
+    def hook(t, v, tb):
+        logging.error("unexpected error", exc_info=(t, v, tb))
+        try:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(None, APP, f"Something went wrong: {v}\n\nSettings > Save error report, then send it to Claude.")
+        except Exception:
+            pass
+    sys.excepthook = hook
+
+
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP)
@@ -3147,7 +3239,10 @@ def main():
         app.setWindowIcon(QIcon(str(ic)))
     app.setStyleSheet(STYLE)
     w = Main()
+    setup_logging(w.store.dir)
     w.show()
+    w.settings.update_found.connect(lambda tag: w.toast.show_msg(f"New version {tag} available: Settings > Download", 6000))
+    QTimer.singleShot(5000, lambda: w.settings.check_updates(True))
     sys.exit(app.exec())
 
 

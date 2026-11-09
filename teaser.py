@@ -96,6 +96,15 @@ def load_footage(xml_path):
                 continue
             cfps = xmlimport._rate(ci, sfps)
             a, b = _n(ci.findtext("in")) / cfps, _n(ci.findtext("out")) / cfps
+            # Footage interpreted at another frame rate in Premiere (e.g. 50p played as 25p for slow motion): the clip is
+            # longer than the real file, its in/out are in the stretched time. Back to real time, or the export points
+            # past the end of the file (the striped "no media" clips).
+            real = info["dur"] / max(1e-6, info["fps"])
+            cd = _n(ci.findtext("duration")) / cfps
+            interp = cd / real if real > 0 and cd > 0 else 1.0
+            if interp > 1.2 or interp < 0.8:
+                a, b = a / interp, b / interp
+            b = min(b, real) if real > 0 else b
             if b - a < 0.4:
                 continue
             tt = _times(ci, sfps, cfps)
@@ -117,6 +126,67 @@ def load_footage(xml_path):
             c += 86400
         p["clock"] = None if c is None else c + p["a"]
     return pieces, skipped
+
+
+def analyse_pieces(pieces, cache=None, progress=None, jobs=2):
+    """Look at every selection once (quality + movement, 4 samples/s) so the best part of it is used.
+    cache: {key: result} (key = file + range + file size/date), filled in place."""
+    from concurrent.futures import ThreadPoolExecutor
+    cache = {} if cache is None else cache
+    todo, done = [], [0]
+
+    def key(p):
+        try:
+            st = Path(p["path"]).stat()
+            return f'{p["path"]}|{p["a"]:.2f}|{p["b"]:.2f}|{st.st_size}|{int(st.st_mtime)}'
+        except Exception:
+            return None
+    for p in pieces:
+        k = key(p)
+        p["_k"] = k
+        if k and k in cache:
+            p["qa"] = cache[k]
+        elif k:
+            todo.append(p)
+
+    def one(p):
+        try:
+            r = core.analyze_range(p["path"], p["a"], p["b"])
+        except Exception:
+            r = None
+        if r:
+            p["qa"] = r
+            cache[p["_k"]] = r
+        done[0] += 1
+        if progress:
+            progress(f"Looking at your selections: {done[0]} of {len(todo)}", done[0] / max(1, len(todo)))
+    with ThreadPoolExecutor(max(1, jobs)) as ex:
+        list(ex.map(one, todo))
+    return len(todo)
+
+
+ENERGY = {"teaser_pre": -0.1, "teaser_post": 0.35, "pregatiri": -0.15, "biserica": -0.15, "cuplu": -0.05, "sala": 0.0,
+          "petrecere": 0.35}   # + = prefer movement (drop, party), - = prefer calmer shots
+
+
+def best_start(q, a, b, length, energy=0.0):
+    """Best start inside the free range [a, b] of piece q: highest quality (+ movement for energetic parts)."""
+    qa = q.get("qa")
+    if not qa or b - a <= length + 0.05:
+        return None
+    t, Q, M = (np.asarray(x, float) for x in qa)
+    t = t + q["a"]
+    sc = Q + energy * M
+    best, bv = None, -1e9
+    s0 = a
+    while s0 + length <= b + 1e-6:
+        m = (t >= s0) & (t < s0 + length)
+        if m.any():
+            v = float(sc[m].mean())
+            if v > bv:
+                best, bv = s0, v
+        s0 += 0.25
+    return best
 
 
 def footage_summary(pieces):
@@ -360,7 +430,7 @@ class Pool:
         for q in self.paths.get(path, []):
             q["free"] = _cut(q["free"], s - self.GAP, e + self.GAP)
 
-    def take(self, cat, length, mode, frac=0.0, when=None, near=None, fallback=True):
+    def take(self, cat, length, mode, frac=0.0, when=None, near=None, fallback=True, energy=0.0):
         """mode 'teaser': random moments (a preview of the whole day); otherwise the story order (chronological) or
         random (mixed). near = a recording time to stay close to (drone shot of the church / of the venue)."""
         for c in [cat] + (FALLBACK.get(cat, []) if fallback else []):
@@ -376,6 +446,9 @@ class Pool:
                     continue
                 other = [x for x in cands if x[0]["path"] != self.last_path]
                 cands = other or cands
+                fresh = [x for x in cands if not x[0].get("uses")]       # every selection once before a second bit
+                if fresh and mode != "teaser":
+                    cands = fresh
                 if near is not None and self.by_time:
                     q, a, b = min(cands, key=lambda x: abs((x[0].get("clock") or 0) - near))
                     s0 = a + (b - a - length) / 2
@@ -391,8 +464,13 @@ class Pool:
                         return 0.0 if lo <= T <= hi else min(abs(T - lo), abs(T - hi))
                     q, a, b = min(cands, key=dist)
                     s0 = min(max(a, T - q["cum"] + q["a"]), b - length)
+                if near is None:
+                    bs = best_start(q, a, b, length, energy)               # the best part of that selection
+                    if bs is not None and (mode == "teaser" or not self.chrono or abs(bs - s0) < (b - a)):
+                        s0 = bs
                 self._mark(q["path"], s0, s0 + length)
                 self.last_path = q["path"]
+                q["uses"] = q.get("uses", 0) + 1
                 if c != cat:
                     self.used_instead[(cat, c)] = self.used_instead.get((cat, c), 0) + 1
                 return dict(q, cat=c, s=s0, e=s0 + length)
@@ -484,7 +562,7 @@ def build(pieces, music, b, seed=1, chronological=True):
                 p = pool.take("drone", e - a, mode, frac=frac, near=near, fallback=False) or \
                     pool.take("church" if name == "biserica" else "venue", e - a, mode, frac=frac, when=when)
             else:
-                p = pool.take(cat, e - a, mode, frac=frac, when=when, near=near)
+                p = pool.take(cat, e - a, mode, frac=frac, when=when, near=near, energy=ENERGY.get(name, 0.0))
             if p:
                 shots.append([a, a + (p["e"] - p["s"]), p])
             elif shots and shots[-1][1] >= a - 0.05 and pool.extend(shots[-1][2], e - a):
@@ -521,8 +599,12 @@ def export_xml(edit, music, out_path, name, fps=25.0):
                 f'<media><video>{core._sc(frate, p["w"], p["h"], "none")}</video></media></file>')
 
     v = []
-    for t0, t1, p in edit["shots"]:
-        st, en = round(t0 * sf), round(t1 * sf)
+    shots = sorted(edit["shots"], key=lambda x: x[0])
+    fr = [[round(t0 * sf), round(t1 * sf)] for t0, t1, _ in shots]
+    for k in range(len(shots) - 1):                     # touching shots share the boundary frame
+        if abs(shots[k][1] - shots[k + 1][0]) < 0.05:
+            fr[k][1] = fr[k + 1][0]
+    for (t0, t1, p), (st, en) in zip(shots, fr):
         if en <= st:
             continue
         fin = round(p["s"] * sf)
@@ -571,11 +653,3 @@ def export_xml(edit, music, out_path, name, fps=25.0):
            f'<audio><numOutputChannels>2</numOutputChannels>{"".join(trk(t) for t in tracks_a if t)}</audio></media></sequence></xmeml>')
     Path(out_path).write_text(xml, encoding="utf-8")
     return len(v)
-
-
-import hashlib as _h
-PASSWORD_SHA256 = "98f03e5c0c28060eea8c17d88d36cd180a7b7932bfc90fbb7d03307e7c2bfed7"   # only the fingerprint of the password is stored, never the password itself
-
-
-def check_password(pw):
-    return _h.sha256(pw.encode("utf-8")).hexdigest() == PASSWORD_SHA256

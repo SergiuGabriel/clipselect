@@ -541,3 +541,51 @@ def audio_layout(path):
         mm = re.match(r"(\d+) channels?", lay)
         total += 1 if lay == "mono" else 2 if lay == "stereo" else int(mm.group(1)) if mm else 6 if lay.startswith("5.1") else 2
     return rate, total
+
+
+def analyze_range(path, a, b, fps=4):
+    """Quick look at one selection only (from a to b seconds): per sample (fps per second) a quality score 0..1
+    (sharpness, steadiness, exposure) and the amount of movement 0..1. Used by Teaser Studio to pick the best part of
+    each selection. Returns (times relative to a, quality, motion) or None."""
+    dur = max(0.0, b - a)
+    if dur < 0.3:
+        return None
+    cmd = [ffmpeg_exe(), "-v", "error", "-nostdin", *decode_flags(), "-ss", f"{a:.3f}", "-t", f"{dur:.3f}", "-i", path,
+           "-map", "0:v:0", "-an", "-sn", "-dn", "-vf", f"fps={fps},scale={AW}:{AH}:flags=fast_bilinear,format=gray",
+           "-f", "rawvideo", "-"]
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **_NOWIN)
+    size = AW * AH
+    lap, mean, bright, diff, jit = [], [], [], [], []
+    prev, prev_shift = None, (0, 0)
+    try:
+        while True:
+            buf = p.stdout.read(size)
+            if len(buf) < size:
+                break
+            f = np.frombuffer(buf, np.uint8).reshape(AH, AW)
+            ff = f.astype(np.float32)
+            lap.append(_lap_var(f))
+            mean.append(float(ff.mean()))
+            bright.append(float((f > 250).mean()))
+            if prev is None:
+                diff.append(0.0)
+                jit.append(0.0)
+            else:
+                diff.append(float(np.abs(ff - prev).mean()))
+                sh = _shift(ff, prev)
+                jit.append(float(np.hypot(sh[0] - prev_shift[0], sh[1] - prev_shift[1])))
+                prev_shift = sh
+            prev = ff
+    finally:
+        p.kill()
+        p.wait()
+    if not lap:
+        return None
+    F = focus_vec(lap)
+    E = exposure_vec(mean, bright)
+    j = np.convolve(np.asarray(jit), np.ones(3) / 3, "same")
+    S = np.clip(1 - (j - 1.5 * 2) / 16, 0, 1)        # 4 samples/s: shifts are ~2x larger than at 8/s
+    q = 0.45 * F + 0.35 * S + 0.2 * E
+    m = np.clip(np.asarray(diff) / 12, 0, 1)
+    t = np.arange(len(q)) / fps
+    return t.round(3).tolist(), q.round(3).tolist(), m.round(3).tolist()
