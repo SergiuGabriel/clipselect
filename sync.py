@@ -127,6 +127,20 @@ def audio_info(path):
     return rate, ch
 
 
+ENV_SR = 100
+
+
+def _envelope(x, sr=SR):
+    """Loudness contour at 100 values per second, high-passed (changes, not levels): robust to different mics/levels."""
+    hop = sr // ENV_SR
+    n = len(x) // hop
+    if n < 2:
+        return np.zeros(0, np.float32)
+    e = np.log1p(1000 * np.sqrt((x[:n * hop].reshape(n, hop).astype(np.float64) ** 2).mean(1)))
+    k = np.ones(ENV_SR) / ENV_SR
+    return (e - np.convolve(e, k, "same")).astype(np.float32)
+
+
 def _prep(x):
     x = x.astype(np.float32)
     x = x - x.mean()
@@ -140,7 +154,12 @@ class MasterIndex:
     """Whitened block spectra of the master, computed once and reused for every clip window."""
 
     def __init__(self, x):
+        self.env = _envelope(x)                               # 100 values per second, for the coarse search
+        self.envF = 1 << int(np.ceil(np.log2(len(self.env) + int(WIN * ENV_SR) * 2 + 1)))
+        E = np.fft.rfft(self.env, self.envF)
+        self.E = (E / (np.abs(E) + 1e-9)).astype(np.complex64)
         x = _prep(x)
+        self.xp = x                                           # kept for the fine local search
         self.n = len(x)
         self.step = F - int(WIN * SR)
         self.blocks = []
@@ -153,6 +172,46 @@ class MasterIndex:
             if s + F >= self.n:
                 break
             s += self.step
+
+    def coarse(self, t_raw, k=6):
+        """Candidate positions (samples at SR) of a raw window, from its loudness contour: a whole night of recorder
+        is scanned in a few milliseconds."""
+        te = _envelope(t_raw)
+        if len(te) < 50 or len(te) > len(self.env):
+            return []
+        T = np.fft.rfft(te, self.envF)
+        T = T / (np.abs(T) + 1e-9)
+        c = np.fft.irfft(self.E * np.conj(T), self.envF)[:len(self.env) - len(te) + 1]
+        out = []
+        for _ in range(k):
+            i = int(np.argmax(c))
+            if c[i] <= -1e8:
+                break
+            out.append(i * (SR // ENV_SR))
+            c[max(0, i - 2 * ENV_SR):i + 2 * ENV_SR] = -1e9
+        return out
+
+    def fine(self, t, center, radius):
+        """Exact GCC-PHAT search of prepared window t only within +-radius samples of `center`."""
+        wn = len(t)
+        a = max(0, int(center - radius))
+        b = min(self.n, int(center + radius) + wn)
+        seg = self.xp[a:b]
+        if len(seg) < wn + 2:
+            return 0, 0.0, 1.0
+        n = 1 << int(np.ceil(np.log2(len(seg) + wn)))
+        X = np.fft.rfft(seg, n)
+        Tt = np.fft.rfft(t, n)
+        r = X * np.conj(Tt)
+        v = np.fft.irfft(r / (np.abs(r) + 1e-9), n)[:len(seg) - wn + 1]
+        k = int(np.argmax(v))
+        mu, sd = float(v.mean()), float(v.std()) + 1e-12
+        guard = int(0.5 * SR)
+        w = v.copy()
+        w[max(0, k - guard):k + guard] = -1e9
+        k2 = int(np.argmax(w)) if len(w) else 0
+        second = float(w[k2]) if len(w) and w[k2] > -1e8 else mu
+        return a + k, (float(v[k]) - mu) / sd, (float(v[k]) - mu) / max(1e-12, second - mu)
 
     def correlate(self, t, lo=None, hi=None):
         """Returns (lag_samples, z, ratio): best position of window `t` in the master.
@@ -253,28 +312,64 @@ def usable_sound(x, sr=SR):
 
 
 def sync_clip(indexes, x, preds=None, win=90.0):
-    """preds: {master_index: predicted offset (s)} -> only those masters, only +-win seconds around the prediction."""
+    """preds: {master_index: predicted offset (s)} -> only those masters, only +-win seconds around the prediction.
+    Without predictions: fast two-step search (loudness contour over the whole recorder -> a few candidates -> exact
+    search only around them). If that is not sure, the old exhaustive search runs as a safety net."""
     weak = not usable_sound(x)        # very quiet / hiss only: accepted only when every check agrees
     dur = len(x) / SR
+    xr = x
     x = _prep(x)
     starts, wn = _pick_windows(x)
-    best = None
-    for mi, idx in enumerate(indexes):
-        if preds is not None and mi not in preds:
-            continue
-        cands = []
-        for st in starts:
-            if preds is not None:
-                c = (preds[mi] * SR) + st
-                lag, z, ratio = idx.correlate(x[st:st + wn], int(c - win * SR), int(c + win * SR))
-            else:
-                lag, z, ratio = idx.correlate(x[st:st + wn])
-            cands.append((st / SR, lag / SR - st / SR, z, ratio))
-        r = _decide(cands)
-        r["master"] = mi
-        rank = ({"fail": 0, "low": 1, "medium": 2, "high": 3}[r["conf"]], r["n"], r["z"])
-        if best is None or rank > best[0]:
-            best = (rank, r)
+
+    def search(mode):
+        best = None
+        for mi, idx in enumerate(indexes):
+            if preds is not None and mi not in preds:
+                continue
+            cands = []
+            for st in starts:
+                t = x[st:st + wn]
+                if preds is not None:
+                    c = (preds[mi] * SR) + st
+                    lag, z, ratio = idx.correlate(t, int(c - win * SR), int(c + win * SR))
+                elif mode == "fast":
+                    lag, z, ratio = 0, 0.0, 1.0
+                    for cand in idx.coarse(xr[st:st + wn]):
+                        l2, z2, r2 = idx.fine(t, cand, int(1.5 * SR))
+                        if z2 > z:
+                            lag, z, ratio = l2, z2, r2
+                else:
+                    lag, z, ratio = idx.correlate(t)
+                cands.append((st / SR, lag / SR - st / SR, z, ratio))
+            if mode == "fast" and preds is None and len(cands) > 1:
+                # second pass: every window is also checked at the offsets the OTHER windows found (repetitive music can
+                # hide the true place from one window's coarse search; the true offset then wins by a wide margin)
+                offs = []
+                for c in sorted(cands, key=lambda c: -c[2]):
+                    if c[2] >= 12 and all(abs(c[1] - o) > 0.5 for o in offs):
+                        offs.append(c[1])
+                new = []
+                for (tw, off, z, ratio), st in zip(cands, starts):
+                    t = x[st:st + wn]
+                    for o in offs:
+                        if abs(o - off) > 0.5:
+                            l2, z2, r2 = idx.fine(t, (o * SR) + st, int(0.5 * SR))
+                            if z2 > z:
+                                off, z, ratio = l2 / SR - st / SR, z2, r2
+                    new.append((tw, off, z, ratio))
+                cands = new
+            r = _decide(cands)
+            r["master"] = mi
+            rank = ({"fail": 0, "low": 1, "medium": 2, "high": 3}[r["conf"]], r["n"], r["z"])
+            if best is None or rank > best[0]:
+                best = (rank, r)
+        return best
+
+    best = search("fast")
+    if preds is None and (best is None or best[1]["conf"] not in ("high", "medium")):
+        slow = search("full")
+        if slow is not None and (best is None or slow[0] > best[0]):
+            best = slow
     if best is None:
         return dict(conf="fail", z=0.0, n=0, k=0, offset=0.0, drift_ppm=0.0, master=0, dur=dur)
     r = best[1]
@@ -299,6 +394,9 @@ def run_sync(masters, clips, progress=None, cancel=None, clocks=None, groups=Non
         if cancel and cancel():
             raise InterruptedError("Cancelled")
 
+    import time as _t
+    T0 = _t.time()
+    t_read = t_search = 0.0
     indexes, info = [], []
     for i, m in enumerate(masters):
         chk()
@@ -316,8 +414,13 @@ def run_sync(masters, clips, progress=None, cancel=None, clocks=None, groups=Non
         except Exception as e:
             return None, str(e)
 
+    t_read = _t.time() - T0            # reading the recorder files
     with ThreadPoolExecutor(max(1, jobs)) as ex:
-        for i, (c, (x, err)) in enumerate(zip(order, ex.map(load, order))):
+        it = ex.map(load, order)
+        for i, c in enumerate(order):
+            a0 = _t.time()
+            x, err = next(it)
+            t_read += _t.time() - a0
             chk()
             if progress:
                 progress(f"Step 1 · syncing audio: clip {i + 1} of {len(order)} ({Path(c).name})", 0.02 + 0.98 * i / max(1, len(order)))
@@ -339,7 +442,9 @@ def run_sync(masters, clips, progress=None, cancel=None, clocks=None, groups=Non
                         r = None
             if r is None:
                 full += 1
+                s0 = _t.time()
                 r = sync_clip(indexes, x)
+                t_search += _t.time() - s0
             r["manual"] = False
             try:   # container duration only if it agrees with the real sound length (some MP4 data tracks inflate it)
                 pd = core.probe(c).duration
@@ -350,8 +455,12 @@ def run_sync(masters, clips, progress=None, cancel=None, clocks=None, groups=Non
             if r["conf"] == "high" and ck is not None and info[r["master"]]["clock"] is not None:
                 delta[g] = _tod_diff(ck, info[r["master"]]["clock"]) - r["offset"]   # this camera's clock error
             results[c] = r
+    fm = lambda v: f"{int(v // 60)}m {int(v % 60):02d}s" if v >= 60 else f"{v:.0f}s"
+    run_sync.report = (f"Sync took {fm(_t.time() - T0)}: reading the files {fm(t_read)}, searching {fm(t_search)}"
+                       + (" (reading is limited by the disk: an external SSD or the internal drive is much faster than a HDD)"
+                          if t_read > 2 * max(1.0, t_search) and t_read > 60 else ""))
     if progress:
-        progress(f"Step 1 · sync finished ({full} full searches, {len(order) - full} fast)", 1.0)
+        progress(f"Step 1 · sync finished ({full} full searches, {len(order) - full} timecode-guided)", 1.0)
     return info, results
 
 
@@ -363,6 +472,40 @@ def _tod_diff(a, b):
     while d < -43200:
         d += 86400
     return d
+
+
+def place_by_time(files, infos, results, info):
+    """Clips that cannot be synced by sound (drone, gimbal with the mic off) are placed APPROXIMATELY by their clock:
+    the clock error of their camera folder is learned from that folder's synced clips (else the median of all cameras).
+    They get conf 'approx': exported on their own track, never used by the auto edit. Returns how many were placed."""
+    group = {f["path"]: f["group"] for f in files}
+    deltas = {}
+    for p, r in results.items():
+        ck = infos.get(p, {}).get("clock")
+        if r["conf"] == "high" and ck is not None and info[r["master"]].get("clock") is not None:
+            deltas.setdefault(group.get(p, ""), []).append(_tod_diff(ck, info[r["master"]]["clock"]) - r["offset"])
+    if not deltas:
+        return 0
+    per = {g: float(np.median(v)) for g, v in deltas.items()}
+    every = float(np.median([d for v in deltas.values() for d in v]))
+    n = 0
+    for f in files:
+        p, i = f["path"], infos[f["path"]]
+        r = results.get(p)
+        if not i["video"] or (r and r["conf"] != "fail") or i.get("clock") is None:
+            continue
+        d = per.get(f["group"], every)
+        for mi, m in enumerate(info):
+            if m.get("clock") is None:
+                continue
+            off = _tod_diff(i["clock"], m["clock"]) - d
+            if -60 <= off <= m["duration"] + 60:
+                why = (r or {}).get("error") or "no sound"
+                results[p] = dict(conf="approx", z=0.0, n=0, k=0, offset=off, drift_ppm=0.0, master=mi,
+                                  dur=i["duration"], manual=False, error=f"{why} · placed by its clock (approximate)")
+                n += 1
+                break
+    return n
 
 
 def master_starts(info):
@@ -512,17 +655,26 @@ def _clock(t, path, dur):
 
 
 def classify(files, infos):
-    """files: [{"path","group"}]. Masters = audio-only files; if there are none, the longest file with sound.
-    Returns (masters, video_clips, note)."""
-    audio_only = [f["path"] for f in files if infos[f["path"]]["audio"] and not infos[f["path"]]["video"]]
+    """files: [{"path","group"}]. The MAIN recorder = the folder of audio-only files with the most recorded time (the
+    mixer recorder runs all night); other audio-only folders (LAV I, LAV II, a second recorder) are EXTRA sources that
+    get synced like clips and exported on their own audio tracks. Without audio-only files: the longest file with sound.
+    Returns (masters, video_clips, note, extra_audio)."""
+    audio_only = [f for f in files if infos[f["path"]]["audio"] and not infos[f["path"]]["video"]]
     videos = [f["path"] for f in files if infos[f["path"]]["video"]]
     if audio_only:
-        return sorted(audio_only), videos, ""
+        tot = {}
+        for f in audio_only:
+            tot[f["group"]] = tot.get(f["group"], 0) + infos[f["path"]]["duration"]
+        main = max(tot, key=tot.get)
+        masters = sorted(f["path"] for f in audio_only if f["group"] == main)
+        extra = sorted(f["path"] for f in audio_only if f["group"] != main)
+        note = f"Recorder: folder \"{main}\". Other audio ({', '.join(sorted(g for g in tot if g != main))}) synced as extra sources. " if extra else ""
+        return masters, videos, note, extra
     with_sound = [p for p in videos if infos[p]["audio"]]
     if not with_sound:
-        return [], videos, "No file with sound was found, so nothing can be synced."
+        return [], videos, "No file with sound was found, so nothing can be synced.", []
     longest = max(with_sound, key=lambda p: infos[p]["duration"])
-    return [longest], videos, f"No recorder file found: using the longest clip ({Path(longest).name}) as the audio master."
+    return [longest], videos, f"No recorder file found: using the longest clip ({Path(longest).name}) as the audio master.", []
 
 
 def auto_cameras(files, infos, results, old_cams=None):
@@ -530,11 +682,17 @@ def auto_cameras(files, infos, results, old_cams=None):
     Overlapping clips of one group: if both are sure they are two cameras (separate tracks), otherwise the less sure
     one is wrong and goes to the '· check sync' track (its result becomes 'low').
     Names/roles the user edited before are kept for the clips they cover."""
-    groups, unsure = {}, {}
+    groups, unsure, audio_src, bytime = {}, {}, {}, {}
     for f in files:
         p = f["path"]
         r = results.get(p)
-        if not infos[p]["video"] or not r or r["conf"] == "fail":
+        if not r or r["conf"] == "fail":
+            continue
+        if not infos[p]["video"]:                        # lavalier / second recorder
+            audio_src.setdefault(f["group"] or "Audio", []).append(p)
+            continue
+        if r["conf"] == "approx":                        # no usable sound: placed by its clock
+            bytime.setdefault(f["group"] or "Camera", []).append(p)
             continue
         if r["conf"] == "low" and not r.get("manual"):   # unsure position: never let it explode into extra tracks
             unsure.setdefault(f["group"] or "Camera", []).append(p)
@@ -565,6 +723,21 @@ def auto_cameras(files, infos, results, old_cams=None):
             base = key[0] or "Camera"
             cams.append(dict(name=base + (f" {k + 1}" if len(lanes) > 1 else ""), role="Handheld",
                              clips=[x[3] for x in sorted(lane)], user=False))
+    for g, paths in sorted(bytime.items()):
+        lanes = []
+        for p in sorted(paths, key=lambda q: (results[q]["master"], results[q]["offset"])):
+            r = results[p]
+            lane = next((L for L in lanes if L[-1][0] != r["master"] or L[-1][1] <= r["offset"] + 0.5), None)
+            if lane is None:
+                lane = []
+                lanes.append(lane)
+            lane.append((r["master"], r["offset"] + r["dur"], p))
+        for k, lane in enumerate(lanes):
+            cams.append(dict(name=f"{g} · by time" + (f" {k + 1}" if len(lanes) > 1 else ""), role="Handheld",
+                             clips=[x[2] for x in lane], user=False, approx=True))
+    for g, paths in sorted(audio_src.items()):
+        cams.append(dict(name=g, role="Audio", clips=sorted(paths, key=lambda q: (results[q]["master"], results[q]["offset"])),
+                         user=False))
     for g, paths in sorted(unsure.items()):
         cams.append(dict(name=f"{g} · check sync", role="Handheld", clips=sorted(paths, key=lambda q: results[q]["offset"]),
                          user=False, check=True))

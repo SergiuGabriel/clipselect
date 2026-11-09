@@ -21,10 +21,11 @@ from PySide6.QtWidgets import (QTextBrowser, QAbstractItemView, QApplication, QC
 import core
 import director
 import help_text
+import teaser
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v2.2.0"
+APP, VER = "MoneyMakingMachine", "v2.4.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 C = dict(BG="#1d1d1d", PANEL="#232323", CARD="#2a2a2a", BORDER="#3a3a3a", TEXT="#d6d6d6", MUTED="#8f8f8f",
          BLUE="#1473e6", HOT="#4b9cf5", GOOD="#4cc38a", FAIR="#e6b93a", POOR="#e5534b")   # Premiere Pro look
@@ -97,6 +98,9 @@ QSlider::sub-page:horizontal:disabled{background:#4a4a4a}
 QSlider::handle:horizontal:disabled{border-color:#5a5a5a}
 QProgressBar{background:#3a3a3a;border:none;border-radius:2px;max-height:4px;min-height:4px}
 QProgressBar::chunk{background:@HOT;border-radius:2px}
+QProgressBar#big{background:#333333;border-radius:5px;max-height:10px;min-height:10px}
+QProgressBar#big::chunk{border-radius:5px;background:qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #1473e6,stop:1 #4b9cf5)}
+QFrame#progress{background:#202a38;border:1px solid #2f4b70;border-radius:6px}
 QListWidget{background:transparent;border:none;outline:none}
 QListWidget::item{padding:6px 6px;border-bottom:1px solid #2c2c2c}
 QListWidget::item:selected{background:#2d4f7c;color:white}
@@ -546,6 +550,53 @@ class SliderRow(QWidget):
         if self.sw:
             self.sw.set(on)
         self._dim(on)
+
+
+def _fmt_dur(s):
+    s = int(max(0, s))
+    return f"{s // 3600}h {s % 3600 // 60:02d}m" if s >= 3600 else f"{s // 60}m {s % 60:02d}s" if s >= 60 else f"{s}s"
+
+
+class ProgressPanel(QFrame):
+    """The same loading bar for every long process: step text, percentage, a thick bar, elapsed and time left."""
+
+    def __init__(self):
+        super().__init__()
+        self.setObjectName("progress")
+        v = QVBoxLayout(self)
+        v.setContentsMargins(14, 10, 14, 10)
+        v.setSpacing(6)
+        top = QHBoxLayout()
+        self.title = QLabel("")
+        self.title.setStyleSheet("font-weight:600;color:#ececec")
+        self.pct = QLabel("0%")
+        self.pct.setStyleSheet(f"font-weight:700;color:{C['HOT']}")
+        top.addWidget(self.title, 1)
+        top.addWidget(self.pct)
+        v.addLayout(top)
+        self.bar = QProgressBar()
+        self.bar.setObjectName("big")
+        self.bar.setRange(0, 1000)
+        self.bar.setTextVisible(False)
+        v.addWidget(self.bar)
+        self.detail = lbl("", "muted")
+        v.addWidget(self.detail)
+        self.t0 = time.time()
+        self.hide()
+
+    def start(self, text="Starting…"):
+        self.t0 = time.time()
+        self.set(text, 0.0)
+        self.show()
+
+    def set(self, text, f):
+        f = max(0.0, min(1.0, f))
+        self.title.setText(text)
+        self.pct.setText(f"{int(f * 100)}%")
+        self.bar.setValue(int(f * 1000))
+        el = time.time() - self.t0
+        left = f"  ·  about {_fmt_dur(el * (1 - f) / f)} left" if f > 0.03 and el > 3 and f < 1 else ""
+        self.detail.setText(f"{_fmt_dur(el)} elapsed{left}")
 
 
 class JobCard(QFrame):
@@ -1191,7 +1242,8 @@ class AnalyzingPage(QWidget):
         v.addWidget(lbl("Now we play the waiting game...", "muted"), 0, Qt.AlignHCenter)
         v.addSpacing(8)
         box = QWidget()
-        box.setMaximumWidth(520)
+        box.setMaximumWidth(560)
+        box.setMinimumWidth(560)
         bv = QVBoxLayout(box)
         bv.setContentsMargins(0, 0, 0, 0)
         row = QHBoxLayout()
@@ -1201,9 +1253,12 @@ class AnalyzingPage(QWidget):
         row.addWidget(self.pct)
         bv.addLayout(row)
         self.bar = QProgressBar()
+        self.bar.setObjectName("big")
         self.bar.setRange(0, 1000)
         self.bar.setTextVisible(False)
         bv.addWidget(self.bar)
+        self.eta = lbl("", "muted")
+        bv.addWidget(self.eta, 0, Qt.AlignHCenter)
         self.count = lbl("0 of 0 videos completed", "muted")
         bv.addWidget(self.count, 0, Qt.AlignHCenter)
         v.addWidget(box, 0, Qt.AlignHCenter)
@@ -1251,6 +1306,7 @@ class AnalyzingPage(QWidget):
         for c in self.cards:
             self.in_l.addWidget(c)
         self.total, self.fin, self.part = len(paths), 0, [0.0] * len(paths)
+        self.t0 = time.time()
         self.paused = False
         self.b_pause.setText("Pause Analysis")
         self._upd()
@@ -1259,7 +1315,9 @@ class AnalyzingPage(QWidget):
         f = sum(self.part) / max(1, self.total)
         self.bar.setValue(int(f * 1000))
         self.pct.setText(f"{int(f * 100)}%")
-        self.count.setText(f"{self.fin} of {self.total} videos completed")
+        self.count.setText(f"Analysing {min(self.total, self.fin + 1)} of {self.total} clips  ·  {self.fin} completed")
+        el = time.time() - getattr(self, "t0", time.time())
+        self.eta.setText(f"{_fmt_dur(el)} elapsed" + (f"  ·  about {_fmt_dur(el * (1 - f) / f)} left" if 0.03 < f < 1 and el > 3 else ""))
         self.in_t.setText(f"IN PROGRESS  {self.total - self.fin}")
         self.ok_t.setText(f"COMPLETED  {self.fin}")
 
@@ -1494,6 +1552,7 @@ class QueuePage(QWidget):
                 s = lbl("", "muted", True)
                 cv.addWidget(s)
                 b = QProgressBar()
+                b.setObjectName("big")
                 b.setRange(0, 1000)
                 b.setTextVisible(False)
                 cv.addWidget(b)
@@ -1501,14 +1560,14 @@ class QueuePage(QWidget):
                 self.cards[k] = (c, t, s, b)
             c, t, s, b = self.cards[k]
             t.setText(title)
-            s.setText(status)
+            s.setText(f"{status}  ·  {int(prog * 100)}%")
             b.setValue(int(prog * 1000))
         self.empty.setVisible(not jobs)
 
 # ---------------------------------------------------------------- multicam
 
-CONF_COL = {"high": C["GOOD"], "medium": C["FAIR"], "low": "#f08a3c", "fail": C["POOR"]}
-CONF_NAME = {"high": "High", "medium": "Medium", "low": "Check", "fail": "Failed"}
+CONF_COL = {"high": C["GOOD"], "medium": C["FAIR"], "low": "#f08a3c", "approx": "#9b8cff", "fail": C["POOR"]}
+CONF_NAME = {"high": "High", "medium": "Medium", "low": "Check", "approx": "By time", "fail": "Failed"}
 MEDIA_EXT = core.VIDEO_EXT | sync.AUDIO_EXT
 
 
@@ -1640,10 +1699,10 @@ class MCWorker(QThread):
                 raise InterruptedError
             self.progress.emit(f"Step 1 · reading files: {i + 1} of {n}", 0.05 * i / n)
             infos[f["path"]] = sync.media_info(f["path"])
-        masters, videos, note = sync.classify(files, infos)
+        masters, videos, note, extra = sync.classify(files, infos)
         if not masters:
             raise ValueError(note or "No audio master found.")
-        withsound = [v for v in videos if infos[v]["audio"]]
+        withsound = [v for v in videos if infos[v]["audio"]] + extra
         info, res = sync.run_sync(masters, withsound, lambda s, f: self.progress.emit(s, 0.05 + 0.95 * f), lambda: self._stop,
                                   clocks={p: i["clock"] for p, i in infos.items()}, groups={f["path"]: f["group"] for f in files},
                                   jobs=self.jobs)
@@ -1651,7 +1710,9 @@ class MCWorker(QThread):
             if v not in res:
                 res[v] = dict(conf="fail", z=0.0, n=0, k=0, offset=0.0, drift_ppm=0.0, master=0,
                               dur=infos[v]["duration"], manual=False, error="No audio stream")
-        return dict(infos=infos, masters=info, results=res, note=note)
+        placed = sync.place_by_time(files, infos, res, info)      # drone / mic-off clips: approximately, by their clock
+        return dict(infos=infos, masters=info, results=res, note=note,
+                    report=getattr(sync.run_sync, "report", "") + (f" · {placed} clip(s) without sound placed by time" if placed else ""))
 
     def _analyze(self):
         an, keys = {}, {}
@@ -1673,7 +1734,7 @@ class MCWorker(QThread):
                 return
             an[v] = core.analyze(v, cancel=lambda: self._stop)
             done[0] += 1
-            self.progress.emit(f"Step 2 · analysing video for the auto edit: {done[0]} of {len(left)}", done[0] / max(1, len(left)))
+            self.progress.emit(f"Step 2 · analysing video for the auto edit: {done[0]} of {len(left)} clips done", done[0] / max(1, len(left)))
 
         with ThreadPoolExecutor(max(1, self.jobs)) as ex:
             list(ex.map(one, left))
@@ -1773,6 +1834,7 @@ class MulticamPage(QWidget):
         legend = QLabel(
             f'{dot(CONF_COL["high"])} <b>High</b> sure &nbsp;&nbsp; {dot(CONF_COL["medium"])} <b>Medium</b> very likely right &nbsp;&nbsp; '
             f'{dot(CONF_COL["low"])} <b>Check</b> position unsure: on the "check sync" track, not used in the auto edit &nbsp;&nbsp; '
+            f'{dot(CONF_COL["approx"])} <b>By time</b> no usable sound, placed approximately by its clock, not used in the auto edit &nbsp;&nbsp; '
             f'{dot(CONF_COL["fail"])} <b>Failed</b> not placed (see the Clips tab) &nbsp;&nbsp;·&nbsp;&nbsp; '
             f'<b>Auto edit</b> row: one colour per camera')
         legend.setWordWrap(True)
@@ -1799,12 +1861,9 @@ class MulticamPage(QWidget):
         self.table.itemChanged.connect(self.on_edit)
         self.tabs.addTab(self.table, "Clips")
         mv.addWidget(self.tabs, 1)
-        self.pbar = QProgressBar()
-        self.pbar.setRange(0, 1000)
-        self.pbar.setTextVisible(False)
-        self.pbar.hide()
-        mv.addWidget(self.pbar)
-        self.status = lbl("", "muted")
+        self.pp = ProgressPanel()
+        mv.insertWidget(0, self.pp)
+        self.status = lbl("", "muted", True)
         mv.addWidget(self.status)
         body.addWidget(mid, 1)
 
@@ -1935,12 +1994,13 @@ class MulticamPage(QWidget):
         if mine and mode == "xml":
             self.b_run.setText("Cancel")
             self.b_run.setEnabled(False)
-        self.pbar.setVisible(bool(mine))
+        self.pp.setVisible(bool(mine))
         if busy and not mine:
             self.status.setText(f"Another job is running ({self._job_p['name']}). See Analysis Queue.")
 
     def _start(self, worker, button):
         self._job_p, self.job_status, self.job_progress = self.p, "Starting…", 0.0
+        self.pp.start()
         self.worker = worker
         worker.progress.connect(self.on_progress)
         worker.done.connect(self.on_done)
@@ -1972,14 +2032,14 @@ class MulticamPage(QWidget):
         s = self.p.get("sync")
         if not s:
             return
-        todo = [x for c in self.p["cams"] for x in c["clips"]]
+        todo = [x for c in self.p["cams"] if c["role"] != "Audio" and not c.get("approx") and not c.get("check") for x in c["clips"]]
         self._start(MCWorker("analyze", None, self.store.load_blob(self.p["id"]), todo, self.store.app["jobs"]), self.b_auto)
 
     def on_progress(self, text, f):
         self.job_status, self.job_progress = text, f
         if self.p is self._job_p:
-            self.status.setText(text)
-            self.pbar.setValue(int(f * 1000))
+            self.status.setText("")            # the panel above already shows it
+            self.pp.set(text, f)
 
     def _finish(self):
         if self.worker:
@@ -2012,12 +2072,12 @@ class MulticamPage(QWidget):
             p["sync"] = dict(masters=r["masters"], clips=r["results"], note=r["note"], when=datetime.now().isoformat(timespec="seconds"))
             cams = sync.auto_cameras(p["files"], r["infos"], r["results"], p.get("cams"))
             for c in cams:
-                if not c.get("user"):
+                if not c.get("user") and c["role"] != "Audio":
                     have = [an_all.get(x) for x in c["clips"]]
                     c["role"] = director.detect_role(have) if all(h is not None for h in have) else "Handheld"
             p["cams"] = cams
             ok = sum(1 for x in r["results"].values() if x["conf"] != "fail")
-            msg = (f"Sync finished: {ok} of {len(r['results'])} clips synced. You can export now, "
+            msg = ((r.get("report") or "") + "\n" +f"Sync finished: {ok} of {len(r['results'])} clips synced. You can export now, "
                                 f"or press Auto Edit to let the program build the edit (this analyses the video and takes longer).")
             if here:
                 self.status.setText(msg)
@@ -2029,7 +2089,7 @@ class MulticamPage(QWidget):
             blob.update({k: dict(key=r["keys"].get(k, ""), a=a.to_json()) for k, a in r["analyses"].items()})
             self.store.save_blob(p["id"], blob)
             for c in p["cams"]:
-                if not c.get("user"):
+                if not c.get("user") and c["role"] != "Audio":
                     c["role"] = director.detect_role([an_all.get(x) for x in c["clips"]])
             if here:
                 self.status.setText("Auto edit ready. Tweak it on the right, then Export XML.")
@@ -2070,7 +2130,7 @@ class MulticamPage(QWidget):
                      f"the sequence uses the first camera's rate.  ") if len(rates) > 1 else ""
             self.note.setText(mixed + (s.get("note") + "  " if s.get("note") else "") +
                               f"Audio master: {m}  ·  {len(self.p['cams'])} cameras  ·  {cnt['high'] + cnt['medium']} clips synced, "
-                              f"{cnt['low']} to check, {cnt['fail']} failed.")
+                              f"{cnt['low']} to check, {cnt['approx']} placed by time, {cnt['fail']} failed.")
         self.refresh_map()
         self.refresh_cams()
         self.refresh_clips()
@@ -2120,7 +2180,8 @@ class MulticamPage(QWidget):
             it.setForeground(QColor(director.CAM_COLORS[ci % 8]))
             self.cam_t.setItem(ci, 0, it)
             cb = QComboBox()
-            cb.addItems(["Handheld", "Static"])
+            cb.addItems(["Audio"] if cam["role"] == "Audio" else ["Handheld", "Static"])
+            cb.setEnabled(cam["role"] != "Audio")
             cb.setCurrentText(cam["role"])
             cb.setMinimumWidth(120)
             cb.setStyleSheet("QComboBox{padding:2px 8px;border-radius:3px}")
@@ -2368,6 +2429,360 @@ class InfoPage(QWidget):
             self.store.save_app()
 
 
+# ---------------------------------------------------------------- teaser studio (password protected)
+
+class _Runner(QThread):
+    done = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, fn, *args):
+        super().__init__()
+        self.fn, self.args = fn, args
+
+    def run(self):
+        try:
+            self.done.emit(self.fn(*self.args))
+        except Exception as e:
+            self.failed.emit(str(e))
+
+
+class MusicView(QWidget):
+    """The music with its four parts, the drop and the beat grid of the current edit."""
+
+    def __init__(self):
+        super().__init__()
+        self.env, self.dur, self.parts, self.drop, self.beats = None, 1.0, [], None, []
+        self.setFixedHeight(130)
+
+    def set_music(self, x, dur):
+        n = 1200
+        hop = max(1, len(x) // n)
+        self.env = np.sqrt((x[:hop * n].reshape(n, hop).astype(np.float64) ** 2).mean(1))
+        self.env /= self.env.max() + 1e-9
+        self.dur = dur
+        self.update()
+
+    def set_parts(self, parts, drop, beats=None):
+        self.parts, self.drop, self.beats = parts, drop, beats or []
+        self.update()
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        W, H = self.width(), self.height()
+        X = lambda t: t / max(1e-6, self.dur) * W
+        p.fillRect(0, 0, W, H, QColor("#1a1a1a"))
+        if self.env is None:
+            p.setPen(QColor(C["MUTED"]))
+            p.drawText(self.rect(), Qt.AlignCenter, "Add the music (one audio file, or the XML of your music edit)")
+            return
+        bounds = [0.0] + list(self.parts) + [self.dur]
+        cols = ["#3d5a80", "#4a6fa5", "#7c5a3a", "#b5179e"]
+        for i in range(min(4, len(bounds) - 1)):
+            c = QColor(cols[i])
+            c.setAlpha(90)
+            p.fillRect(QRectF(X(bounds[i]), 0, X(bounds[i + 1]) - X(bounds[i]), 22), c)
+            p.setPen(QColor("#ececec"))
+            p.drawText(QRectF(X(bounds[i]) + 6, 0, X(bounds[i + 1]) - X(bounds[i]), 22), Qt.AlignVCenter, teaser.PARTS[i])
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(C["HOT"]))
+        n = len(self.env)
+        for i in range(n):
+            h = self.env[i] * (H - 50)
+            p.drawRect(QRectF(i / n * W, 26 + (H - 50 - h) / 2, max(1.0, W / n), h))
+        p.setPen(QPen(QColor(255, 255, 255, 60), 1))
+        for b in self.beats:
+            p.drawLine(QPointF(X(b), H - 20), QPointF(X(b), H - 14))
+        if self.drop is not None:
+            p.setPen(QPen(QColor("#ff5c8a"), 2))
+            p.drawLine(QPointF(X(self.drop), 22), QPointF(X(self.drop), H - 22))
+            p.drawText(QRectF(X(self.drop) + 4, 24, 60, 16), Qt.AlignLeft, "DROP")
+        p.setPen(QColor(C["MUTED"]))
+        step = 30 if self.dur <= 400 else 60
+        for t in range(0, int(self.dur) + 1, step):
+            p.drawText(QRectF(X(t) - 20, H - 14, 40, 14), Qt.AlignCenter, f"{t // 60}:{t % 60:02d}")
+
+
+class ShotStrip(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.shots, self.dur = [], 1.0
+        self.setFixedHeight(54)
+
+    def set(self, shots, dur):
+        self.shots, self.dur = shots, dur
+        self.update()
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        W = self.width()
+        p.fillRect(0, 0, W, 34, QColor("#1a1a1a"))
+        for t0, t1, sh in self.shots:
+            p.fillRect(QRectF(t0 / self.dur * W, 2, max(1.0, (t1 - t0) / self.dur * W - 0.6), 30), QColor(teaser.CAT_COLOR[sh["cat"]]))
+        x = 0
+        p.setPen(QColor(C["MUTED"]))
+        for c in ("bride", "groom", "couple", "church", "venue", "party", "drone"):
+            p.fillRect(QRectF(x, 40, 10, 10), QColor(teaser.CAT_COLOR[c]))
+            p.drawText(QRectF(x + 14, 37, 70, 16), Qt.AlignVCenter, teaser.CAT_NAME[c])
+            x += 80
+
+
+class TeaserPage(QWidget):
+    def __init__(self, store):
+        super().__init__()
+        self.store = store
+        self.pieces, self.music, self.edit, self.runner = [], None, None, None
+        self.seed = 1
+        v = QVBoxLayout(self)
+        v.setContentsMargins(0, 0, 0, 0)
+        self.stack = QStackedWidget()
+        v.addWidget(self.stack)
+        # ---- locked
+        lk = QWidget()
+        lv = QVBoxLayout(lk)
+        lv.setAlignment(Qt.AlignCenter)
+        box = QFrame()
+        box.setObjectName("card")
+        box.setFixedWidth(380)
+        bv = QVBoxLayout(box)
+        bv.setContentsMargins(22, 20, 22, 20)
+        bv.addWidget(lbl("Teaser Studio", "h2"))
+        bv.addWidget(lbl("This part of the app is locked. Enter the password to open it.", "muted", True))
+        self.pw = QLineEdit()
+        self.pw.setEchoMode(QLineEdit.Password)
+        self.pw.setPlaceholderText("Password")
+        self.pw.returnPressed.connect(self.unlock)
+        bv.addWidget(self.pw)
+        self.pw_err = lbl("", "muted")
+        bv.addWidget(self.pw_err)
+        bv.addWidget(btn("Unlock", "primary", self.unlock))
+        lv.addWidget(box)
+        self.stack.addWidget(lk)
+        # ---- studio
+        st = QWidget()
+        sv = QVBoxLayout(st)
+        sv.setContentsMargins(24, 18, 24, 18)
+        sv.setSpacing(10)
+        top = QHBoxLayout()
+        top.addWidget(lbl("Teaser Studio", "h1"))
+        badge = QLabel("PREVIEW")
+        badge.setStyleSheet("background:#7c5cff;color:white;font-size:9px;font-weight:700;border-radius:3px;padding:2px 6px")
+        top.addWidget(badge)
+        top.addStretch()
+        self.b_shuffle = btn("Shuffle shots", slot=self.shuffle)
+        self.b_gen = btn("Generate", "primary", self.generate)
+        self.b_exp = btn("Export XML", slot=self.export)
+        for b in (self.b_shuffle, self.b_exp, self.b_gen):
+            top.addWidget(b)
+        sv.addLayout(top)
+        sv.addWidget(lbl("Builds your shortmovie structure (teaser with drop → getting ready → church → party) from your colour "
+                         "labels, cut on the beat of your music. Testimonials and vows: add them in Premiere afterwards "
+                         "(the export has a marker for every part).", "muted", True))
+        body = QHBoxLayout()
+        body.setSpacing(18)
+        sv.addLayout(body, 1)
+        left = QVBoxLayout()
+        left.setSpacing(10)
+
+        def card(n, title):
+            f = QFrame()
+            f.setObjectName("card")
+            f.setFixedWidth(390)
+            l = QVBoxLayout(f)
+            l.setContentsMargins(14, 12, 14, 12)
+            h = QHBoxLayout()
+            num = QLabel(str(n))
+            num.setFixedSize(22, 22)
+            num.setAlignment(Qt.AlignCenter)
+            num.setStyleSheet(f"background:{C['BLUE']};color:white;border-radius:11px;font-weight:700")
+            h.addWidget(num)
+            h.addWidget(lbl(title, "h2"))
+            h.addStretch()
+            l.addLayout(h)
+            left.addWidget(f)
+            return l
+        l1 = card(1, "Footage (your colour labels)")
+        l1.addWidget(lbl("Export from Premiere an XML of a sequence with your labelled clips (selects). Rose bride, Blue "
+                         "groom, Purple couple, Brown church, Yellow venue, Iris party, Violet drone.", "muted", True))
+        l1.addWidget(btn("Import labelled XML", slot=self.pick_footage))
+        self.foot_lbl = QLabel("")
+        self.foot_lbl.setWordWrap(True)
+        l1.addWidget(self.foot_lbl)
+        l2 = card(2, "Music")
+        l2.addWidget(lbl("Your songs already joined: one audio file, or the XML of your music edit.", "muted", True))
+        r = QHBoxLayout()
+        r.addWidget(btn("Audio file", slot=lambda: self.pick_music(False)))
+        r.addWidget(btn("Music XML", slot=lambda: self.pick_music(True)))
+        l2.addLayout(r)
+        self.mus_lbl = lbl("", "muted", True)
+        l2.addWidget(self.mus_lbl)
+        l3 = card(3, "Parts")
+        self.f = {}
+        g = QGridLayout()
+        for i, (k, t) in enumerate((("drop", "Drop (teaser)"), ("p1", "Pregătiri start"), ("p2", "Biserica start"),
+                                    ("p3", "Petrecere start"))):
+            g.addWidget(lbl(t, "muted"), i, 0)
+            e = QLineEdit()
+            e.setFixedWidth(90)
+            e.editingFinished.connect(self.parts_edited)
+            g.addWidget(e, i, 1)
+            self.f[k] = e
+        l3.addLayout(g)
+        l3.addWidget(btn("Detect again", "link", self.redetect))
+        l4 = card(4, "Story order")
+        r = QHBoxLayout()
+        self.b_chrono = btn("Chronological", "seg", lambda: self.set_order(True))
+        self.b_mixed = btn("Mixed", "seg", lambda: self.set_order(False))
+        r.addWidget(self.b_chrono)
+        r.addWidget(self.b_mixed)
+        l4.addLayout(r)
+        left.addStretch()
+        body.addLayout(left)
+        right = QVBoxLayout()
+        right.addWidget(lbl("MUSIC", "section"))
+        self.mv = MusicView()
+        right.addWidget(self.mv)
+        right.addWidget(lbl("YOUR SHORTMOVIE", "section"))
+        self.strip = ShotStrip()
+        right.addWidget(self.strip)
+        self.summary = lbl("", "muted", True)
+        right.addWidget(self.summary)
+        self.pp = ProgressPanel()
+        right.addWidget(self.pp)
+        right.addStretch()
+        body.addLayout(right, 1)
+        self.stack.addWidget(st)
+        self.chrono = True
+        self.set_order(store.app.get("teaser_chrono", True))
+        self.stack.setCurrentIndex(1 if store.app.get("teaser_unlocked") else 0)
+        self._buttons()
+
+    # ---- lock
+    def unlock(self):
+        if teaser.check_password(self.pw.text()):
+            self.store.app["teaser_unlocked"] = True
+            self.store.save_app()
+            self.pw.clear()
+            self.stack.setCurrentIndex(1)
+        else:
+            self.pw_err.setText("Wrong password.")
+            self.pw_err.setStyleSheet(f"color:{C['POOR']}")
+
+    # ---- inputs
+    def _run(self, text, fn, args, done):
+        if self.runner and self.runner.isRunning():
+            return
+        self.pp.start(text)
+        self.pp.set(text, 0.3)
+        self.runner = _Runner(fn, *args)
+        self.runner.done.connect(lambda r: (self.pp.hide(), done(r)))
+        self.runner.failed.connect(lambda m: (self.pp.hide(), self.summary.setText("Error: " + m)))
+        self.runner.start()
+
+    def pick_footage(self):
+        f, _ = QFileDialog.getOpenFileName(self, "Labelled footage XML (from Premiere)", "", "XML (*.xml)")
+        if f:
+            self._run("Reading your labelled clips…", teaser.load_footage, (f,), self.footage_loaded)
+
+    def footage_loaded(self, r):
+        self.pieces, skipped = r
+        s = teaser.footage_summary(self.pieces)
+        rows = []
+        for c in ("bride", "groom", "couple", "church", "venue", "party", "drone"):
+            n, sec = s.get(c, (0, 0.0))
+            warn = "" if n else f' <span style="color:{C["POOR"]}">missing</span>'
+            rows.append(f'<span style="color:{teaser.CAT_COLOR[c]}">●</span> {teaser.CAT_NAME[c]}: {n} clips, '
+                        f'{int(sec // 60)}:{int(sec % 60):02d}{warn}')
+        ign = ", ".join(f"{k} {v}" for k, v in skipped.items())
+        self.foot_lbl.setText("<br>".join(rows) + (f'<br><span style="color:{C["MUTED"]}">Ignored: {ign}</span>' if ign else ""))
+        self._buttons()
+
+    def pick_music(self, as_xml):
+        if as_xml:
+            f, _ = QFileDialog.getOpenFileName(self, "XML of your music edit", "", "XML (*.xml)")
+        else:
+            f, _ = QFileDialog.getOpenFileName(self, "Music (one file with all the songs)", "", "Audio (*.wav *.mp3 *.aif *.aiff *.m4a *.flac);;All files (*)")
+        if f:
+            self._run("Reading the music, finding the beat and the drop…", self._load_music, (f,), self.music_loaded)
+
+    @staticmethod
+    def _load_music(f):
+        m = teaser.load_music(f)
+        parts, drop = teaser.guess_parts(m)
+        return m, parts, drop
+
+    def music_loaded(self, r):
+        self.music, parts, drop = r
+        self.mv.set_music(self.music["x"], self.music["duration"])
+        self._set_parts(parts, drop)
+        d = self.music["duration"]
+        self.mus_lbl.setText(f"{int(d // 60)}:{int(d % 60):02d} of music"
+                             + (" · song changes taken from the XML" if self.music["song_starts"] else " · parts guessed, adjust them below"))
+        self._buttons()
+
+    # ---- parts
+    def _set_parts(self, parts, drop):
+        self.parts, self.drop = list(parts), drop
+        for k, t in zip(("drop", "p1", "p2", "p3"), [drop] + list(parts)):
+            self.f[k].setText(f"{int(t // 60)}:{t % 60:04.1f}")
+        self.mv.set_parts(self.parts, self.drop)
+
+    def parts_edited(self):
+        try:
+            vals = [parse_t(self.f[k].text()) for k in ("drop", "p1", "p2", "p3")]
+        except ValueError:
+            return
+        drop, p1, p2, p3 = vals
+        if 0 < drop < p1 < p2 < p3:
+            self._set_parts([p1, p2, p3], drop)
+
+    def redetect(self):
+        if self.music:
+            parts, drop = teaser.guess_parts(self.music)
+            self._set_parts(parts, drop)
+
+    def set_order(self, chrono):
+        self.chrono = chrono
+        for b, on in ((self.b_chrono, chrono), (self.b_mixed, not chrono)):
+            b.setProperty("active", on)
+            repolish(b)
+        self.store.app["teaser_chrono"] = chrono
+        self.store.save_app()
+
+    # ---- build / export
+    def _buttons(self):
+        ok = bool(self.pieces) and self.music is not None
+        self.b_gen.setEnabled(ok)
+        self.b_shuffle.setEnabled(ok and self.edit is not None)
+        self.b_exp.setEnabled(self.edit is not None)
+
+    def generate(self):
+        if not self.pieces or self.music is None:
+            return
+        self.edit = teaser.build(self.pieces, self.music, self.parts, self.drop, seed=self.seed, chronological=self.chrono)
+        self.strip.set(self.edit["shots"], self.music["duration"])
+        allbeats = [t0 for t0, _, _ in self.edit["shots"]]
+        self.mv.set_parts(self.parts, self.drop, allbeats)
+        bpm = " · ".join(f"{k} {v:.0f} BPM" for k, v in self.edit["bpm"].items() if v)
+        self.summary.setText(f"{len(self.edit['shots'])} shots, every cut on a beat · {bpm}")
+        self._buttons()
+
+    def shuffle(self):
+        self.seed += 1
+        self.generate()
+
+    def export(self):
+        if not self.edit:
+            return
+        out, _ = QFileDialog.getSaveFileName(self, "Save XML", "Shortmovie (auto).xml", "XML (*.xml)")
+        if out:
+            try:
+                n = teaser.export_xml(self.edit, self.music, out, Path(out).stem)
+                self.summary.setText(f"Saved {n} shots to {out}. Premiere: File > Import · DaVinci: File > Import > Timeline.")
+            except Exception as e:
+                self.summary.setText(f"Export failed: {e}")
+
+
 # ---------------------------------------------------------------- main window
 
 class Main(QMainWindow):
@@ -2414,6 +2829,7 @@ class Main(QMainWindow):
         sv.addSpacing(14)
         self.nav = {"dash": btn("Dashboard", "nav", lambda: self.go("dash")),
                     "queue": btn("Analysis Queue", "nav", lambda: self.go("queue")),
+                    "teaser": btn("Teaser Studio", "nav", lambda: self.go("teaser")),
                     "settings": btn("Settings", "nav", lambda: self.go("settings")),
                     "info": btn("Info / How to use", "nav", lambda: self.go("info"))}
         for b in self.nav.values():
@@ -2430,7 +2846,8 @@ class Main(QMainWindow):
         self.mc = MulticamPage(self.store)
         self.settings = SettingsPage(self.store)
         self.info = InfoPage(self.store)
-        for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info):
+        self.teaser = TeaserPage(self.store)
+        for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser):
             self.stack.addWidget(w)
         self.dash.new_project.connect(self.new_project)
         self.dash.open_project.connect(self.open_project)
@@ -2470,7 +2887,7 @@ class Main(QMainWindow):
         self.stack.setCurrentWidget(w)
         for k, b in self.nav.items():
             b.setProperty("active", (k == "dash" and w in (self.dash, self.proj, self.res, self.mc)) or (k == "queue" and w in (self.queue, self.anl))
-                          or (k == "settings" and w is self.settings) or (k == "info" and w is self.info))
+                          or (k == "settings" and w is self.settings) or (k == "info" and w is self.info) or (k == "teaser" and w is self.teaser))
             repolish(b)
 
     def go(self, where):
@@ -2481,6 +2898,8 @@ class Main(QMainWindow):
             self.show_page(self.settings)
         elif where == "info":
             self.show_page(self.info)
+        elif where == "teaser":
+            self.show_page(self.teaser)
         else:
             self.show_page(self.queue)
 

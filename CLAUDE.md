@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.2.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.4.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -51,6 +51,7 @@ linking to https://www.instagram.com/sergiugabrielcg/.
 - `director.py` — multicam auto director + XML export.
 - `help_text.py` — Info / How to use page (HTML, Romanian + English).
 - `xmlimport.py` — import of an already synced FCP7 XML for Auto Edit.
+- `teaser.py` — Teaser Studio engine (labels, music parts, beats, drop, edit, XML export).
 - `make_icons.py` — builds icon.icns / icon.ico / icon.png from `icon_source.png` (run in CI before PyInstaller).
 - `.github/workflows/build.yml` — builds macOS DMGs (Apple Silicon + Intel) and a Windows folder with PyInstaller on every push.
 
@@ -68,6 +69,31 @@ bottleneck, decoding is: explain this if asked again.
   sync.master_starts); without a recorder the timeline is the reference (no beat snapping).
 - Low-confidence ("Check") clips never split a camera into many tracks: they go to one "<group> · check sync" camera and
   are not used by the director (a DJI Osmo project once exploded into 59 tracks).
+
+## Done in v2.3
+- Fast sync: a 100 Hz loudness contour scans the whole recorder per window (MasterIndex.coarse), the exact GCC-PHAT runs
+  only +-1.5 s around the candidates (MasterIndex.fine); a second pass re-checks every window at the offsets the other
+  windows found (repetitive music); the old exhaustive search remains the fallback when the fast one is not sure.
+  ~5x faster on a 3 h recorder. run_sync.report = "Sync took … reading … searching …" (disk vs CPU).
+- classify(): main recorder = audio-only folder with the most hours; other audio-only folders (LAV I, LAV II) are extra
+  sources: synced like clips, cams with role "Audio", exported on their own audio tracks.
+- place_by_time(): clips without usable sound (drone, mic off) get conf "approx" from their clock corrected by the
+  folder's (else median) clock error; own "<group> · by time" camera, full clips in the export, never in the auto edit.
+- Teaser Studio (teaser.py + TeaserPage), v2.4: PASSWORD protected (only its SHA-256 is in teaser.py, never write the
+  password in code, docs or commits; unlock is remembered per computer in settings.json). Built from the owner's 5
+  shortmovies: TEASER (~1 min, song with a drop: before the drop bride/groom/church/couple/drone, after it party +
+  couple), PREGĂTIRI (calm song, bride/groom alternating, ends with couple), BISERICA (church, last quarter couple),
+  PETRECERE (venue + drone first, then the party shots he selected). Categories = his Premiere label colours: Rose bride,
+  Blue groom, Purple couple, Brown church, Yellow/Caribbean venue, Iris party, Violet drone; ignore Tan (interviews),
+  Forest (nests), Lavender (adjustment layers). Music = one joined file or the XML of his music edit (song changes =
+  part boundaries); beat grid per part, drop = biggest loudness jump in the teaser. Export: V1 shots on beats, music on
+  A1/A2, markers Teaser / DROP / Pregătiri / Biserica / Petrecere. He adds testimonials and vows himself.
+  Not done yet: slow motion (he uses 50% on party/couple), quality-based picking inside a labelled clip, Lock / Swap /
+  Never use, quick preview render.
+
+## Progress UI
+Every long process shows the same ProgressPanel (step text, %, thick gradient bar, elapsed + estimated time left):
+multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Analyze Footage" page, Analysis Queue cards.
 
 ## Rules learned the hard way
 - Every clipitem <name> is EXACTLY the file name (e.g. RS-MAIN6210.MP4). DaVinci Resolve links timeline clips to media by

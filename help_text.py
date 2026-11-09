@@ -42,6 +42,16 @@ camerelor întregi.</li>
 </ol>
 <p><b>Dacă adaugi fișiere după:</b> dai din nou Sync, apoi Auto Edit. A doua oară se analizează doar clipurile noi, deci
 merge mult mai repede.</p>
+<h3>Lavaliere, dronă, camere fără sunet</h3>
+<ul>
+<li><b>Recorderul principal</b> e folderul cu cele mai multe ore de audio (recorderul de la mixer). Celelalte foldere doar cu
+audio (de exemplu <b>LAV I</b>, <b>LAV II</b>) sunt sincronizate pe el și apar în export pe pistele lor audio, întregi.</li>
+<li><b>Drona și camerele fără sunet</b> nu pot fi sincronizate pe sunet. Sunt așezate <b>aproximativ după oră</b> (timecode
+sau ora din fișier, corectată cu eroarea de ceas învățată de la celelalte camere), apar în mov („By time”), pe pista lor,
+cu clipul întreg, și nu sunt folosite în montajul automat.</li>
+<li>La finalul sincronizării vezi <b>cât a durat</b> citirea fișierelor și cât căutarea. Dacă citirea durează mult, discul e
+cel care încetinește (un HDD extern e mult mai lent decât un SSD).</li>
+</ul>
 <h3>Import XML (sincronizare făcută în altă aplicație)</h3>
 <p>Dacă ai sincronizat deja materialul în <b>Syncaila</b>, Premiere Pro sau DaVinci Resolve, exportă de acolo un XML (FCP7 XML)
 cu fiecare cameră pe pista ei și apasă <b>Import XML</b>. Aplicația preia pozițiile exact cum sunt (fără să mai sincronizeze),
@@ -92,6 +102,19 @@ schimbă instant. Rezultatul rămâne salvat în History, ca să-l poți redesch
 <p>În proiectele Multicam, butonul Auto Edit face exact aceeași analiză pe clipurile fiecărei camere. Rezultatul îl
 folosește apoi regizorul automat ca să aleagă camera pentru fiecare moment.</p>
 
+<h2>Teaser Studio (protejat cu parolă)</h2>
+<ol>
+<li><b>Footage:</b> în Premiere pui clipurile etichetate pe culori într-un sequence (selects) și dai Export XML. Culori:
+Rose mireasă, Blue mire, Purple cuplu, Brown biserică, Yellow sală, Iris petrecere, Violet dronă. Tan, Forest și Lavender
+sunt ignorate.</li>
+<li><b>Music:</b> melodiile deja îmbinate, într-un fișier audio sau ca XML al montajului muzical (din XML se văd exact
+schimbările de melodie).</li>
+<li><b>Parts:</b> aplicația găsește drop-ul și părțile (Teaser, Pregătiri, Biserica, Petrecere); le poți corecta.</li>
+<li><b>Generate</b> construiește structura ta: teaser (înainte de drop pregătiri, biserică, cuplu, dronă; după drop
+petrecere alternată cu cuplu), pregătiri mireasă/mire, biserica cu cuplul la final, sala, apoi petrecerea. Fiecare tăietură
+cade pe beat. <b>Shuffle</b> alege alte cadre; <b>Export XML</b> are markere pentru fiecare parte, ca să pui testimonialele și
+jurămintele în Premiere.</li>
+</ol>
 <h2>Sfaturi utile</h2>
 <ul>
 <li><b>Auto sau Custom?</b> Auto este varianta clasică: păstrează cadrele bune și le pune pe o singură pistă. Custom îți dă
@@ -160,6 +183,16 @@ sound uncut.</li>
 </ol>
 <p><b>If you add files later:</b> press Sync again, then Auto Edit. The second time only the new clips are analysed, so it
 is much faster.</p>
+<h3>Lavaliers, drone, cameras without sound</h3>
+<ul>
+<li>The <b>main recorder</b> is the audio-only folder with the most hours (the mixer recorder). Other audio-only folders
+(e.g. <b>LAV I</b>, <b>LAV II</b>) are synced to it and exported on their own audio tracks, uncut.</li>
+<li><b>Drone and cameras without sound</b> cannot be synced by sound. They are placed <b>approximately by time</b> (timecode or
+file time, corrected by the clock error learned from the other cameras), shown in purple ("By time"), on their own track
+with the full clip, and are not used by the auto edit.</li>
+<li>When the sync finishes you see <b>how long</b> reading the files and searching took. If reading takes long, the disk is
+what slows it down (an external HDD is much slower than an SSD).</li>
+</ul>
 <h3>Import XML (synced in another app)</h3>
 <p>If your footage is already synced in <b>Syncaila</b>, Premiere Pro or DaVinci Resolve, export an XML (FCP7 XML) from there
 with every camera on its own track and press <b>Import XML</b>. The app takes the positions exactly as they are (it does not
@@ -209,6 +242,18 @@ in the frame".</li>
 <p>In Multicam projects, the Auto Edit button runs exactly the same analysis on every camera's clips. The automatic
 director then uses it to choose the camera for every moment.</p>
 
+<h2>Teaser Studio (password protected)</h2>
+<ol>
+<li><b>Footage:</b> in Premiere put your colour-labelled clips in a sequence (selects) and Export XML. Colours: Rose bride,
+Blue groom, Purple couple, Brown church, Yellow venue, Iris party, Violet drone. Tan, Forest and Lavender are ignored.</li>
+<li><b>Music:</b> your songs already joined, as one audio file or as the XML of your music edit (the XML shows exactly where
+each song starts).</li>
+<li><b>Parts:</b> the app finds the drop and the parts (Teaser, Pregătiri, Biserica, Petrecere); you can correct them.</li>
+<li><b>Generate</b> builds your structure: teaser (before the drop getting ready, church, couple, drone; after the drop party
+alternating with the couple), bride/groom getting ready, the church ending with the couple, the venue, then the party.
+Every cut lands on a beat. <b>Shuffle</b> picks other shots; <b>Export XML</b> has a marker for every part, so you can add
+testimonials and vows in Premiere.</li>
+</ol>
 <h2>Useful tips</h2>
 <ul>
 <li><b>Auto or Custom?</b> Auto is the classic version: it keeps the good shots and puts them on one track. Custom gives you

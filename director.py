@@ -134,7 +134,7 @@ def build(cams, results, analyses, masters, st):
         for ci, c in enumerate(cams):
             for p in c["clips"]:
                 r, a = results.get(p), analyses.get(p)
-                if r and r["conf"] not in ("fail", "low") and r["master"] == mi and a is not None and a.fs:
+                if r and r["conf"] in ("high", "medium") and r["master"] == mi and a is not None and a.fs:
                     mem.append((ci, p, r["offset"], a.duration, a))
         if not mem:
             out.append(None)
@@ -222,6 +222,16 @@ def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=N
         ids[k] += 1
         return f"{'clipitem' if k == 'clip' else 'file'}-{ids[k]}"
 
+    snd = {}
+
+    def has_sound(p):
+        if p not in snd:
+            try:
+                snd[p] = core.audio_layout(p)[1] > 0
+            except Exception:
+                snd[p] = False
+        return snd[p]
+
     def ai(p):
         if p not in ainfo:
             try:
@@ -238,6 +248,8 @@ def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=N
 
     placed = []   # (cam, path, global_start)
     for ci, cam in enumerate(cams):
+        if cam.get("role") == "Audio":
+            continue
         for p in cam["clips"]:
             r = results.get(p)
             if r and r["conf"] != "fail":
@@ -246,7 +258,9 @@ def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=N
         raise ValueError("Nothing to export yet: run Sync first.")
     first = vinfo(placed[0][1])
     rate_xml, fps = core._rate(first.fps)
-    T0 = min([0.0] + [g for _, _, g in placed])
+    T0 = min([0.0] + [g for _, _, g in placed] +
+             [starts[results[p]["master"]] + results[p]["offset"] for c in cams if c.get("role") == "Audio"
+              for p in c["clips"] if results.get(p) and results[p]["conf"] != "fail"])
     sc = core._sc(rate_xml, first.width, first.height, "none")
 
     def file_xml(p):
@@ -311,7 +325,9 @@ def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=N
             cuts[ci].append((g, p, a, b, tuple(f)))
     has_edit = any(cuts.values())
     for ci, cam in enumerate(cams):
-        if has_edit:
+        if cam.get("role") == "Audio":
+            continue
+        if has_edit and not cam.get("approx") and not cam.get("check"):
             its = [item(p, a, b, g, lab(ci), f"{cam['name']} · {Path(p).stem}{flag(p)}", frames=f) for g, p, a, b, f in cuts[ci]]
         else:
             its = [item(p, 0.0, dur(p), g, lab(ci), f"{cam['name']} · {Path(p).stem}{flag(p)}")
@@ -345,9 +361,35 @@ def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=N
     # camera sound, one track per camera
     for ci, cam in enumerate(cams):
         its = [item(p, 0.0, dur(p), g, lab(ci), f"{cam['name']} audio · {Path(p).stem}", audio_ch=1)
-               for c, p, g in sorted(placed, key=lambda x: x[2]) if c == ci and ai(p)[1] > 0]
+               for c, p, g in sorted(placed, key=lambda x: x[2]) if c == ci and has_sound(p)]
         if its:
             a_tracks.append(track(its))            # not muted (owner's wish)
+    # extra audio sources (lavaliers, second recorder): one audio track per source folder, uncut, synced
+    for ci, cam in enumerate(cams):
+        if cam.get("role") != "Audio":
+            continue
+        its = []
+        for p in cam["clips"]:
+            r = results.get(p)
+            if not r or r["conf"] == "fail":
+                continue
+            key = "a:" + p
+            rate_, ch_ = ai(p)
+            adur = int(np.ceil(r["dur"] * fps))
+            if key in defined:
+                f = f'<file id="{defined[key]}"/>'
+            else:
+                defined[key] = nid("file")
+                f = (f'<file id="{defined[key]}"><name>{escape(Path(p).name)}</name><pathurl>{escape(core._url(p))}</pathurl>'
+                     f'{rate_xml}<duration>{adur}</duration><media><audio><samplecharacteristics><depth>16</depth>'
+                     f'<samplerate>{rate_}</samplerate></samplecharacteristics><channelcount>{max(1, ch_)}</channelcount></audio></media></file>')
+            st = round((starts[r["master"]] + r["offset"] - T0) * fps)
+            its.append(f'<clipitem id="{nid("clip")}"><name>{escape(Path(p).name)}</name><duration>{adur}</duration>{rate_xml}'
+                       f'<start>{st}</start><end>{st + adur}</end><in>0</in><out>{adur}</out>'
+                       f'<labels><label2>{lab(ci)}</label2></labels>{f}'
+                       f'<sourcetrack><mediatype>audio</mediatype><trackindex>1</trackindex></sourcetrack></clipitem>')
+        if its:
+            a_tracks.append(track(its))
     end = max([g + dur(p) for _, p, g in placed] + [starts[i] + m["duration"] for i, m in enumerate(masters)])
     total = int(np.ceil((end - T0) * fps))
     xml = (f'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4"><sequence id="sequence-1">'
