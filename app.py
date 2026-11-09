@@ -10,8 +10,8 @@ from datetime import datetime
 from pathlib import Path
 
 import numpy as np
-from PySide6.QtCore import QPointF, QRectF, QStandardPaths, Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPen, QPixmap
+from PySide6.QtCore import QPointF, QRectF, QRegularExpression, QStandardPaths, Qt, QThread, QTimer, Signal
+from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPen, QPixmap, QRegularExpressionValidator
 from PySide6.QtWidgets import (QTextBrowser, QAbstractItemView, QApplication, QComboBox, QDialog, QFileDialog, QFrame,
                                QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
                                QMainWindow, QProgressBar, QPushButton, QScrollArea, QSlider, QStackedWidget,
@@ -25,7 +25,7 @@ import teaser
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v2.4.1"
+APP, VER = "MoneyMakingMachine", "v2.4.2"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 C = dict(BG="#1d1d1d", PANEL="#232323", CARD="#2a2a2a", BORDER="#3a3a3a", TEXT="#d6d6d6", MUTED="#8f8f8f",
          BLUE="#1473e6", HOT="#4b9cf5", GOOD="#4cc38a", FAIR="#e6b93a", POOR="#e5534b")   # Premiere Pro look
@@ -2277,6 +2277,8 @@ class MulticamPage(QWidget):
 # ---------------------------------------------------------------- settings / performance
 
 class SettingsPage(QWidget):
+    lock_teaser = Signal()
+
     def __init__(self, store):
         super().__init__()
         self.store = store
@@ -2336,6 +2338,10 @@ class SettingsPage(QWidget):
         self.sw_hw.toggled.connect(self.set_hw)
         hw.addWidget(self.sw_hw)
         right.addLayout(hw)
+        right.addSpacing(18)
+        right.addWidget(lbl("Teaser Studio", "h2"))
+        right.addWidget(lbl("Locks Teaser Studio again on this computer (the password is needed to open it).", "muted", True))
+        right.addWidget(btn("Lock Teaser Studio", slot=self.lock_teaser.emit), 0, Qt.AlignLeft)
         right.addStretch()
         body.addLayout(right, 1)
         v.addLayout(body, 1)
@@ -2483,7 +2489,11 @@ class MusicView(QWidget):
             c.setAlpha(90)
             p.fillRect(QRectF(X(bounds[i]), 0, X(bounds[i + 1]) - X(bounds[i]), 22), c)
             p.setPen(QColor("#ececec"))
-            p.drawText(QRectF(X(bounds[i]) + 6, 0, X(bounds[i + 1]) - X(bounds[i]), 22), Qt.AlignVCenter, teaser.PARTS[i])
+            r_ = QRectF(X(bounds[i]) + 4, 0, max(0.0, X(bounds[i + 1]) - X(bounds[i]) - 6), 22)
+            p.save()
+            p.setClipRect(r_)                       # a short part never writes over its neighbour
+            p.drawText(r_, Qt.AlignVCenter, p.fontMetrics().elidedText(teaser.PARTS[i], Qt.ElideRight, int(r_.width())))
+            p.restore()
         p.setPen(Qt.NoPen)
         p.setBrush(QColor(C["HOT"]))
         n = len(self.env)
@@ -2565,8 +2575,8 @@ class TeaserPage(QWidget):
         sv.setSpacing(10)
         top = QHBoxLayout()
         top.addWidget(lbl("Teaser Studio", "h1"))
-        badge = QLabel("PREVIEW")
-        badge.setStyleSheet("background:#7c5cff;color:white;font-size:9px;font-weight:700;border-radius:3px;padding:2px 6px")
+        badge = QLabel("NEW")
+        badge.setStyleSheet(f"background:{C['POOR']};color:white;font-size:10px;font-weight:800;border-radius:9px;padding:2px 8px")
         top.addWidget(badge)
         top.addStretch()
         self.b_shuffle = btn("Shuffle shots", slot=self.shuffle)
@@ -2581,7 +2591,12 @@ class TeaserPage(QWidget):
         body = QHBoxLayout()
         body.setSpacing(18)
         sv.addLayout(body, 1)
-        left = QVBoxLayout()
+        lscroll = QScrollArea()                 # the cards keep their natural size, the column scrolls instead
+        lscroll.setWidgetResizable(True)
+        lscroll.setFixedWidth(410)
+        lw = QWidget()
+        left = QVBoxLayout(lw)
+        left.setContentsMargins(0, 0, 8, 0)
         left.setSpacing(10)
 
         def card(n, title):
@@ -2619,10 +2634,17 @@ class TeaserPage(QWidget):
         l3 = card(3, "Parts")
         self.f = {}
         g = QGridLayout()
+        g.setVerticalSpacing(8)
+        g.setColumnStretch(0, 1)
+        val = QRegularExpressionValidator(QRegularExpression(r"^\d{0,2}(:\d{0,2}(\.\d?)?)?$"))
         for i, (k, t) in enumerate(teaser.BOUNDS):
-            g.addWidget(lbl(t, "muted"), i, 0)
+            g.addWidget(lbl(t, "muted"), i, 0, Qt.AlignVCenter)
             e = QLineEdit()
-            e.setFixedWidth(90)
+            e.setFixedSize(110, 30)
+            e.setPlaceholderText("m:ss.s")
+            e.setValidator(val)                 # digits, ":" and "." only
+            e.setAlignment(Qt.AlignCenter)
+            e.setEnabled(False)
             e.editingFinished.connect(self.parts_edited)
             g.addWidget(e, i, 1)
             self.f[k] = e
@@ -2630,7 +2652,10 @@ class TeaserPage(QWidget):
         self.parts_note = lbl("", "muted", True)
         self.parts_note.setStyleSheet(f"color:{C['POOR']}")
         l3.addWidget(self.parts_note)
-        l3.addWidget(btn("Detect again", "link", self.redetect))
+        self.b_detect = btn("Detect again", "link", self.redetect)
+        self.b_detect.setToolTip("Sets the six moments back to what the app found in the music (song changes, drop).")
+        self.b_detect.setEnabled(False)
+        l3.addWidget(self.b_detect)
         l4 = card(4, "Story order")
         r = QHBoxLayout()
         self.b_chrono = btn("Chronological", "seg", lambda: self.set_order(True))
@@ -2638,12 +2663,16 @@ class TeaserPage(QWidget):
         r.addWidget(self.b_chrono)
         r.addWidget(self.b_mixed)
         l4.addLayout(r)
+        self.order_lbl = lbl("", "muted", True)
+        l4.addWidget(self.order_lbl)
         left.addStretch()
-        body.addLayout(left)
+        lscroll.setWidget(lw)
+        body.addWidget(lscroll)
         right = QVBoxLayout()
         right.addWidget(lbl("MUSIC", "section"))
         self.mv = MusicView()
         right.addWidget(self.mv)
+        right.addWidget(lbl("The small ticks under the music show where the cuts fall. The pink line is the drop.", "muted"))
         right.addWidget(lbl("YOUR SHORTMOVIE", "section"))
         self.strip = ShotStrip()
         right.addWidget(self.strip)
@@ -2657,7 +2686,25 @@ class TeaserPage(QWidget):
         self.chrono = True
         self.set_order(store.app.get("teaser_chrono", True))
         self.stack.setCurrentIndex(1 if store.app.get("teaser_unlocked") else 0)
+        self.auto_bounds = None
         self._buttons()
+        if store.app.get("teaser_unlocked"):
+            QTimer.singleShot(0, self.restore)
+
+    def restore(self):
+        """Reload the footage XML, the music and your six moments from last time."""
+        t = self.store.app.get("teaser", {})
+        foot, mus, b = t.get("footage"), t.get("music"), t.get("bounds")
+        then = (lambda: self._load_music_file(mus, b)) if mus and Path(mus).exists() else None
+        if foot and Path(foot).exists():
+            self._load_footage(foot, then)
+        elif then:
+            then()
+
+    def lock(self):
+        self.store.app["teaser_unlocked"] = False
+        self.store.save_app()
+        self.stack.setCurrentIndex(0)
 
     # ---- lock
     def unlock(self):
@@ -2666,6 +2713,7 @@ class TeaserPage(QWidget):
             self.store.save_app()
             self.pw.clear()
             self.stack.setCurrentIndex(1)
+            self.restore()
         else:
             self.pw_err.setText("Wrong password.")
             self.pw_err.setStyleSheet(f"color:{C['POOR']}")
@@ -2673,7 +2721,8 @@ class TeaserPage(QWidget):
     # ---- inputs
     def _run(self, text, fn, args, done):
         if self.runner and self.runner.isRunning():
-            return
+            if not self.runner.wait(3000):       # the previous job is just finishing (chained loads)
+                return
         self.pp.start(text)
         self.pp.set(text, 0.3)
         self.runner = _Runner(fn, *args)
@@ -2681,10 +2730,20 @@ class TeaserPage(QWidget):
         self.runner.failed.connect(lambda m: (self.pp.hide(), self.summary.setText("Error: " + m)))
         self.runner.start()
 
+    def _remember(self, **kw):
+        t = self.store.app.setdefault("teaser", {})
+        t.update(kw)
+        self.store.save_app()
+
     def pick_footage(self):
         f, _ = QFileDialog.getOpenFileName(self, "Labelled footage XML (from Premiere)", "", "XML (*.xml)")
         if f:
-            self._run("Reading your labelled clips…", teaser.load_footage, (f,), self.footage_loaded)
+            self._load_footage(f)
+
+    def _load_footage(self, f, then=None):
+        self._foot_path = f
+        self._run("Reading your labelled clips and their recording times…", teaser.load_footage, (f,),
+                  lambda r: (self.footage_loaded(r), then and then()))
 
     def footage_loaded(self, r):
         self.pieces, skipped = r
@@ -2696,7 +2755,9 @@ class TeaserPage(QWidget):
             rows.append(f'<span style="color:{teaser.CAT_COLOR[c]}">●</span> {teaser.CAT_NAME[c]}: {n} clips, '
                         f'{int(sec // 60)}:{int(sec % 60):02d}{warn}')
         ign = ", ".join(f"{k} {v}" for k, v in skipped.items())
-        self.foot_lbl.setText("<br>".join(rows) + (f'<br><span style="color:{C["MUTED"]}">Ignored: {ign}</span>' if ign else ""))
+        self.foot_lbl.setText(f'<b>{Path(self._foot_path).name}</b><br>' + "<br>".join(rows) +
+                              (f'<br><span style="color:{C["MUTED"]}">Ignored: {ign}</span>' if ign else ""))
+        self._remember(footage=self._foot_path)
         self._buttons()
 
     def pick_music(self, as_xml):
@@ -2705,20 +2766,36 @@ class TeaserPage(QWidget):
         else:
             f, _ = QFileDialog.getOpenFileName(self, "Music (one file with all the songs)", "", "Audio (*.wav *.mp3 *.aif *.aiff *.m4a *.flac);;All files (*)")
         if f:
-            self._run("Reading the music, finding the beat and the drop…", self._load_music, (f,), self.music_loaded)
+            self._load_music_file(f)
+
+    def _load_music_file(self, f, bounds=None):
+        self._mus_path = f
+        self._run("Reading the music, finding the beat and the drop…", self._load_music, (f,),
+                  lambda r: self.music_loaded(r, bounds))
 
     @staticmethod
     def _load_music(f):
         m = teaser.load_music(f)
         return m, teaser.guess_parts(m)
 
-    def music_loaded(self, r):
+    def music_loaded(self, r, bounds=None):
         self.music, b = r
+        self.auto_bounds = dict(b)
         self.mv.set_music(self.music["x"], self.music["duration"])
+        if bounds and teaser.valid(bounds, self.music["duration"]):
+            b = bounds                                   # what you had set last time
+        for e in self.f.values():
+            e.setEnabled(True)
+        self.b_detect.setEnabled(True)
         self._set_parts(b)
         d = self.music["duration"]
-        self.mus_lbl.setText(f"{int(d // 60)}:{int(d % 60):02d} of music"
-                             + (" · song changes taken from the XML" if self.music["song_starts"] else " · parts guessed, adjust them below"))
+        miss = self.music.get("missing") or []
+        warn = (f'<br><span style="color:{C["POOR"]}">Not found, left out of the analysis: {", ".join(miss)}</span>'
+                if miss else "")
+        self.mus_lbl.setText(f"<b>{Path(self._mus_path).name}</b> · {int(d // 60)}:{int(d % 60):02d} of music"
+                             + (" · song changes taken from the XML" if self.music["song_starts"] else " · moments guessed, adjust them below")
+                             + warn)
+        self._remember(music=self._mus_path)
         self._buttons()
 
     # ---- parts
@@ -2729,28 +2806,46 @@ class TeaserPage(QWidget):
             self.f[k].setText(f"{int(t // 60)}:{t % 60:04.1f}")
             self.f[k].setStyleSheet("")
         self.mv.set_parts([b[k] for k, _ in teaser.BOUNDS[1:]], b["drop"])
+        self._remember(bounds=self.bounds)
 
     def parts_edited(self):
-        try:
-            b = {k: parse_t(self.f[k].text()) for k, _ in teaser.BOUNDS}
-        except ValueError:
-            return
-        if self.music and teaser.valid(b, self.music["duration"]):
+        red = f"border:1.5px solid {C['POOR']}"
+        b, bad = {}, []
+        for k, _ in teaser.BOUNDS:
+            try:
+                b[k] = parse_t(self.f[k].text())
+            except ValueError:
+                bad.append(k)
+        if not bad and self.music:
+            ks = [k for k, _ in teaser.BOUNDS]
+            bad = [k2 for k1, k2 in zip(ks, ks[1:]) if b[k2] <= b[k1]]
+            if b[ks[-1]] >= self.music["duration"]:
+                bad.append(ks[-1])
+        for k, e in self.f.items():
+            e.setStyleSheet(red if k in bad else "")
+        if not bad and self.music and teaser.valid(b, self.music["duration"]):
             self._set_parts(b)
             self.parts_note.setText("")
         else:
-            self.parts_note.setText("The times must go forward: Drop < Teaser ends < Pregătiri ends < Biserica ends < "
+            self.parts_note.setText("The times must go forward: Drop < Teaser ends < Getting ready ends < Church ends < "
                                     "Party song starts < Venue ends.")
 
     def redetect(self):
         if self.music:
-            self._set_parts(teaser.guess_parts(self.music))
+            self._set_parts(self.auto_bounds)
+            self.parts_note.setText("")
 
     def set_order(self, chrono):
         self.chrono = chrono
         for b, on in ((self.b_chrono, chrono), (self.b_mixed, not chrono)):
             b.setProperty("active", on)
             repolish(b)
+        self.order_lbl.setText(
+            "Chronological: every part follows the day in the order the clips were recorded (timecode / file time); "
+            "if some clips have no recording time, the order of your selects sequence is used. "
+            "The teaser is always mixed." if chrono else
+            "Mixed: every part keeps its kind of shots (bride, church, party…) but picks them in random order. "
+            "Press Shuffle shots for another mix.")
         self.store.app["teaser_chrono"] = chrono
         self.store.save_app()
 
@@ -2760,6 +2855,11 @@ class TeaserPage(QWidget):
         self.b_gen.setEnabled(ok)
         self.b_shuffle.setEnabled(ok and self.edit is not None)
         self.b_exp.setEnabled(self.edit is not None)
+        if not ok:
+            need = [n for n, have in (("the labelled footage XML", bool(self.pieces)), ("the music", self.music is not None)) if not have]
+            self.summary.setText("Add " + " and ".join(need) + " to generate.")
+        elif self.edit is None:
+            self.summary.setText("Ready: press Generate.")
 
     def generate(self):
         if not self.pieces or self.music is None:
@@ -2769,7 +2869,14 @@ class TeaserPage(QWidget):
         allbeats = [t0 for t0, _, _ in self.edit["shots"]]
         self.mv.set_parts([self.bounds[k] for k, _ in teaser.BOUNDS[1:]], self.bounds["drop"], allbeats)
         bpm = " · ".join(f"{k} {v:.0f} BPM" for k, v in self.edit["bpm"].items() if v)
-        self.summary.setText(f"{len(self.edit['shots'])} shots, every cut on a beat · {bpm}")
+        inst = self.edit.get("used_instead") or {}
+        grouped = {}
+        for (w, u), n in inst.items():
+            grouped.setdefault(w, []).append((n, u))
+        miss = "".join(f'<br><span style="color:{C["FAIR"]}">Not enough {teaser.CAT_NAME[w].lower()} shots, filled with: '
+                       + ", ".join(f"{teaser.CAT_NAME[u].lower()} ({n}×)" for n, u in sorted(v, reverse=True)) + "</span>"
+                       for w, v in sorted(grouped.items()))
+        self.summary.setText(f"{len(self.edit['shots'])} shots, every cut on a beat · order: {self.edit['order']}<br>{bpm}{miss}")
         self._buttons()
 
     def shuffle(self):
@@ -2779,7 +2886,8 @@ class TeaserPage(QWidget):
     def export(self):
         if not self.edit:
             return
-        out, _ = QFileDialog.getSaveFileName(self, "Save XML", "Shortmovie (auto).xml", "XML (*.xml)")
+        start = str(Path(getattr(self, "_foot_path", "") or ".").parent / "Shortmovie (auto).xml")
+        out, _ = QFileDialog.getSaveFileName(self, "Save XML", start, "XML (*.xml)")
         if out:
             try:
                 n = teaser.export_xml(self.edit, self.music, out, Path(out).stem)
@@ -2852,6 +2960,7 @@ class Main(QMainWindow):
         self.settings = SettingsPage(self.store)
         self.info = InfoPage(self.store)
         self.teaser = TeaserPage(self.store)
+        self.settings.lock_teaser.connect(self.teaser.lock)
         for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser):
             self.stack.addWidget(w)
         self.dash.new_project.connect(self.new_project)

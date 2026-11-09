@@ -113,18 +113,20 @@ schimbările de melodie).</li>
   <ul>
   <li><b>Drop</b>: drop-ul din melodia de teaser (găsit automat);</li>
   <li><b>Teaser ends</b>: finalul părții de după drop, aici încep pregătirile;</li>
-  <li><b>Pregătiri ends</b>: aici începe biserica;</li>
-  <li><b>Biserica ends</b>: aici vin cadrele de cuplu, peste finalul jurămintelor;</li>
+  <li><b>Getting ready ends</b>: aici începe biserica;</li>
+  <li><b>Church ends</b>: aici vin cadrele de cuplu, peste finalul jurămintelor;</li>
   <li><b>Party song starts</b>: începe melodia de petrecere și prezentarea locației (sala, drona);</li>
   <li><b>Venue ends</b>: începe petrecerea propriu-zisă.</li>
   </ul>
   Dacă dai muzica ca XML, granițele dintre melodii sunt luate exact de acolo. Timpii trebuie să meargă înainte, în
   ordinea de mai sus.</li>
+<li><b>Story order:</b> <b>Chronological</b> ia cadrele fiecărei părți în ordinea în care au fost filmate (după
+timecode / ora din fișier; dacă unele clipuri n-au oră, după ordinea din sequence-ul tău). <b>Mixed</b> păstrează
+părțile și tipurile de cadre, dar le alege la întâmplare. Teaserul e mereu amestecat.</li>
 <li><b>Generate</b> construiește structura ta: teaser (înainte de drop pregătiri, biserică, cuplu, dronă; după drop
 petrecere alternată cu cuplu), pregătiri mireasă/mire, biserica cu cuplul la final, sala, apoi petrecerea. Fiecare tăietură
 cade pe beat. <b>Shuffle</b> alege alte cadre; <b>Export XML</b> are markere pentru fiecare parte, ca să pui testimonialele și
-jurămintele în Premiere (markere: Teaser, DROP, Pregătiri, Biserica, Cuplu + jurăminte, Petrecere: sala,
-Petrecere: party).</li>
+jurămintele în Premiere (markere: Teaser, DROP, Getting ready, Church, Couple + vows, Party: venue, Party).</li>
 </ol>
 <h2>Sfaturi utile</h2>
 <ul>
@@ -263,18 +265,20 @@ each song starts).</li>
   <ul>
   <li><b>Drop</b>: the drop of the teaser song (found automatically);</li>
   <li><b>Teaser ends</b>: end of the part after the drop, getting ready starts here;</li>
-  <li><b>Pregătiri ends</b>: the church starts here;</li>
-  <li><b>Biserica ends</b>: the couple shots start here, over the end of the vows;</li>
+  <li><b>Getting ready ends</b>: the church starts here;</li>
+  <li><b>Church ends</b>: the couple shots start here, over the end of the vows;</li>
   <li><b>Party song starts</b>: the party song and the venue presentation (venue, drone) start;</li>
   <li><b>Venue ends</b>: the party itself starts.</li>
   </ul>
   If you give the music as an XML, the song changes are taken from it exactly. The times must go forward, in the order
   above.</li>
+<li><b>Story order:</b> <b>Chronological</b> takes each part's shots in the order they were recorded (timecode / file
+time; if some clips have no recording time, the order of your sequence). <b>Mixed</b> keeps the parts and kinds of shots
+but picks them at random. The teaser is always mixed.</li>
 <li><b>Generate</b> builds your structure: teaser (before the drop getting ready, church, couple, drone; after the drop party
 alternating with the couple), bride/groom getting ready, the church ending with the couple, the venue, then the party.
 Every cut lands on a beat. <b>Shuffle</b> picks other shots; <b>Export XML</b> has a marker for every part, so you can add
-testimonials and vows in Premiere (markers: Teaser, DROP, Pregătiri, Biserica, Cuplu + jurăminte, Petrecere: sala,
-Petrecere: party).</li>
+testimonials and vows in Premiere (markers: Teaser, DROP, Getting ready, Church, Couple + vows, Party: venue, Party).</li>
 </ol>
 <h2>Useful tips</h2>
 <ul>

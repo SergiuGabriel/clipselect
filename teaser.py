@@ -2,9 +2,9 @@
 
   1. TEASER   (~1 min, song with a drop): before the drop bride / groom getting ready, church, couple, drone;
                after the drop party alternated with couple, quick cuts.
-  2. PREGĂTIRI (calm song, ~120-140 s): bride and groom alternating, ends with the couple (first look).
-  3. BISERICA  (<= 120 s): church shots, the last part only the couple (leaving the church).
-  4. PETRECERE: venue presentation (+ drone) first, then the party shots he selected.
+  2. GETTING READY (calm song, ~120-140 s): bride and groom alternating, ends with the couple (first look).
+  3. CHURCH (<= 120 s): church shots, then only the couple over the end of the vows.
+  4. PARTY: venue presentation (+ drone) first, then the party shots he selected.
 
 Categories come from his Premiere label colours (he labels his footage anyway):
 Rose bride · Blue groom · Purple couple · Brown church · Yellow / Caribbean venue · Iris party · Violet drone.
@@ -31,7 +31,7 @@ CAT_NAME = {"bride": "Bride", "groom": "Groom", "couple": "Couple", "church": "C
             "drone": "Drone"}
 LABEL_OF = {"bride": "Rose", "groom": "Blue", "couple": "Purple", "church": "Brown", "venue": "Yellow", "party": "Iris",
             "drone": "Violet"}
-PARTS = ["Teaser", "Pregătiri", "Biserica", "Cuplu", "Sala", "Petrecere"]
+PARTS = ["Teaser", "Getting ready", "Church", "Couple", "Venue", "Party"]
 # target length of a shot (seconds), from his films: ~40-47 cuts/min in the teaser and getting ready, a bit calmer later
 TARGET = {"teaser_pre": 1.2, "teaser_post": 0.9, "pregatiri": 1.3, "biserica": 1.4, "cuplu": 1.5, "sala": 1.0,
           "petrecere": 1.0}
@@ -62,6 +62,7 @@ def load_footage(xml_path):
     for t, tr in enumerate(vid.findall("track") if vid is not None else []):
         for ci in tr.findall("clipitem"):
             if ci.find("sequence") is not None:
+                skipped["multicam / nested"] = skipped.get("multicam / nested", 0) + 1
                 continue
             lab = ci.findtext("labels/label2") or ""
             f = ci.find("file")
@@ -79,6 +80,19 @@ def load_footage(xml_path):
             pieces.append(dict(cat=CATS[lab], path=info["path"], a=a, b=b, order=st / sfps + t * 1e-3, fps=info["fps"],
                                fdur=info["dur"] / max(1e-6, info["fps"]), w=info["w"], h=info["h"]))
     pieces.sort(key=lambda p: p["order"])
+    # recording time of every file (timecode, creation time or file date), for the chronological story order
+    clocks = {}
+    for p in pieces:
+        if p["path"] not in clocks:
+            try:
+                clocks[p["path"]] = sync.media_info(p["path"])["clock"] if Path(p["path"]).exists() else None
+            except Exception:
+                clocks[p["path"]] = None
+    for p in pieces:
+        c = clocks.get(p["path"])
+        if c is not None and c < 5 * 3600:      # after midnight: still the same wedding day
+            c += 86400
+        p["clock"] = None if c is None else c + p["a"]
     return pieces, skipped
 
 
@@ -121,6 +135,7 @@ def load_music(path):
         dur = max(i["end"] for i in items)
         x = np.zeros(int(dur * SR) + SR, np.float32)
         cache = {}
+        missing = sorted({Path(it["path"]).name for it in items if not Path(it["path"]).exists()})
         for it in items:
             if not Path(it["path"]).exists():
                 continue
@@ -136,9 +151,9 @@ def load_music(path):
             sp = spans.setdefault(it["path"], [it["start"], it["end"]])
             sp[0], sp[1] = min(sp[0], it["start"]), max(sp[1], it["end"])
         songs = sorted((s for s in spans.values() if s[1] - s[0] >= 15), key=lambda s: s[0])
-        return dict(kind="xml", items=items, x=x, duration=dur, song_starts=[s[0] for s in songs[1:]])
+        return dict(kind="xml", items=items, x=x, duration=dur, song_starts=[s[0] for s in songs[1:]], missing=missing)
     x = sync.audio_pcm(path)
-    return dict(kind="file", path=path, x=x, duration=len(x) / SR, song_starts=[])
+    return dict(kind="file", path=path, x=x, duration=len(x) / SR, song_starts=[], missing=[])
 
 
 def _onset_env(x, sr=SR, rate=100):
@@ -180,8 +195,8 @@ def find_drop(x, t0, t1):
     return t0 + best / rate
 
 
-BOUNDS = [("drop", "Drop"), ("teaser_end", "Teaser ends (after the drop)"), ("pregatiri_end", "Pregătiri ends"),
-          ("biserica_end", "Biserica ends (couple + vows start)"), ("party_start", "Party song starts (venue)"),
+BOUNDS = [("drop", "Drop"), ("teaser_end", "Teaser ends (after the drop)"), ("pregatiri_end", "Getting ready ends"),
+          ("biserica_end", "Church ends (couple + vows start)"), ("party_start", "Party song starts (venue)"),
           ("venue_end", "Venue ends (party starts)")]
 
 
@@ -221,6 +236,10 @@ class Pool:
     def __init__(self, pieces, rng, chronological):
         self.rng, self.chrono = rng, chronological
         self.by = {}
+        self.by_time = bool(pieces) and all(p.get("clock") is not None for p in pieces)
+        if chronological and self.by_time:
+            pieces = sorted(pieces, key=lambda p: p["clock"])
+        self.used_instead = {}
         for p in pieces:
             self.by.setdefault(p["cat"], []).append(dict(p, cur=p["a"]))
 
@@ -236,10 +255,14 @@ class Pool:
                 continue
             if mode == "teaser":
                 p = self.rng.choice(ps)
+                if c != cat:
+                    self.used_instead[(cat, c)] = self.used_instead.get((cat, c), 0) + 1
                 mid = (p["a"] + p["b"]) / 2
                 s = max(p["a"], min(mid - length / 2 + self.rng.uniform(-0.4, 0.4) * (p["b"] - p["a"]) / 2, p["b"] - length))
                 return dict(p, cat=c, s=s, e=min(p["b"], s + length))
-            p = ps[0] if self.chrono else self.rng.choice(ps)     # ps keeps his timeline order = the story order
+            p = ps[0] if self.chrono else self.rng.choice(ps)     # ps is in story order (recording time or his sequence)
+            if c != cat:
+                self.used_instead[(cat, c)] = self.used_instead.get((cat, c), 0) + 1
             s = p["cur"]
             e = min(p["b"], s + length)
             p["cur"] = e + 0.2
@@ -265,7 +288,7 @@ def build(pieces, music, b, seed=1, chronological=True):
     bpms = {}
     shots = []
     side = 0
-    for (t0, t1, name), part in zip(sections, ["Teaser", "Teaser", "Pregătiri", "Biserica", "Biserica", "Petrecere", "Petrecere"]):
+    for (t0, t1, name), part in zip(sections, ["Teaser", "Teaser", "Getting ready", "Church", "Church", "Party", "Party"]):
         if t1 - t0 < 0.5:
             continue
         grid, bpm = beats(music["x"], t0, t1)
@@ -309,7 +332,8 @@ def build(pieces, music, b, seed=1, chronological=True):
                 shots.append((a, a + (p["e"] - p["s"]), p))
             k = j if j > k else k + 1
             n_in += 1
-    return dict(shots=shots, bpm=bpms, sections=sections, bounds=dict(b))
+    return dict(shots=shots, bpm=bpms, sections=sections, bounds=dict(b), used_instead=pool.used_instead,
+                order=("recording time" if pool.by_time else "your sequence order") if chronological else "mixed")
 
 
 def export_xml(edit, music, out_path, name, fps=25.0):
@@ -369,8 +393,8 @@ def export_xml(edit, music, out_path, name, fps=25.0):
                                f'{rate_xml}<start>{st}</start><end>{en}</end><in>{fin}</in><out>{fin + en - st}</out>{body}'
                                f'<sourcetrack><mediatype>audio</mediatype><trackindex>{k + 1}</trackindex></sourcetrack></clipitem>')
     bb = edit["bounds"]
-    marks = [("Teaser", 0.0), ("DROP", bb["drop"]), ("Pregătiri", bb["teaser_end"]), ("Biserica", bb["pregatiri_end"]),
-             ("Cuplu + jurăminte", bb["biserica_end"]), ("Petrecere: sala", bb["party_start"]), ("Petrecere: party", bb["venue_end"])]
+    marks = [("Teaser", 0.0), ("DROP", bb["drop"]), ("Getting ready", bb["teaser_end"]), ("Church", bb["pregatiri_end"]),
+             ("Couple + vows", bb["biserica_end"]), ("Party: venue", bb["party_start"]), ("Party", bb["venue_end"])]
     markers = "".join(f'<marker><name>{escape(n)}</name><comment></comment><in>{round(t * sf)}</in><out>-1</out></marker>' for n, t in marks)
     total = round(music["duration"] * sf)
     trk = lambda its: f'<track>{"".join(its)}<enabled>TRUE</enabled><locked>FALSE</locked></track>'

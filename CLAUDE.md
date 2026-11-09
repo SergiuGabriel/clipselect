@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.4.1), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.4.2), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -90,6 +90,11 @@ bottleneck, decoding is: explain this if asked again.
   teaser.BOUNDS): Drop, Teaser ends, Pregătiri ends, Biserica ends (couple + end of vows start), Party song starts
   (venue presentation + drone), Venue ends (party). Export: V1 shots on beats, music on A1/A2, markers Teaser / DROP /
   Pregătiri / Biserica / Cuplu + jurăminte / Petrecere: sala / Petrecere: party. He adds testimonials and vows himself.
+  v2.4.2: all Teaser Studio text in ENGLISH (no Romanian in the UI except the RO page of Info), red "NEW" badge,
+  m:ss fields (digits only, invalid ones turn red), Detect again only with music, Story order explained (Chronological =
+  recording time / timecode, else the selects order; Mixed = random within each part; the teaser is always mixed),
+  footage / music / moments remembered and reloaded, warnings for missing songs, ignored multicam clips and categories
+  replaced by others, Settings > "Lock Teaser Studio".
   Not done yet: slow motion (he uses 50% on party/couple), quality-based picking inside a labelled clip, Lock / Swap /
   Never use, quick preview render.
 
