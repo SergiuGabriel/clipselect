@@ -109,11 +109,22 @@ Rose mireasă, Blue mire, Purple cuplu, Brown biserică, Yellow sală, Iris petr
 sunt ignorate.</li>
 <li><b>Music:</b> melodiile deja îmbinate, într-un fișier audio sau ca XML al montajului muzical (din XML se văd exact
 schimbările de melodie).</li>
-<li><b>Parts:</b> aplicația găsește drop-ul și părțile (Teaser, Pregătiri, Biserica, Petrecere); le poți corecta.</li>
+<li><b>Parts:</b> aplicația propune șase momente și le poți corecta (m:ss):
+  <ul>
+  <li><b>Drop</b>: drop-ul din melodia de teaser (găsit automat);</li>
+  <li><b>Teaser ends</b>: finalul părții de după drop, aici încep pregătirile;</li>
+  <li><b>Pregătiri ends</b>: aici începe biserica;</li>
+  <li><b>Biserica ends</b>: aici vin cadrele de cuplu, peste finalul jurămintelor;</li>
+  <li><b>Party song starts</b>: începe melodia de petrecere și prezentarea locației (sala, drona);</li>
+  <li><b>Venue ends</b>: începe petrecerea propriu-zisă.</li>
+  </ul>
+  Dacă dai muzica ca XML, granițele dintre melodii sunt luate exact de acolo. Timpii trebuie să meargă înainte, în
+  ordinea de mai sus.</li>
 <li><b>Generate</b> construiește structura ta: teaser (înainte de drop pregătiri, biserică, cuplu, dronă; după drop
 petrecere alternată cu cuplu), pregătiri mireasă/mire, biserica cu cuplul la final, sala, apoi petrecerea. Fiecare tăietură
 cade pe beat. <b>Shuffle</b> alege alte cadre; <b>Export XML</b> are markere pentru fiecare parte, ca să pui testimonialele și
-jurămintele în Premiere.</li>
+jurămintele în Premiere (markere: Teaser, DROP, Pregătiri, Biserica, Cuplu + jurăminte, Petrecere: sala,
+Petrecere: party).</li>
 </ol>
 <h2>Sfaturi utile</h2>
 <ul>
@@ -248,11 +259,22 @@ director then uses it to choose the camera for every moment.</p>
 Blue groom, Purple couple, Brown church, Yellow venue, Iris party, Violet drone. Tan, Forest and Lavender are ignored.</li>
 <li><b>Music:</b> your songs already joined, as one audio file or as the XML of your music edit (the XML shows exactly where
 each song starts).</li>
-<li><b>Parts:</b> the app finds the drop and the parts (Teaser, Pregătiri, Biserica, Petrecere); you can correct them.</li>
+<li><b>Parts:</b> the app proposes six moments and you can correct them (m:ss):
+  <ul>
+  <li><b>Drop</b>: the drop of the teaser song (found automatically);</li>
+  <li><b>Teaser ends</b>: end of the part after the drop, getting ready starts here;</li>
+  <li><b>Pregătiri ends</b>: the church starts here;</li>
+  <li><b>Biserica ends</b>: the couple shots start here, over the end of the vows;</li>
+  <li><b>Party song starts</b>: the party song and the venue presentation (venue, drone) start;</li>
+  <li><b>Venue ends</b>: the party itself starts.</li>
+  </ul>
+  If you give the music as an XML, the song changes are taken from it exactly. The times must go forward, in the order
+  above.</li>
 <li><b>Generate</b> builds your structure: teaser (before the drop getting ready, church, couple, drone; after the drop party
 alternating with the couple), bride/groom getting ready, the church ending with the couple, the venue, then the party.
 Every cut lands on a beat. <b>Shuffle</b> picks other shots; <b>Export XML</b> has a marker for every part, so you can add
-testimonials and vows in Premiere.</li>
+testimonials and vows in Premiere (markers: Teaser, DROP, Pregătiri, Biserica, Cuplu + jurăminte, Petrecere: sala,
+Petrecere: party).</li>
 </ol>
 <h2>Useful tips</h2>
 <ul>

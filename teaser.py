@@ -31,7 +31,7 @@ CAT_NAME = {"bride": "Bride", "groom": "Groom", "couple": "Couple", "church": "C
             "drone": "Drone"}
 LABEL_OF = {"bride": "Rose", "groom": "Blue", "couple": "Purple", "church": "Brown", "venue": "Yellow", "party": "Iris",
             "drone": "Violet"}
-PARTS = ["Teaser", "Pregătiri", "Biserica", "Petrecere"]
+PARTS = ["Teaser", "Pregătiri", "Biserica", "Cuplu", "Sala", "Petrecere"]
 # target length of a shot (seconds), from his films: ~40-47 cuts/min in the teaser and getting ready, a bit calmer later
 TARGET = {"teaser_pre": 1.2, "teaser_post": 0.9, "pregatiri": 1.3, "biserica": 1.4, "cuplu": 1.5, "sala": 1.0,
           "petrecere": 1.0}
@@ -180,19 +180,37 @@ def find_drop(x, t0, t1):
     return t0 + best / rate
 
 
+BOUNDS = [("drop", "Drop"), ("teaser_end", "Teaser ends (after the drop)"), ("pregatiri_end", "Pregătiri ends"),
+          ("biserica_end", "Biserica ends (couple + vows start)"), ("party_start", "Party song starts (venue)"),
+          ("venue_end", "Venue ends (party starts)")]
+
+
 def guess_parts(music):
-    """[teaser end, pregătiri end, biserica end] + drop. Song changes from an XML win; otherwise his usual lengths."""
+    """All six boundaries. Song changes from a music XML win; otherwise his usual lengths (teaser ~1 min, getting ready
+    ~130 s, church ~100 s, couple = last quarter before the party song, venue presentation ~25 s)."""
     D = music["duration"]
-    s = [t for t in music["song_starts"] if 20 < t < D - 10]
-    if len(s) >= 3:
-        b = s[:3]
+    s = sorted(t for t in music["song_starts"] if 20 < t < D - 10)
+    if len(s) >= 3:            # teaser song | calm song | (church song) | party song
+        t_end, p_end, party = s[0], s[1], s[-1]
+    elif len(s) == 2:          # no own song for the church
+        t_end, party = s
+        p_end = t_end + 0.6 * (party - t_end)
+    elif len(s) == 1:
+        t_end = s[0]
+        party = max(t_end + 60, min(t_end + 230.0, D * 0.85))
+        p_end = t_end + 0.6 * (party - t_end)
     else:
-        b = [min(60.0, D * 0.2), min(60.0 + 130.0, D * 0.6), min(60.0 + 130.0 + 100.0, D * 0.85)]
-        for i, t in enumerate(s[:3]):
-            b[i] = t
-        b = sorted(b)
-    drop = find_drop(music["x"], 0, b[0])
-    return b, drop
+        t_end, p_end, party = min(60.0, D * 0.2), min(190.0, D * 0.6), min(290.0, D * 0.85)
+    t_end, p_end, party = sorted([t_end, p_end, party])
+    b_end = p_end + 0.75 * (party - p_end)
+    venue_end = party + min(25.0, 0.3 * (D - party))
+    drop = find_drop(music["x"], 0, t_end)
+    return dict(drop=drop, teaser_end=t_end, pregatiri_end=p_end, biserica_end=b_end, party_start=party, venue_end=venue_end)
+
+
+def valid(b, duration):
+    v = [b[k] for k, _ in BOUNDS]
+    return all(0 < x for x in v) and all(x < y for x, y in zip(v, v[1:])) and v[-1] < duration
 
 
 # ---------------------------------------------------------------- the edit
@@ -235,15 +253,15 @@ class Pool:
         return None
 
 
-def build(pieces, music, parts, drop, seed=1, chronological=True):
-    """Returns dict(shots=[(t0, t1, piece)], beats per part, bpm per part, sections=[(t0, t1, name)])."""
+def build(pieces, music, b, seed=1, chronological=True):
+    """b = the six boundaries (see BOUNDS). Returns dict(shots=[(t0, t1, piece)], bpm per part, sections, bounds)."""
     rng = random.Random(seed)
     pool = Pool(pieces, rng, chronological)
     D = music["duration"]
-    b0, b1, b2 = parts
-    sections = [(0.0, drop, "teaser_pre"), (drop, b0, "teaser_post"), (b0, b1, "pregatiri"),
-                (b1, b1 + 0.75 * (b2 - b1), "biserica"), (b1 + 0.75 * (b2 - b1), b2, "cuplu"),
-                (b2, b2 + min(25.0, 0.3 * (D - b2)), "sala"), (b2 + min(25.0, 0.3 * (D - b2)), D, "petrecere")]
+    sections = [(0.0, b["drop"], "teaser_pre"), (b["drop"], b["teaser_end"], "teaser_post"),
+                (b["teaser_end"], b["pregatiri_end"], "pregatiri"), (b["pregatiri_end"], b["biserica_end"], "biserica"),
+                (b["biserica_end"], b["party_start"], "cuplu"), (b["party_start"], b["venue_end"], "sala"),
+                (b["venue_end"], D, "petrecere")]
     bpms = {}
     shots = []
     side = 0
@@ -291,7 +309,7 @@ def build(pieces, music, parts, drop, seed=1, chronological=True):
                 shots.append((a, a + (p["e"] - p["s"]), p))
             k = j if j > k else k + 1
             n_in += 1
-    return dict(shots=shots, bpm=bpms, sections=sections, parts=parts, drop=drop)
+    return dict(shots=shots, bpm=bpms, sections=sections, bounds=dict(b))
 
 
 def export_xml(edit, music, out_path, name, fps=25.0):
@@ -350,7 +368,9 @@ def export_xml(edit, music, out_path, name, fps=25.0):
             tracks_a[k].append(f'<clipitem id="{nid()}"><name>{escape(Path(it["path"]).name)}</name><duration>{fin + en - st}</duration>'
                                f'{rate_xml}<start>{st}</start><end>{en}</end><in>{fin}</in><out>{fin + en - st}</out>{body}'
                                f'<sourcetrack><mediatype>audio</mediatype><trackindex>{k + 1}</trackindex></sourcetrack></clipitem>')
-    marks = [("Teaser", 0.0), ("DROP", edit["drop"])] + list(zip(PARTS[1:], edit["parts"]))
+    bb = edit["bounds"]
+    marks = [("Teaser", 0.0), ("DROP", bb["drop"]), ("Pregătiri", bb["teaser_end"]), ("Biserica", bb["pregatiri_end"]),
+             ("Cuplu + jurăminte", bb["biserica_end"]), ("Petrecere: sala", bb["party_start"]), ("Petrecere: party", bb["venue_end"])]
     markers = "".join(f'<marker><name>{escape(n)}</name><comment></comment><in>{round(t * sf)}</in><out>-1</out></marker>' for n, t in marks)
     total = round(music["duration"] * sf)
     trk = lambda its: f'<track>{"".join(its)}<enabled>TRUE</enabled><locked>FALSE</locked></track>'

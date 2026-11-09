@@ -25,7 +25,7 @@ import teaser
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v2.4.0"
+APP, VER = "MoneyMakingMachine", "v2.4.1"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 C = dict(BG="#1d1d1d", PANEL="#232323", CARD="#2a2a2a", BORDER="#3a3a3a", TEXT="#d6d6d6", MUTED="#8f8f8f",
          BLUE="#1473e6", HOT="#4b9cf5", GOOD="#4cc38a", FAIR="#e6b93a", POOR="#e5534b")   # Premiere Pro look
@@ -2477,8 +2477,8 @@ class MusicView(QWidget):
             p.drawText(self.rect(), Qt.AlignCenter, "Add the music (one audio file, or the XML of your music edit)")
             return
         bounds = [0.0] + list(self.parts) + [self.dur]
-        cols = ["#3d5a80", "#4a6fa5", "#7c5a3a", "#b5179e"]
-        for i in range(min(4, len(bounds) - 1)):
+        cols = ["#3d5a80", "#4a6fa5", "#7c5a3a", "#7e3fb0", "#9a7b12", "#b5179e"]
+        for i in range(min(6, len(bounds) - 1)):
             c = QColor(cols[i])
             c.setAlpha(90)
             p.fillRect(QRectF(X(bounds[i]), 0, X(bounds[i + 1]) - X(bounds[i]), 22), c)
@@ -2619,8 +2619,7 @@ class TeaserPage(QWidget):
         l3 = card(3, "Parts")
         self.f = {}
         g = QGridLayout()
-        for i, (k, t) in enumerate((("drop", "Drop (teaser)"), ("p1", "Pregătiri start"), ("p2", "Biserica start"),
-                                    ("p3", "Petrecere start"))):
+        for i, (k, t) in enumerate(teaser.BOUNDS):
             g.addWidget(lbl(t, "muted"), i, 0)
             e = QLineEdit()
             e.setFixedWidth(90)
@@ -2628,6 +2627,9 @@ class TeaserPage(QWidget):
             g.addWidget(e, i, 1)
             self.f[k] = e
         l3.addLayout(g)
+        self.parts_note = lbl("", "muted", True)
+        self.parts_note.setStyleSheet(f"color:{C['POOR']}")
+        l3.addWidget(self.parts_note)
         l3.addWidget(btn("Detect again", "link", self.redetect))
         l4 = card(4, "Story order")
         r = QHBoxLayout()
@@ -2708,38 +2710,41 @@ class TeaserPage(QWidget):
     @staticmethod
     def _load_music(f):
         m = teaser.load_music(f)
-        parts, drop = teaser.guess_parts(m)
-        return m, parts, drop
+        return m, teaser.guess_parts(m)
 
     def music_loaded(self, r):
-        self.music, parts, drop = r
+        self.music, b = r
         self.mv.set_music(self.music["x"], self.music["duration"])
-        self._set_parts(parts, drop)
+        self._set_parts(b)
         d = self.music["duration"]
         self.mus_lbl.setText(f"{int(d // 60)}:{int(d % 60):02d} of music"
                              + (" · song changes taken from the XML" if self.music["song_starts"] else " · parts guessed, adjust them below"))
         self._buttons()
 
     # ---- parts
-    def _set_parts(self, parts, drop):
-        self.parts, self.drop = list(parts), drop
-        for k, t in zip(("drop", "p1", "p2", "p3"), [drop] + list(parts)):
+    def _set_parts(self, b):
+        self.bounds = dict(b)
+        for k, _ in teaser.BOUNDS:
+            t = b[k]
             self.f[k].setText(f"{int(t // 60)}:{t % 60:04.1f}")
-        self.mv.set_parts(self.parts, self.drop)
+            self.f[k].setStyleSheet("")
+        self.mv.set_parts([b[k] for k, _ in teaser.BOUNDS[1:]], b["drop"])
 
     def parts_edited(self):
         try:
-            vals = [parse_t(self.f[k].text()) for k in ("drop", "p1", "p2", "p3")]
+            b = {k: parse_t(self.f[k].text()) for k, _ in teaser.BOUNDS}
         except ValueError:
             return
-        drop, p1, p2, p3 = vals
-        if 0 < drop < p1 < p2 < p3:
-            self._set_parts([p1, p2, p3], drop)
+        if self.music and teaser.valid(b, self.music["duration"]):
+            self._set_parts(b)
+            self.parts_note.setText("")
+        else:
+            self.parts_note.setText("The times must go forward: Drop < Teaser ends < Pregătiri ends < Biserica ends < "
+                                    "Party song starts < Venue ends.")
 
     def redetect(self):
         if self.music:
-            parts, drop = teaser.guess_parts(self.music)
-            self._set_parts(parts, drop)
+            self._set_parts(teaser.guess_parts(self.music))
 
     def set_order(self, chrono):
         self.chrono = chrono
@@ -2759,10 +2764,10 @@ class TeaserPage(QWidget):
     def generate(self):
         if not self.pieces or self.music is None:
             return
-        self.edit = teaser.build(self.pieces, self.music, self.parts, self.drop, seed=self.seed, chronological=self.chrono)
+        self.edit = teaser.build(self.pieces, self.music, self.bounds, seed=self.seed, chronological=self.chrono)
         self.strip.set(self.edit["shots"], self.music["duration"])
         allbeats = [t0 for t0, _, _ in self.edit["shots"]]
-        self.mv.set_parts(self.parts, self.drop, allbeats)
+        self.mv.set_parts([self.bounds[k] for k, _ in teaser.BOUNDS[1:]], self.bounds["drop"], allbeats)
         bpm = " · ".join(f"{k} {v:.0f} BPM" for k, v in self.edit["bpm"].items() if v)
         self.summary.setText(f"{len(self.edit['shots'])} shots, every cut on a beat · {bpm}")
         self._buttons()

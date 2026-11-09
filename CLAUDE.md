@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.4.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.4.1), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -86,8 +86,10 @@ bottleneck, decoding is: explain this if asked again.
   PETRECERE (venue + drone first, then the party shots he selected). Categories = his Premiere label colours: Rose bride,
   Blue groom, Purple couple, Brown church, Yellow/Caribbean venue, Iris party, Violet drone; ignore Tan (interviews),
   Forest (nests), Lavender (adjustment layers). Music = one joined file or the XML of his music edit (song changes =
-  part boundaries); beat grid per part, drop = biggest loudness jump in the teaser. Export: V1 shots on beats, music on
-  A1/A2, markers Teaser / DROP / Pregătiri / Biserica / Petrecere. He adds testimonials and vows himself.
+  part boundaries); beat grid per part, drop = biggest loudness jump in the teaser. SIX editable boundaries (v2.4.1,
+  teaser.BOUNDS): Drop, Teaser ends, Pregătiri ends, Biserica ends (couple + end of vows start), Party song starts
+  (venue presentation + drone), Venue ends (party). Export: V1 shots on beats, music on A1/A2, markers Teaser / DROP /
+  Pregătiri / Biserica / Cuplu + jurăminte / Petrecere: sala / Petrecere: party. He adds testimonials and vows himself.
   Not done yet: slow motion (he uses 50% on party/couple), quality-based picking inside a labelled clip, Lock / Swap /
   Never use, quick preview render.
 
