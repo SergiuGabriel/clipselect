@@ -10,7 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 import numpy as np
-from PySide6.QtCore import QPointF, QRectF, QRegularExpression, QStandardPaths, Qt, QThread, QTimer, Signal
+from PySide6.QtCore import QPoint, QPointF, QPropertyAnimation, QRectF, QRegularExpression, QStandardPaths, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QColor, QIcon, QImage, QPainter, QPen, QPixmap, QRegularExpressionValidator
 from PySide6.QtWidgets import (QTextBrowser, QAbstractItemView, QApplication, QComboBox, QDialog, QFileDialog, QFrame,
                                QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
@@ -25,7 +25,7 @@ import teaser
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v2.4.2"
+APP, VER = "MoneyMakingMachine", "v2.4.4"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 C = dict(BG="#1d1d1d", PANEL="#232323", CARD="#2a2a2a", BORDER="#3a3a3a", TEXT="#d6d6d6", MUTED="#8f8f8f",
          BLUE="#1473e6", HOT="#4b9cf5", GOOD="#4cc38a", FAIR="#e6b93a", POOR="#e5534b")   # Premiere Pro look
@@ -550,6 +550,35 @@ class SliderRow(QWidget):
         if self.sw:
             self.sw.set(on)
         self._dim(on)
+
+
+class Toast(QLabel):
+    """Green notification that slides down from the top of the window and goes away by itself."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.setStyleSheet("background:#1f8f4e;color:white;font-weight:700;font-size:13px;border-radius:8px;padding:10px 18px")
+        self.hide()
+        self.anim = None
+
+    def show_msg(self, text, ms=3000):
+        self.setText("✓  " + text)
+        self.adjustSize()
+        x = (self.parent().width() - self.width()) // 2
+        self.move(x, -self.height())
+        self.show()
+        self.raise_()
+        self._slide(QPoint(x, -self.height()), QPoint(x, 14))
+        QTimer.singleShot(ms, lambda: self._slide(self.pos(), QPoint(self.x(), -self.height() - 4), hide=True))
+
+    def _slide(self, a, b, hide=False):
+        self.anim = QPropertyAnimation(self, b"pos")
+        self.anim.setDuration(260)
+        self.anim.setStartValue(a)
+        self.anim.setEndValue(b)
+        if hide:
+            self.anim.finished.connect(self.hide)
+        self.anim.start()
 
 
 def _fmt_dur(s):
@@ -2538,6 +2567,8 @@ class ShotStrip(QWidget):
 
 
 class TeaserPage(QWidget):
+    notify = Signal(str)
+
     def __init__(self, store):
         super().__init__()
         self.store = store
@@ -2876,7 +2907,13 @@ class TeaserPage(QWidget):
         miss = "".join(f'<br><span style="color:{C["FAIR"]}">Not enough {teaser.CAT_NAME[w].lower()} shots, filled with: '
                        + ", ".join(f"{teaser.CAT_NAME[u].lower()} ({n}×)" for n, u in sorted(v, reverse=True)) + "</span>"
                        for w, v in sorted(grouped.items()))
-        self.summary.setText(f"{len(self.edit['shots'])} shots, every cut on a beat · order: {self.edit['order']}<br>{bpm}{miss}")
+        short = self.edit.get("short", 0.0)
+        if short > 0.5:
+            miss += (f'<br><span style="color:{C["POOR"]}">{int(short)} s have no unused footage left (a moment is never used '
+                     f'twice): label more clips in Premiere.</span>')
+        self.summary.setText(f"{len(self.edit['shots'])} shots, every cut on a beat, no moment used twice · "
+                             f"order: {self.edit['order']}<br>{bpm}{miss}")
+        self.notify.emit(f"Shortmovie generated: {len(self.edit['shots'])} shots")
         self._buttons()
 
     def shuffle(self):
@@ -2892,6 +2929,7 @@ class TeaserPage(QWidget):
             try:
                 n = teaser.export_xml(self.edit, self.music, out, Path(out).stem)
                 self.summary.setText(f"Saved {n} shots to {out}. Premiere: File > Import · DaVinci: File > Import > Timeline.")
+                self.notify.emit(f"XML saved: {Path(out).name}")
             except Exception as e:
                 self.summary.setText(f"Export failed: {e}")
 
@@ -2947,6 +2985,13 @@ class Main(QMainWindow):
                     "info": btn("Info / How to use", "nav", lambda: self.go("info"))}
         for b in self.nav.values():
             sv.addWidget(b)
+        nb = QHBoxLayout(self.nav["teaser"])
+        nb.setContentsMargins(0, 0, 8, 0)
+        nb.addStretch()
+        new = QLabel("NEW")
+        new.setStyleSheet(f"background:{C['POOR']};color:white;font-size:9px;font-weight:800;border-radius:7px;padding:1px 6px")
+        new.setAttribute(Qt.WA_TransparentForMouseEvents)
+        nb.addWidget(new)
         sv.addStretch()
         sv.addWidget(lbl("Local workspace", "muted"))
         h.addWidget(side)
@@ -2961,6 +3006,8 @@ class Main(QMainWindow):
         self.info = InfoPage(self.store)
         self.teaser = TeaserPage(self.store)
         self.settings.lock_teaser.connect(self.teaser.lock)
+        self.toast = Toast(self)
+        self.teaser.notify.connect(self.toast.show_msg)
         for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser):
             self.stack.addWidget(w)
         self.dash.new_project.connect(self.new_project)

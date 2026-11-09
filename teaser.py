@@ -41,6 +41,28 @@ FALLBACK = {"drone": ["venue", "couple"], "venue": ["drone", "couple"], "couple"
 
 # ---------------------------------------------------------------- footage (labelled XML from Premiere)
 
+def _n(v, d="0"):
+    """Frame numbers: integers in Premiere's XML, sometimes written with decimals by other apps."""
+    try:
+        return int(round(float(v if v not in (None, "") else d)))
+    except ValueError:
+        return int(d)
+
+
+def _times(ci, fps, cfps):
+    """(start, end) on the timeline in seconds. Next to a transition xmeml writes -1 for start or end."""
+    st, en = _n(ci.findtext("start"), "-1"), _n(ci.findtext("end"), "-1")
+    cin, cout = _n(ci.findtext("in")), _n(ci.findtext("out"))
+    ln = round((cout - cin) / cfps * fps)
+    if st < 0 and en >= 0:
+        st = en - ln
+    if en < 0 and st >= 0:
+        en = st + ln
+    if st < 0 or en <= st:
+        return None
+    return st / fps, en / fps
+
+
 def load_footage(xml_path):
     """Every labelled video clip of the XML = one usable piece: (category, file, in s, out s, order on his timeline)."""
     root = ET.parse(xml_path).getroot()
@@ -49,7 +71,7 @@ def load_footage(xml_path):
         if f.get("id") and f.findtext("pathurl"):
             sc = f.find("media/video/samplecharacteristics")
             files[f.get("id")] = dict(path=xmlimport._path(f.findtext("pathurl")), fps=xmlimport._rate(f, 25.0),
-                                      dur=int(f.findtext("duration") or 0),
+                                      dur=_n(f.findtext("duration")),
                                       w=int(sc.findtext("width") or 1920) if sc is not None else 1920,
                                       h=int(sc.findtext("height") or 1080) if sc is not None else 1080)
     seqs = list(root.iter("sequence"))
@@ -73,11 +95,12 @@ def load_footage(xml_path):
                 skipped[lab or "(no colour)"] = skipped.get(lab or "(no colour)", 0) + 1
                 continue
             cfps = xmlimport._rate(ci, sfps)
-            a, b = int(ci.findtext("in", "0")) / cfps, int(ci.findtext("out", "0")) / cfps
+            a, b = _n(ci.findtext("in")) / cfps, _n(ci.findtext("out")) / cfps
             if b - a < 0.4:
                 continue
-            st = int(ci.findtext("start", "0"))
-            pieces.append(dict(cat=CATS[lab], path=info["path"], a=a, b=b, order=st / sfps + t * 1e-3, fps=info["fps"],
+            tt = _times(ci, sfps, cfps)
+            st = tt[0] if tt else 0.0
+            pieces.append(dict(cat=CATS[lab], path=info["path"], a=a, b=b, order=st + t * 1e-3, fps=info["fps"],
                                fdur=info["dur"] / max(1e-6, info["fps"]), w=info["w"], h=info["h"]))
     pieces.sort(key=lambda p: p["order"])
     # recording time of every file (timecode, creation time or file date), for the chronological story order
@@ -125,11 +148,11 @@ def load_music(path):
             for ci in tr.findall("clipitem"):
                 f = ci.find("file")
                 p = files.get(f.get("id")) if f is not None else None
-                st, en = int(ci.findtext("start", "-1")), int(ci.findtext("end", "-1"))
-                if not p or st < 0 or en <= st:
-                    continue
                 cf = xmlimport._rate(ci, fps)
-                items.append(dict(path=p, start=st / fps, end=en / fps, a=int(ci.findtext("in", "0")) / cf))
+                tt = _times(ci, fps, cf)
+                if not p or not tt:
+                    continue
+                items.append(dict(path=p, start=tt[0], end=tt[1], a=_n(ci.findtext("in")) / cf, track=len(items)))
         if not items:
             raise ValueError("No audio clips in this XML.")
         dur = max(i["end"] for i in items)
@@ -146,12 +169,14 @@ def load_music(path):
             seg = src[s0:s0 + n]
             d0 = int(it["start"] * SR)
             x[d0:d0 + len(seg)] += seg
-        spans = {}
-        for it in items:
-            sp = spans.setdefault(it["path"], [it["start"], it["end"]])
-            sp[0], sp[1] = min(sp[0], it["start"]), max(sp[1], it["end"])
-        songs = sorted((s for s in spans.values() if s[1] - s[0] >= 15), key=lambda s: s[0])
-        return dict(kind="xml", items=items, x=x, duration=dur, song_starts=[s[0] for s in songs[1:]], missing=missing)
+        # where one music piece hands over to the next (a cut or a crossfade), also inside ONE joined file
+        long_ = sorted((it for it in items if it["end"] - it["start"] >= 15), key=lambda it: it["start"])
+        starts = []
+        for it in long_[1:]:
+            t = it["start"]
+            if all(abs(t - u) > 5 for u in starts):
+                starts.append(round(t, 2))
+        return dict(kind="xml", items=items, x=x, duration=dur, song_starts=starts, missing=missing)
     x = sync.audio_pcm(path)
     return dict(kind="file", path=path, x=x, duration=len(x) / SR, song_starts=[], missing=[])
 
@@ -200,27 +225,77 @@ BOUNDS = [("drop", "Drop"), ("teaser_end", "Teaser ends (after the drop)"), ("pr
           ("venue_end", "Venue ends (party starts)")]
 
 
+# where each moment usually falls, learned from his films (seconds after the previous moment): (min, typical, max)
+PRIOR = dict(teaser_end=(30, 50, 75), pregatiri_end=(45, 70, 140), biserica_end=(30, 45, 120),
+             party_start=(12, 23, 45), venue_end=(10, 20, 50))
+
+
+def _novelty(x, rate=2):
+    """How much the sound changes at every half second (loudness, brightness, rhythm density), 8 s before vs after."""
+    hop = SR // rate
+    n = len(x) // hop
+    if n < 20:
+        return np.zeros(max(n, 0))
+    fr = x[:n * hop].reshape(n, hop).astype(np.float64)
+    rms = np.log1p(1000 * np.sqrt((fr ** 2).mean(1)))
+    zc = (np.abs(np.diff(np.sign(fr), axis=1)) > 0).mean(1)          # brightness proxy
+    on = _onset_env(x)[: n * (100 // rate)].reshape(n, -1).mean(1) if n * (100 // rate) <= len(_onset_env(x)) else np.zeros(n)
+    F = np.vstack([(f - f.mean()) / (f.std() + 1e-9) for f in (rms, zc, on)])
+    k = 8 * rate
+    nov = np.zeros(n)
+    for t in range(k, n - k):
+        nov[t] = np.linalg.norm(F[:, t:t + k].mean(1) - F[:, t - k:t].mean(1))
+    return nov
+
+
 def guess_parts(music):
-    """All six boundaries. Song changes from a music XML win; otherwise his usual lengths (teaser ~1 min, getting ready
-    ~130 s, church ~100 s, couple = last quarter before the party song, venue presentation ~25 s)."""
-    D = music["duration"]
-    s = sorted(t for t in music["song_starts"] if 20 < t < D - 10)
-    if len(s) >= 3:            # teaser song | calm song | (church song) | party song
-        t_end, p_end, party = s[0], s[1], s[-1]
-    elif len(s) == 2:          # no own song for the church
-        t_end, party = s
-        p_end = t_end + 0.6 * (party - t_end)
-    elif len(s) == 1:
-        t_end = s[0]
-        party = max(t_end + 60, min(t_end + 230.0, D * 0.85))
-        p_end = t_end + 0.6 * (party - t_end)
+    """All six moments. Each one is looked for in the window where he usually puts it (learned from his films):
+    a cut between music pieces in the XML wins, otherwise the strongest change in the sound, otherwise the typical
+    place. The drop is the biggest loudness jump inside the teaser; the party song is found as a big rise in energy."""
+    D, x = music["duration"], music["x"]
+    cuts = [t for t in music.get("song_starts", []) if 5 < t < D - 5]
+    nov = _novelty(x)
+    rate = 2
+
+    def pick(lo, typ, hi):
+        lo, hi = max(lo, 1.0), min(hi, D - 2)
+        if hi <= lo:
+            return min(max(typ, 1.0), D - 2)
+        inside = [t for t in cuts if lo <= t <= hi]
+        if inside:
+            return min(inside, key=lambda t: abs(t - typ))
+        a, b = int(lo * rate), int(hi * rate)
+        if b > a and nov[a:b].max() > 1.2:              # a clear change in the music
+            w = nov[a:b] * np.exp(-0.5 * ((np.arange(a, b) / rate - typ) / max(8.0, (hi - lo) / 2)) ** 2)
+            return (a + int(np.argmax(w))) / rate
+        return typ
+
+    b = {}
+    b["teaser_end"] = pick(*PRIOR["teaser_end"])
+    t = b["teaser_end"]
+    b["pregatiri_end"] = pick(t + PRIOR["pregatiri_end"][0], t + PRIOR["pregatiri_end"][1], t + PRIOR["pregatiri_end"][2])
+    p = b["pregatiri_end"]
+    # the next change in the music is the PARTY SONG (church + couple sit on one song / the sermon before it):
+    # a cut in the XML wins, otherwise the biggest rise in loudness
+    lo, hi = p + PRIOR["biserica_end"][0] + PRIOR["party_start"][0], p + PRIOR["biserica_end"][2] + PRIOR["party_start"][2]
+    inside = [c for c in cuts if lo <= c <= hi]
+    if inside:
+        party = min(inside, key=lambda c: abs(c - (p + PRIOR["biserica_end"][1] + PRIOR["party_start"][1])))
+    elif hi - lo > 10 and lo < D - 15:
+        party = find_drop(x, lo, min(hi, D - 5))
     else:
-        t_end, p_end, party = min(60.0, D * 0.2), min(190.0, D * 0.6), min(290.0, D * 0.85)
-    t_end, p_end, party = sorted([t_end, p_end, party])
-    b_end = p_end + 0.75 * (party - p_end)
-    venue_end = party + min(25.0, 0.3 * (D - party))
-    drop = find_drop(music["x"], 0, t_end)
-    return dict(drop=drop, teaser_end=t_end, pregatiri_end=p_end, biserica_end=b_end, party_start=party, venue_end=venue_end)
+        party = min(p + PRIOR["biserica_end"][1] + PRIOR["party_start"][1], D - 25)
+    b["party_start"] = party
+    b["biserica_end"] = max(p + PRIOR["biserica_end"][0], party - PRIOR["party_start"][1])   # couple + vows ~23 s
+    v = PRIOR["venue_end"]
+    b["venue_end"] = pick(party + v[0], party + v[1], party + v[2])
+    b["drop"] = find_drop(x, 3, b["teaser_end"] - 3)
+    ks = ["drop", "teaser_end", "pregatiri_end", "biserica_end", "party_start", "venue_end"]
+    for k1, k2 in zip(ks, ks[1:]):                       # keep them in order, inside the music
+        if b[k2] <= b[k1] + 1:
+            b[k2] = b[k1] + 2
+    b["venue_end"] = min(b["venue_end"], D - 1)
+    return b
 
 
 def valid(b, duration):
@@ -230,50 +305,110 @@ def valid(b, duration):
 
 # ---------------------------------------------------------------- the edit
 
+def _cut(free, s, e):
+    """Remove [s, e] from a list of free (a, b) intervals."""
+    out = []
+    for a, b in free:
+        if e <= a or s >= b:
+            out.append((a, b))
+            continue
+        if s > a:
+            out.append((a, s))
+        if e < b:
+            out.append((e, b))
+    return [(a, b) for a, b in out if b - a > 0.05]
+
+
 class Pool:
-    """Usable pieces per category; every take consumes footage so the same moment is not repeated."""
+    """All labelled footage. Rules (from the owner):
+    - a moment is NEVER used twice (not even teaser + later part): every take is removed from that FILE's free time,
+      for every labelled piece of the same file;
+    - the same clip is never used twice in a row when there is another one;
+    - chronological = the shots of a part are spread over ALL the material of that kind, in recording order (with a
+      little randomness), not just the first clips;
+    - 'before' / 'after' the church (recording time): first look / couple shots of the morning go to getting ready,
+      couple shots after the church to the couple part, Iris shots after the church are the party."""
+
+    GAP = 0.3   # seconds kept free around every used shot
 
     def __init__(self, pieces, rng, chronological):
         self.rng, self.chrono = rng, chronological
-        self.by = {}
         self.by_time = bool(pieces) and all(p.get("clock") is not None for p in pieces)
-        if chronological and self.by_time:
-            pieces = sorted(pieces, key=lambda p: p["clock"])
-        self.used_instead = {}
-        for p in pieces:
-            self.by.setdefault(p["cat"], []).append(dict(p, cur=p["a"]))
+        key = (lambda p: p["clock"]) if self.by_time else (lambda p: p["order"])
+        self.by, self.paths = {}, {}
+        for p in sorted(pieces, key=key):
+            q = dict(p, free=[(p["a"], p["b"])])
+            self.by.setdefault(p["cat"], []).append(q)
+            self.paths.setdefault(p["path"], []).append(q)
+        for c, ps in self.by.items():            # position of every piece inside its kind's material (story order)
+            cum = 0.0
+            for q in ps:
+                q["cum"] = cum
+                cum += q["b"] - q["a"]
+        self.total = {c: sum(q["b"] - q["a"] for q in ps) for c, ps in self.by.items()}
+        ch = [q["clock"] for q in self.by.get("church", []) if q.get("clock") is not None]
+        self.church_t = float(np.median(ch)) if self.by_time and ch else None
+        pt = [q["clock"] for q in self.by.get("party", []) if q.get("clock") is not None and
+              (self.church_t is None or q["clock"] > self.church_t)]
+        self.party_t = float(np.median(pt)) if pt else None
+        self.used_instead, self.last_path, self.short = {}, None, 0.0
 
     def has(self, cat):
-        return any(p["b"] - p["cur"] >= 0.5 for p in self.by.get(cat, []))
+        return any(b - a >= 0.5 for q in self.by.get(cat, []) for a, b in q["free"])
 
-    def take(self, cat, length, mode):
-        """mode 'teaser': random pieces, from their middle (the teaser previews the best moments);
-        otherwise in his timeline order (chronological story) or at random."""
-        for c in [cat] + FALLBACK.get(cat, []):
-            ps = [p for p in self.by.get(c, []) if p["b"] - p["cur"] >= min(length, 0.8)]
-            if not ps:
-                continue
-            if mode == "teaser":
-                p = self.rng.choice(ps)
+    def _mark(self, path, s, e):
+        for q in self.paths.get(path, []):
+            q["free"] = _cut(q["free"], s - self.GAP, e + self.GAP)
+
+    def take(self, cat, length, mode, frac=0.0, when=None, near=None, fallback=True):
+        """mode 'teaser': random moments (a preview of the whole day); otherwise the story order (chronological) or
+        random (mixed). near = a recording time to stay close to (drone shot of the church / of the venue)."""
+        for c in [cat] + (FALLBACK.get(cat, []) if fallback else []):
+            for use_when in ((when, None) if when else (None,)):
+                cands = []
+                for q in self.by.get(c, []):
+                    ck = q.get("clock")
+                    if use_when and self.church_t is not None and ck is not None:
+                        if (use_when == "before" and ck > self.church_t) or (use_when == "after" and ck < self.church_t):
+                            continue
+                    cands += [(q, a, b) for a, b in q["free"] if b - a >= length]
+                if not cands:
+                    continue
+                other = [x for x in cands if x[0]["path"] != self.last_path]
+                cands = other or cands
+                if near is not None and self.by_time:
+                    q, a, b = min(cands, key=lambda x: abs((x[0].get("clock") or 0) - near))
+                    s0 = a + (b - a - length) / 2
+                elif mode == "teaser" or not self.chrono:
+                    q, a, b = self.rng.choice(cands)
+                    s0 = self.rng.uniform(a, b - length)
+                else:
+                    tot = max(1e-6, self.total.get(c, 1.0))
+                    T = (frac + self.rng.uniform(-0.05, 0.05)) * tot
+                    def dist(x):
+                        q, a, b = x
+                        lo, hi = q["cum"] + a - q["a"], q["cum"] + b - q["a"] - length
+                        return 0.0 if lo <= T <= hi else min(abs(T - lo), abs(T - hi))
+                    q, a, b = min(cands, key=dist)
+                    s0 = min(max(a, T - q["cum"] + q["a"]), b - length)
+                self._mark(q["path"], s0, s0 + length)
+                self.last_path = q["path"]
                 if c != cat:
                     self.used_instead[(cat, c)] = self.used_instead.get((cat, c), 0) + 1
-                mid = (p["a"] + p["b"]) / 2
-                s = max(p["a"], min(mid - length / 2 + self.rng.uniform(-0.4, 0.4) * (p["b"] - p["a"]) / 2, p["b"] - length))
-                return dict(p, cat=c, s=s, e=min(p["b"], s + length))
-            p = ps[0] if self.chrono else self.rng.choice(ps)     # ps is in story order (recording time or his sequence)
-            if c != cat:
-                self.used_instead[(cat, c)] = self.used_instead.get((cat, c), 0) + 1
-            s = p["cur"]
-            e = min(p["b"], s + length)
-            p["cur"] = e + 0.2
-            return dict(p, cat=c, s=s, e=e)
-        # everything of this kind is used up: start reusing it rather than leaving a hole in the edit
-        for c in [cat] + FALLBACK.get(cat, []):
-            if self.by.get(c):
-                for p in self.by[c]:
-                    p["cur"] = p["a"]
-                return self.take(cat, length, mode)
+                return dict(q, cat=c, s=s0, e=s0 + length)
         return None
+
+    def extend(self, shot, extra):
+        """No new footage left: let the previous shot run longer (only if that footage is still unused)."""
+        q = next((x for x in self.paths.get(shot["path"], []) if x["a"] <= shot["e"] < x["b"] + 1e-6), None)
+        if q is None:
+            return False
+        for a, b in q["free"]:
+            if a <= shot["e"] + self.GAP + 0.01 and b >= shot["e"] + extra + self.GAP:
+                self._mark(q["path"], shot["e"], shot["e"] + extra)
+                shot["e"] += extra
+                return True
+        return False
 
 
 def build(pieces, music, b, seed=1, chronological=True):
@@ -288,6 +423,7 @@ def build(pieces, music, b, seed=1, chronological=True):
     bpms = {}
     shots = []
     side = 0
+    block, block_left = "bride", 0
     for (t0, t1, name), part in zip(sections, ["Teaser", "Teaser", "Getting ready", "Church", "Church", "Party", "Party"]):
         if t1 - t0 < 0.5:
             continue
@@ -298,28 +434,36 @@ def build(pieces, music, b, seed=1, chronological=True):
         bl = float(np.median(np.diff(grid))) if len(grid) > 1 else 0.5
         cuts = [t0] + [g for g in grid if g > t0 + 0.25]
         k, n_in = 0, 0
-        while k < len(cuts) and cuts[k] < t1 - 0.3:
+        while k < len(cuts) and cuts[k] < t1 - 0.35:
             nb = max(1, round(TARGET[name] / bl))
             if rng.random() < 0.25:
                 nb = max(1, nb + rng.choice([-1, 1]))
             j = min(len(cuts) - 1, k + nb)
             a, e = cuts[k], (cuts[j] if j > k and cuts[j] <= t1 else t1)
+            if t1 - e < 0.35:                        # never leave a rest too short for a shot at the end of a part
+                e = t1
             if e - a < 0.3:
                 break
+            spare_drone = len(pool.by.get("drone", [])) > 2      # keep the drone shots for church / venue openings
             if name == "teaser_pre":
-                cat = "drone" if n_in == 0 and pool.has("drone") else rng.choices(
-                    ["bride", "groom", "church", "couple", "drone"], [25, 20, 20, 25, 10])[0]
+                cat = "drone" if n_in == 0 and spare_drone else rng.choices(
+                    ["bride", "groom", "church", "couple", "drone"], [25, 20, 20, 25, 10 if spare_drone else 0])[0]
             elif name == "teaser_post":
                 cat = rng.choices(["party", "couple", "bride", "groom"], [45, 35, 10, 10])[0]
             elif name == "pregatiri":
-                if (a - t0) / max(1e-6, t1 - t0) > 0.9:
-                    cat = "couple"
-                else:
-                    if n_in % rng.choice([2, 3, 3, 4]) == 0:
+                # blocks of 2-4 shots: bride / groom alternating, with couple blocks mixed in (more towards the end)
+                pos = (a - t0) / max(1e-6, t1 - t0)
+                if n_in == 0 or block_left <= 0:
+                    block_left = rng.choice([2, 3, 3, 4])
+                    if rng.random() < 0.15 + 0.35 * pos and pool.has("couple"):
+                        block = "couple"
+                    else:
                         side ^= 1
-                    cat = ["bride", "groom"][side]
+                        block = ["bride", "groom"][side]
+                cat = "couple" if pos > 0.92 else block
+                block_left -= 1
             elif name == "biserica":
-                cat = "church"
+                cat = "drone" if n_in == 0 and pool.has("drone") else "church"      # every place opens with the drone
             elif name == "cuplu":
                 cat = "couple"
             elif name == "sala":
@@ -327,12 +471,34 @@ def build(pieces, music, b, seed=1, chronological=True):
             else:
                 cat = "party"
             mode = "teaser" if name.startswith("teaser") else "story"
-            p = pool.take(cat, e - a, mode)
+            frac = (a - t0) / max(1e-6, t1 - t0)
+            when = {"pregatiri": "before", "cuplu": "after", "petrecere": "after", "sala": "after"}.get(name)
+            if name == "teaser_post" and cat == "party":
+                when = "after"                      # Iris before the church is the first look, not the party
+            near = None
+            if cat == "drone" and name == "biserica":
+                near = pool.church_t
+            elif cat == "drone" and name == "sala":
+                near = pool.party_t
+            if cat == "drone" and name in ("biserica", "sala"):
+                p = pool.take("drone", e - a, mode, frac=frac, near=near, fallback=False) or \
+                    pool.take("church" if name == "biserica" else "venue", e - a, mode, frac=frac, when=when)
+            else:
+                p = pool.take(cat, e - a, mode, frac=frac, when=when, near=near)
             if p:
-                shots.append((a, a + (p["e"] - p["s"]), p))
+                shots.append([a, a + (p["e"] - p["s"]), p])
+            elif shots and shots[-1][1] >= a - 0.05 and pool.extend(shots[-1][2], e - a):
+                shots[-1][1] = e                    # nothing new left: the previous shot runs longer
+            else:
+                pool.short += e - a                 # no unused footage at all for this moment
             k = j if j > k else k + 1
             n_in += 1
-    return dict(shots=shots, bpm=bpms, sections=sections, bounds=dict(b), used_instead=pool.used_instead,
+        # a tiny rest at the end of the part (shorter than a shot): the last shot runs to the boundary
+        if shots and t0 <= shots[-1][0] < t1 and t1 - shots[-1][1] > 0.01:
+            if pool.extend(shots[-1][2], t1 - shots[-1][1]):
+                shots[-1][1] = t1
+    shots = [tuple(x) for x in shots]
+    return dict(shots=shots, bpm=bpms, sections=sections, bounds=dict(b), used_instead=pool.used_instead, short=pool.short,
                 order=("recording time" if pool.by_time else "your sequence order") if chronological else "mixed")
 
 

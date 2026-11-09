@@ -59,10 +59,13 @@ def parse(xml_path):
                 if not path:
                     continue
                 cfps = _rate(ci, fps)
-                st, en = int(ci.findtext("start", "-1")), int(ci.findtext("end", "-1"))
-                cin, cout = int(ci.findtext("in", "0")), int(ci.findtext("out", "0"))
+                num = lambda v, d: int(round(float(v))) if v not in (None, "") else d
+                st, en = num(ci.findtext("start"), -1), num(ci.findtext("end"), -1)
+                cin, cout = num(ci.findtext("in"), 0), num(ci.findtext("out"), 0)
                 if st < 0 and en >= 0:          # next to a transition: start is -1
                     st = en - round((cout - cin) / cfps * fps)
+                if en < 0 and st >= 0:          # ... or end is -1
+                    en = st + round((cout - cin) / cfps * fps)
                 if st < 0:
                     continue
                 row.append((path, st / fps - cin / cfps, (en if en >= 0 else st) / fps))

@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.4.2), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.4.4), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -101,6 +101,25 @@ bottleneck, decoding is: explain this if asked again.
 ## Progress UI
 Every long process shows the same ProgressPanel (step text, %, thick gradient bar, elapsed + estimated time left):
 multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Analyze Footage" page, Analysis Queue cards.
+
+## Learned from comparing his finished edit (Madalina si Radu) with the program's (v2.4.3)
+- His music XML was ONE joined file cut into pieces with crossfades. xmeml writes start/end = -1 next to a transition:
+  those clips must be kept (start = end - length / end = start + length) everywhere we read XML (teaser._times,
+  xmlimport). Skipping them lost the whole soundtrack (analysis on the last 4 s, export without the song).
+- Part boundaries = cuts between music pieces, also inside one file (song_starts), not only different files.
+- The change in the music after the church is the PARTY SONG; church end = ~23 s earlier (couple + end of vows).
+  Priors from his 6 films in teaser.PRIOR (teaser ~50 s, getting ready ~70 s, church ~45 s, couple ~23 s, venue ~20 s).
+- In getting ready he mixes many couple shots between bride / groom (blocks of 2-4, more couple towards the end).
+- A slot is filled only by a piece long enough for it (no holes); reuse before accepting a shorter piece.
+- Green toast (Main.toast) after Generate / Export in Teaser Studio; red NEW badge on the Teaser Studio menu item.
+- Do not send the owner screenshots of Teaser Studio any more unless he asks.
+- v2.4.4 shot rules (teaser.Pool): a MOMENT IS NEVER USED TWICE (every take is cut out of that file's free time, for
+  every labelled piece of the same file, teaser included; when footage runs out the previous shot runs longer, never a
+  repeat; leftover seconds are reported); never the same clip twice in a row if there is another; chronological =
+  spread over ALL the material of that kind in recording order (+-5% randomness), not the first clips; church and
+  venue OPEN WITH THE DRONE shot recorded closest in time (no stand-in from another place); the teaser only uses drone
+  when there are more than 2 drone clips; 'before'/'after' the church by recording time: morning couple / first look
+  -> getting ready, couple after church -> couple part, Iris after church -> party; no rest < 0.35 s at part ends.
 
 ## Rules learned the hard way
 - Every clipitem <name> is EXACTLY the file name (e.g. RS-MAIN6210.MP4). DaVinci Resolve links timeline clips to media by

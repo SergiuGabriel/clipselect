@@ -120,6 +120,10 @@ schimbările de melodie).</li>
   </ul>
   Dacă dai muzica ca XML, granițele dintre melodii sunt luate exact de acolo. Timpii trebuie să meargă înainte, în
   ordinea de mai sus.</li>
+<li><b>Reguli de alegere:</b> un moment nu e folosit niciodată de două ori (nici în teaser și apoi în film), același
+clip nu apare de două ori la rând, biserica și sala încep cu cadrul de dronă filmat cel mai aproape de ele, iar
+petrecerea folosește doar cadrele Iris filmate după biserică (cele de dimineață sunt first look). Dacă nu ajunge
+materialul, aplicația îți spune câte secunde au rămas neacoperite.</li>
 <li><b>Story order:</b> <b>Chronological</b> ia cadrele fiecărei părți în ordinea în care au fost filmate (după
 timecode / ora din fișier; dacă unele clipuri n-au oră, după ordinea din sequence-ul tău). <b>Mixed</b> păstrează
 părțile și tipurile de cadre, dar le alege la întâmplare. Teaserul e mereu amestecat.</li>
@@ -272,6 +276,10 @@ each song starts).</li>
   </ul>
   If you give the music as an XML, the song changes are taken from it exactly. The times must go forward, in the order
   above.</li>
+<li><b>Shot rules:</b> a moment is never used twice (not even in the teaser and then in the film), the same clip never
+appears twice in a row, church and venue open with the drone shot recorded closest to them, and the party only uses Iris
+shots recorded after the church (the morning ones are the first look). If there is not enough footage, the app tells you
+how many seconds are left uncovered.</li>
 <li><b>Story order:</b> <b>Chronological</b> takes each part's shots in the order they were recorded (timecode / file
 time; if some clips have no recording time, the order of your sequence). <b>Mixed</b> keeps the parts and kinds of shots
 but picks them at random. The teaser is always mixed.</li>
