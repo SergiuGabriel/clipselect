@@ -15,7 +15,8 @@ import sync
 
 GRID = 0.5
 SR = core.SAMPLE_FPS
-DEFAULTS = dict(minshot=3, maxshot=30, pace=50, energy=60, beat=True, static_backup=False)
+DEFAULTS = dict(minshot=3, maxshot=30, pace=50, energy=60, beat=True, static_backup=False,
+                drop_beats=4, buildup="hold", energy_cuts=True)       # the last three: global (Settings > Auto edit music)
 CAM_COLORS = ["#a78bfa", "#2dd4bf", "#fb923c", "#22c55e", "#818cf8", "#f472b6", "#38bdf8", "#c4b5fd"]  # = sync.CAM_LABELS
 
 
@@ -124,6 +125,109 @@ def _limit_long_shots(path, q, avail, mn, mx):
     return path
 
 
+def _music_slots(mm, r0, r1, st, en_at):
+    """Shots on the music between r0 and r1: list of (t0, t1, kind) on bar / beat lines.
+    kind: 'drop' (one cut every drop_beats), 'build' (held or accelerating), 'bar' (1-8 bars, by energy)."""
+    beats = np.asarray(mm["beats"], float)
+    down = np.asarray(mm["down"], int)
+    bars = beats[down] if len(down) else np.array([])
+    bars = bars[(bars >= r0 - 1e-6) & (bars < r1)]
+    if len(bars) < 2:
+        return []
+    bar_len = float(np.median(np.diff(bars)))
+    drops = [d for d in mm.get("drops", []) if r0 <= d[0] < r1]
+    builds = [b for b in mm.get("builds", []) if r0 <= b[1] <= r1 + 1e-6]
+    u = int(st.get("drop_beats", 4))
+    slots, i = [], 0
+    bars_l = list(bars) + [min(r1, bars[-1] + bar_len)]
+
+    def in_span(t, spans):
+        return next((sp for sp in spans if sp[0] - 1e-6 <= t < sp[1] - 1e-6), None)
+    while i < len(bars_l) - 1:
+        t = bars_l[i]
+        d = in_span(t, drops)
+        bu = in_span(t, builds)
+        if d:                                          # drop: one camera change every u beats, from the drop
+            bb = beats[(beats >= d[0] - 1e-6) & (beats < min(d[1], r1) - 1e-6)]
+            pts = list(bb[::u]) + [min(d[1], r1)]
+            for a, b in zip(pts, pts[1:]):
+                if b - a > 0.2:
+                    slots.append((float(a), float(b), "drop"))
+            while i < len(bars_l) - 1 and bars_l[i] < d[1] - 1e-6:
+                i += 1
+            continue
+        if bu:                                         # build-up before a drop
+            end = bu[1]
+            if st.get("buildup", "hold") == "accelerate":
+                bl = [x for x in bars_l if bu[0] - 1e-6 <= x < end - 1e-6]
+                n = len(bl)
+                pts = bl[:max(1, n // 2):2] + bl[max(1, n // 2):max(1, 3 * n // 4)]
+                bb = beats[(beats >= (bl[3 * n // 4] if n >= 4 else bl[-1]) - 1e-6) & (beats < end - 1e-6)]
+                pts = sorted(set(pts + list(bb[::2]))) + [end]
+                for a, b in zip(pts, pts[1:]):
+                    if b - a > 0.2:
+                        slots.append((float(a), float(b), "build"))
+            else:
+                slots.append((float(bu[0]), float(end), "build"))
+            while i < len(bars_l) - 1 and bars_l[i] < end - 1e-6:
+                i += 1
+            continue
+        # normal bars: as many as the minimum shot needs (powers of 2), shorter when the music is intense
+        k = 1
+        while k * bar_len < st["minshot"] * 0.95 and k < 8:
+            k *= 2
+        if st.get("energy_cuts", True):
+            e = en_at(t, t + k * bar_len)
+            if e >= 0.7:
+                k = max(1, k // 2)
+            elif e <= 0.35:
+                k = min(8, k * 2)
+        while k > 1 and k * bar_len > st["maxshot"]:
+            k //= 2
+        while k > 1 and i % k:                         # stay on the phrase grid (bar 1, 3, 5... / 1, 5, 9...)
+            k //= 2
+        j = i + k
+        # never run into a drop / build-up
+        for sp in drops + builds:
+            if t < sp[0] < bars_l[min(j, len(bars_l) - 1)]:
+                j = next(n for n, x in enumerate(bars_l) if x >= sp[0] - 1e-6)
+        j = max(i + 1, min(j, len(bars_l) - 1))
+        slots.append((float(t), float(bars_l[j]), "bar"))
+        i = j
+    return slots
+
+
+def _slot_dp(cost, kinds, pace, C):
+    """Camera per slot. State = (camera now, camera before): staying costs (we WANT a change on the bar line),
+    going back to the camera before costs a bit (no ping-pong between two cameras), most on a drop."""
+    S = cost.shape[1]
+    stay_n = 10 + 0.3 * pace
+    INF = 1e18
+    acc = np.repeat(cost[:, 0][:, None], C, axis=1)            # acc[now, before]
+    bp = np.zeros((S, C, C), np.int16)
+    eye = np.eye(C, dtype=bool)
+    for s in range(1, S):
+        drop = kinds[s] in ("drop", "build") or kinds[s - 1] == "build"
+        stay = 60.0 if drop else stay_n
+        pp = (15.0 if drop else 8.0) if C >= 3 else 0.0
+        # tmp[c, p, q] = acc[p, q] + stay if c == p + pp if c == q (and c != p)
+        tmp = np.broadcast_to(acc[None, :, :], (C, C, C)).copy()
+        tmp[eye[:, :, None].repeat(C, 2)] += stay
+        back = eye[:, None, :].repeat(C, 1) & ~eye[:, :, None].repeat(C, 2)
+        tmp[back] += pp
+        bq = tmp.argmin(axis=2)
+        acc = tmp.min(axis=2) + cost[:, s][:, None]
+        acc = np.minimum(acc, INF)
+        bp[s] = bq
+    c, p = np.unravel_index(np.argmin(acc), acc.shape)
+    path = [0] * S
+    for s in range(S - 1, -1, -1):
+        path[s] = int(c)
+        if s:
+            c, p = int(p), int(bp[s, c, p])
+    return path
+
+
 def build(cams, results, analyses, masters, st):
     """Returns one edit per master: dict(master, T0, T1, segs=[(t0, t1, cam)], pieces=[(cam, path, in, out, seq_t)],
     stats). Times are master times (seconds)."""
@@ -164,6 +268,29 @@ def build(cams, results, analyses, masters, st):
         mx = max(mn + 1, int(round(st["maxshot"] / GRID)))
         pen = 2 + (100 - st["pace"]) / 100 * 18
         path = _limit_long_shots(_dp(cost, mn, pen), np.where(avail, q, -1e9), avail, mn, mx)
+        mm = m.get("music") if st["beat"] else None
+        music_spans = []
+        if mm and mm.get("beats"):
+            ev = np.asarray(mm["energy"]["v"], float)
+            er = mm["energy"]["rate"]
+            en_at = lambda a, b: float(ev[int(a * er):max(int(a * er) + 1, int(b * er))].mean()) if int(a * er) < len(ev) else 0.5
+            for r0_, r1_, kind_, _bpm in mm["regions"]:
+                if kind_ != "music":
+                    continue
+                sl = _music_slots(mm, max(r0_, T0), min(r1_, T1), st, en_at)
+                if len(sl) < 2:
+                    continue
+                cst = np.full((C, len(sl)), 1e4)
+                for k_, (a_, b_, _) in enumerate(sl):
+                    c0, c1 = int((a_ - T0) / GRID), max(int((a_ - T0) / GRID) + 1, int(np.ceil((b_ - T0) / GRID)))
+                    c0, c1 = max(0, c0), min(nT, c1)
+                    if c1 <= c0:
+                        continue
+                    av = avail[:, c0:c1].mean(1)
+                    qm = np.array([q[ci, c0:c1][avail[ci, c0:c1]].mean() if avail[ci, c0:c1].any() else -1e3 for ci in range(C)])
+                    cst[:, k_] = np.where(av >= 0.9, 100 - qm, 1e4 * (1 - av) + 100 - np.maximum(qm, -100))
+                cpath = _slot_dp(cst, [x[2] for x in sl], st["pace"], C)
+                music_spans.append((sl[0][0], sl[-1][1], [(a_, b_, cpath[k_]) for k_, (a_, b_, _) in enumerate(sl)]))
         # segments (skip cells where the chosen camera has no footage)
         segs = []
         for t in range(nT):
@@ -173,9 +300,74 @@ def build(cams, results, analyses, masters, st):
             else:
                 segs.append([t, t + 1, c])
         segs = [[T0 + a * GRID, min(T1, T0 + b * GRID), c] for a, b, c in segs if c >= 0]
-        # cuts on the beat
+        if music_spans:
+            out_segs = []
+            for a_, b_, c_ in segs:                      # the grid edit OUTSIDE the music
+                pieces_ = [(a_, b_)]
+                for s0, s1, _ in music_spans:
+                    nxt = []
+                    for u0, u1 in pieces_:
+                        if u1 <= s0 or u0 >= s1:
+                            nxt.append((u0, u1))
+                        else:
+                            if u0 < s0:
+                                nxt.append((u0, s0))
+                            if u1 > s1:
+                                nxt.append((s1, u1))
+                    pieces_ = nxt
+                out_segs += [[u0, u1, c_] for u0, u1 in pieces_ if u1 - u0 > 0.04]
+            for s0, s1, sl in music_spans:
+                out_segs += [[a_, b_, c_] for a_, b_, c_ in sl]
+            out_segs.sort(key=lambda x: x[0])
+            segs = []
+            for x in out_segs:                           # merge same camera
+                if segs and segs[-1][2] == x[2] and abs(segs[-1][1] - x[0]) < 1e-6:
+                    segs[-1][1] = x[1]
+                else:
+                    segs.append(x)
+            # speech: move cuts outside the music into the pauses between sentences
+            pz = np.array(mm.get("pauses") or [])
+            if len(pz):
+                inmus = lambda t: any(s0 - 1e-6 <= t <= s1 + 1e-6 for s0, s1, _ in music_spans)
+                for k in range(1, len(segs)):
+                    prev, cur = segs[k - 1], segs[k]
+                    b = cur[0]
+                    if abs(prev[1] - b) > 1e-6 or inmus(b):
+                        continue
+                    j = np.searchsorted(pz, b)
+                    cand = [pz[i] for i in range(max(0, j - 3), min(len(pz), j + 3))
+                            if abs(pz[i] - b) <= 1.5 and not inmus(pz[i])]
+                    if cand:
+                        for nb in sorted(cand, key=lambda x: abs(x - b)):
+                            nb = float(nb)
+                            if nb - prev[0] >= 0.8 * st["minshot"] and cur[1] - nb >= 0.8 * st["minshot"]:
+                                prev[1] = cur[0] = nb
+                                break
+            # slivers left where the grid edit meets the music: glued to the shot before (never inside a drop)
+            protect = [(a_, b_) for _, _, sl in music_spans for a_, b_, _c in sl]
+            short = lambda sg: sg[1] - sg[0] < 0.6 * st["minshot"] and not any(abs(sg[0] - a_) < 1e-6 and abs(sg[1] - b_) < 1e-6 for a_, b_ in protect)
+            k = 0
+            while k < len(segs):
+                if short(segs[k]) and len(segs) > 1:
+                    if k > 0 and abs(segs[k - 1][1] - segs[k][0]) < 1e-6:
+                        segs[k - 1][1] = segs[k][1]
+                        segs.pop(k)
+                        continue
+                    if k + 1 < len(segs) and abs(segs[k][1] - segs[k + 1][0]) < 1e-6:
+                        segs[k + 1][0] = segs[k][0]
+                        segs.pop(k)
+                        continue
+                k += 1
+            merged_ = []
+            for x_ in segs:
+                if merged_ and merged_[-1][2] == x_[2] and abs(merged_[-1][1] - x_[0]) < 1e-6:
+                    merged_[-1][1] = x_[1]
+                else:
+                    merged_.append(x_)
+            segs = merged_
+        # cuts on the beat (old way, only without a music map)
         on = np.array(m.get("onsets") or [])
-        if st["beat"] and len(on):
+        if st["beat"] and len(on) and not music_spans:
             for k in range(1, len(segs)):
                 prev, cur = segs[k - 1], segs[k]
                 if abs(prev[1] - cur[0]) > 1e-6:
@@ -201,7 +393,7 @@ def build(cams, results, analyses, masters, st):
         share = {}
         for t0, t1, ci in segs:
             share[ci] = share.get(ci, 0) + t1 - t0
-        out.append(dict(master=mi, T0=T0, T1=T1, segs=[tuple(s) for s in segs], pieces=pieces,
+        out.append(dict(master=mi, T0=T0, T1=T1, segs=[tuple(s) for s in segs], pieces=pieces, music=bool(music_spans),
                         stats=dict(shots=len(segs), avg=float(np.mean(shots)) if shots else 0.0,
                                    share={ci: v / max(1e-9, sum(share.values())) for ci, v in share.items()})))
     return out
@@ -212,6 +404,91 @@ def build(cams, results, analyses, masters, st):
 #           Sync only (no auto edit yet): the full clips.
 # A1(/A2) = recorder (all recorder files, one after another on the common timeline)
 # then one audio track per camera (camera sound, synced, uncut, NOT muted)
+
+def song_starts(mm):
+    """(time, tempo) where every song starts: a tempo change (> 4 %) or a gap in the beats."""
+    b, bp = mm.get("beats", []), mm.get("bpm", [])
+    out = []
+    for i in range(len(b)):
+        if i == 0 or abs(bp[i] - bp[i - 1]) / max(1e-6, bp[i - 1]) > 0.04 or b[i] - b[i - 1] > 2.5 * 60 / max(1e-6, bp[i - 1]):
+            seg = [x for x, t in zip(bp[i:i + 32], b[i:i + 32])]
+            out.append((b[i], float(np.median(seg))))
+    return out
+
+
+def music_markers(masters, starts, T0, fps):
+    """Sequence markers: every song start (with its tempo) and every drop."""
+    out = []
+    for mi, m in enumerate(masters):
+        mm = m.get("music")
+        if not mm:
+            continue
+        for t, bpm in song_starts(mm):
+            out.append((starts[mi] + t, f"Song · {bpm:.0f} BPM"))
+        for d0, d1 in mm.get("drops", []):
+            out.append((starts[mi] + d0, "DROP"))
+    return "".join(f'<marker><name>{escape(n)}</name><comment></comment><in>{round((t - T0) * fps)}</in><out>-1</out></marker>'
+                   for t, n in sorted(out))
+
+
+def export_beatcheck(masters, out_xml, fps=25.0):
+    """To CHECK the beat on your own music: a click track (a click on every beat, higher on beat 1 of the bar, a long
+    tone on every drop) next to the recorder, one sequence. Listen / look at the waveform in Premiere or DaVinci."""
+    import wave
+    starts = sync.master_starts(masters)
+    rate_xml, fps = core._rate(fps)
+    SRC = 16000
+    a1, a2, defs = [], [], []
+    n = 0
+    for mi, m in enumerate(masters):
+        mm = m.get("music")
+        if not mm or not m.get("path"):
+            continue
+        n += 1
+        dur = m["duration"]
+        x = np.zeros(int(dur * SRC) + SRC, np.float32)
+        down = set(mm.get("down", []))
+        for k, b in enumerate(mm.get("beats", [])):
+            f, ln, amp = (2000, 0.015, 0.9) if k in down else (1000, 0.012, 0.5)
+            t = np.arange(int(ln * SRC)) / SRC
+            i = int(b * SRC)
+            seg = amp * np.sin(2 * np.pi * f * t) * np.exp(-t * 200)
+            x[i:i + len(seg)] += seg[:max(0, len(x) - i)]
+        for d0, _ in mm.get("drops", []):
+            t = np.arange(int(0.4 * SRC)) / SRC
+            i = int(d0 * SRC)
+            seg = 0.6 * np.sin(2 * np.pi * 3000 * t) * np.exp(-t * 6)
+            x[i:i + len(seg)] += seg[:max(0, len(x) - i)]
+        wav = Path(out_xml).with_name(f"{Path(out_xml).stem} - beats {n}.wav")
+        with wave.open(str(wav), "wb") as w:
+            w.setnchannels(1)
+            w.setsampwidth(2)
+            w.setframerate(SRC)
+            w.writeframes((np.clip(x, -1, 1) * 32767).astype(np.int16).tobytes())
+        fr = int(np.ceil(dur * fps))
+        st = round(starts[mi] * fps)
+        r_, c_ = sync.audio_info(m["path"])
+        a1.append(f'<clipitem id="rec-{n}"><name>{escape(Path(m["path"]).name)}</name><duration>{fr}</duration>{rate_xml}'
+                  f'<start>{st}</start><end>{st + fr}</end><in>0</in><out>{fr}</out><file id="frec-{n}"><name>{escape(Path(m["path"]).name)}</name>'
+                  f'<pathurl>{escape(core._url(m["path"]))}</pathurl>{rate_xml}<duration>{fr}</duration><media><audio><samplecharacteristics>'
+                  f'<depth>16</depth><samplerate>{r_}</samplerate></samplecharacteristics><channelcount>{c_}</channelcount></audio></media></file>'
+                  f'<sourcetrack><mediatype>audio</mediatype><trackindex>1</trackindex></sourcetrack></clipitem>')
+        a2.append(f'<clipitem id="clk-{n}"><name>{escape(wav.name)}</name><duration>{fr}</duration>{rate_xml}'
+                  f'<start>{st}</start><end>{st + fr}</end><in>0</in><out>{fr}</out><file id="fclk-{n}"><name>{escape(wav.name)}</name>'
+                  f'<pathurl>{escape(core._url(str(wav)))}</pathurl>{rate_xml}<duration>{fr}</duration><media><audio><samplecharacteristics>'
+                  f'<depth>16</depth><samplerate>{SRC}</samplerate></samplecharacteristics><channelcount>1</channelcount></audio></media></file>'
+                  f'<sourcetrack><mediatype>audio</mediatype><trackindex>1</trackindex></sourcetrack></clipitem>')
+    if not n:
+        raise ValueError("No music map yet: press Auto Edit first (it reads the music).")
+    total = max(round((starts[i] + m["duration"]) * fps) for i, m in enumerate(masters))
+    trk = lambda its: f'<track>{"".join(its)}<enabled>TRUE</enabled><locked>FALSE</locked></track>'
+    xml = (f'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4"><sequence id="sequence-1">'
+           f'<name>{escape(Path(out_xml).stem)}</name><duration>{total}</duration>{rate_xml}{music_markers(masters, starts, 0.0, fps)}'
+           f'<media><video><format>{core._sc(rate_xml, 1920, 1080, "none")}</format><track></track></video>'
+           f'<audio><numOutputChannels>2</numOutputChannels>{trk(a1)}{trk(a2)}</audio></media></sequence></xmeml>')
+    Path(out_xml).write_text(xml, encoding="utf-8")
+    return n
+
 
 def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=None):
     starts = starts or sync.master_starts(masters)
@@ -393,7 +670,8 @@ def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=N
     end = max([g + dur(p) for _, p, g in placed] + [starts[i] + m["duration"] for i, m in enumerate(masters)])
     total = int(np.ceil((end - T0) * fps))
     xml = (f'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4"><sequence id="sequence-1">'
-           f'<name>{escape(name)}</name><duration>{total}</duration>{rate_xml}<media><video><format>{sc}</format>{"".join(v_tracks)}</video>'
+           f'<name>{escape(name)}</name><duration>{total}</duration>{rate_xml}{music_markers(masters, starts, T0, fps)}'
+           f'<media><video><format>{sc}</format>{"".join(v_tracks)}</video>'
            f'<audio><numOutputChannels>2</numOutputChannels><format><samplecharacteristics><depth>16</depth><samplerate>{arate}</samplerate>'
            f'</samplecharacteristics></format>{"".join(a_tracks)}</audio></media></sequence></xmeml>')
     Path(out_path).write_text(xml, encoding="utf-8")

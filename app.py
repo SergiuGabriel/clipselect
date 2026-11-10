@@ -23,13 +23,14 @@ from PySide6.QtWidgets import (QTextBrowser, QAbstractItemView, QApplication, QC
 
 import core
 import director
+import music
 import help_text
 import teaser
 import ai
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v2.6.0"
+APP, VER = "MoneyMakingMachine", "v2.7.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
 
@@ -1703,14 +1704,14 @@ class SyncMap(QWidget):
         self.mdur, self.rows, self.edit, self.tmin, self.tmax = 0.0, [], [], 0.0, 1.0
         self.setMinimumHeight(140)
 
-    def set_data(self, spans, rows, edit=None):
-        """spans: [(t0, t1)] of the recorder files on the common timeline."""
-        self.spans, self.rows, self.edit = spans or [], rows, edit or []
+    def set_data(self, spans, rows, edit=None, music=None):
+        """spans: [(t0, t1)] of the recorder files on the common timeline. music: [(offset, music map)]."""
+        self.spans, self.rows, self.edit, self.music = spans or [], rows, edit or [], music or []
         starts = [b[0] for _, _, bl in rows for b in bl] + [s[0] for s in self.spans]
         ends = [b[1] for _, _, bl in rows for b in bl] + [s[1] for s in self.spans]
         self.tmin = min([0.0] + starts)
         self.tmax = max(ends) if ends else 1.0
-        self.setMinimumHeight(80 + 26 * (len(rows) + 2))
+        self.setMinimumHeight(80 + 26 * (len(rows) + 3))
         self.update()
 
     def paintEvent(self, _):
@@ -1738,6 +1739,40 @@ class SyncMap(QWidget):
         for s0, s1 in getattr(self, "spans", []):
             p.drawRoundedRect(QRectF(X(s0), y, max(2.0, X(s1) - X(s0) - 1), 20), 3, 3)
         y += 26
+        if self.music:
+            # music row: energy of every song (darker = calmer), speech in grey, drops in pink, tempo written in
+            row(y, "Music")
+            for g, mm in self.music:
+                ev = mm.get("energy", {}).get("v", [])
+                er = mm.get("energy", {}).get("rate", 2)
+                for r0, r1, kind, bpm in mm.get("regions", []):
+                    x0, x1 = X(g + r0), X(g + r1)
+                    if kind == "speech":
+                        p.setBrush(QColor("#4a4a4a"))
+                        p.drawRect(QRectF(x0, y + 7, max(1.0, x1 - x0), 6))
+                    elif kind == "music":
+                        step = max(1, int((r1 - r0) * er / max(1.0, x1 - x0)))
+                        for k in range(int(r0 * er), int(r1 * er), step):
+                            if k >= len(ev):
+                                break
+                            e = ev[k]
+                            col = QColor.fromHsvF(0.6 - 0.55 * e, 0.75, 0.45 + 0.5 * e)
+                            p.setBrush(col)
+                            p.drawRect(QRectF(X(g + k / er), y + 1 + 18 * (1 - e) * 0.6, max(1.0, X(g + (k + step) / er) - X(g + k / er)),
+                                              18 - 18 * (1 - e) * 0.6))
+
+                for d0, d1 in mm.get("drops", []):
+                    p.setBrush(QColor("#ff5c8a"))
+                    p.drawRect(QRectF(X(g + d0) - 1, y - 2, 2.5, 24))
+                ss = director.song_starts(mm)                 # the tempo written at the start of every song
+                for k, (t0, bpm) in enumerate(ss):
+                    t1 = ss[k + 1][0] if k + 1 < len(ss) else mm.get("duration", t0)
+                    if X(g + t1) - X(g + t0) > 52:
+                        p.setPen(QColor("#ececec"))
+                        p.drawText(QRectF(X(g + t0) + 3, y, X(g + t1) - X(g + t0) - 6, 20), Qt.AlignVCenter | Qt.AlignLeft,
+                                   f"{bpm:.0f} BPM")
+                        p.setPen(Qt.NoPen)
+            y += 26
         row(y, "Auto edit")
         for t0, t1, col in self.edit:
             p.setBrush(QColor(col))
@@ -1767,9 +1802,10 @@ class MCWorker(QThread):
     done = Signal(object)
     failed = Signal(str)
 
-    def __init__(self, mode, files, cache=None, todo=None, jobs=2):
+    def __init__(self, mode, files, cache=None, todo=None, jobs=2, masters=None):
         super().__init__()
         self.mode, self.files, self.cache, self.todo, self.jobs, self._stop = mode, files, cache or {}, todo or [], jobs, False
+        self.masters = masters or []
 
     def cancel(self):
         self._stop = True
@@ -1836,7 +1872,18 @@ class MCWorker(QThread):
             list(ex.map(one, left))
         if self._stop:
             raise InterruptedError
-        return dict(analyses=an, keys=keys)
+        # the music map of every recorder file (once: kept in the project)
+        maps = {}
+        need = [(i, m) for i, m in enumerate(self.masters) if m.get("path") and not m.get("music") and Path(m["path"]).exists()]
+        for n, (i, m) in enumerate(need):
+            if self._stop:
+                raise InterruptedError
+            self.progress.emit(f"Step 2 · reading the music (beats, bars, drops): {n + 1} of {len(need)}", (n + 0.5) / len(need))
+            try:
+                maps[i] = music.analyze(sync.audio_pcm(m["path"]))
+            except Exception:
+                logging.exception("music analysis failed for %s", m["path"])
+        return dict(analyses=an, keys=keys, music=maps)
 
 
 class MulticamPage(QWidget):
@@ -1864,6 +1911,10 @@ class MulticamPage(QWidget):
         self.b_xml.setToolTip("Use a timeline that is already synced in Syncaila, Premiere Pro or DaVinci Resolve (FCP7 XML).")
         self.b_auto = btn("Auto Edit", slot=self.run_auto)
         self.b_run = btn("Sync", "primary", self.toggle_run)
+        self.b_beat = btn("Beat check", "link", self.export_beatcheck)
+        self.b_beat.setToolTip("Exports the recorder with a click on every beat (higher on beat 1 of the bar, a long tone on every "
+                               "drop) as one sequence: listen / look at the waveform to check the beat on your music.")
+        hh.addWidget(self.b_beat)
         hh.addWidget(self.b_xml)
         hh.addWidget(self.b_exp)
         hh.addWidget(self.b_auto)
@@ -1932,7 +1983,8 @@ class MulticamPage(QWidget):
             f'{dot(CONF_COL["low"])} <b>Check</b> position unsure: on the "check sync" track, not used in the auto edit &nbsp;&nbsp; '
             f'{dot(CONF_COL["approx"])} <b>By time</b> no usable sound, placed approximately by its clock, not used in the auto edit &nbsp;&nbsp; '
             f'{dot(CONF_COL["fail"])} <b>Failed</b> not placed (see the Clips tab) &nbsp;&nbsp;·&nbsp;&nbsp; '
-            f'<b>Auto edit</b> row: one colour per camera')
+            f'<b>Auto edit</b> row: one colour per camera &nbsp;&nbsp;·&nbsp;&nbsp; <b>Music</b> row (after Auto Edit): every song with its '
+            f'tempo, brighter = more intense, grey = speech, <span style="color:#ff5c8a">pink line</span> = drop')
         legend.setWordWrap(True)
         legend.setStyleSheet(f"color:{C['MUTED']};font-size:11px")
         hv_.addSpacing(6)
@@ -1985,7 +2037,9 @@ class MulticamPage(QWidget):
         br = QHBoxLayout()
         br.addWidget(lbl("Cut on the beat"))
         bq = lbl("?", "muted")
-        bq.setToolTip("Moves every cut onto the nearest beat or sound accent of the master audio (within 0.3 s).")
+        bq.setToolTip("On music: shots follow the bars and beats of the recorder (tempo followed song by song), a cut exactly "
+                      "on every drop, faster cuts when the music is intense (Settings > Auto edit on the music). "
+                      "On speech: cuts in the pauses between sentences. Off: the old way, on a 0.5 s grid.")
         br.addWidget(bq)
         br.addStretch()
         self.sw_beat = Switch(True)
@@ -2129,7 +2183,8 @@ class MulticamPage(QWidget):
         if not s:
             return
         todo = [x for c in self.p["cams"] if c["role"] != "Audio" and not c.get("approx") and not c.get("check") for x in c["clips"]]
-        self._start(MCWorker("analyze", None, self.store.load_blob(self.p["id"]), todo, self.store.app["jobs"]), self.b_auto)
+        self._start(MCWorker("analyze", None, self.store.load_blob(self.p["id"]), todo, self.store.app["jobs"],
+                             masters=s["masters"]), self.b_auto)
 
     def on_progress(self, text, f):
         self.job_status, self.job_progress = text, f
@@ -2179,6 +2234,9 @@ class MulticamPage(QWidget):
             if here:
                 self.status.setText(msg)
         else:                 # analysis finished
+            for i, mm in (r.get("music") or {}).items():
+                if i < len(p["sync"]["masters"]):
+                    p["sync"]["masters"][i]["music"] = mm
             an_all.update(r["analyses"])
             if here:
                 self.an.update(r["analyses"])
@@ -2205,7 +2263,8 @@ class MulticamPage(QWidget):
     def recompute(self):
         s = self.p.get("sync") if self.p else None
         has_an = s and any(x in self.an for c in self.p["cams"] for x in c["clips"])
-        self.edits = director.build(self.p["cams"], s["clips"], self.an, s["masters"], self.p["dir"]) if has_an else []
+        st = {**self.p["dir"], **self.store.app.get("music", {})}
+        self.edits = director.build(self.p["cams"], s["clips"], self.an, s["masters"], st) if has_an else []
         self.refresh_all()
 
     # ---- views
@@ -2253,7 +2312,8 @@ class MulticamPage(QWidget):
                 shots += e["stats"]["shots"]
                 for t0, t1, ci in e["segs"]:
                     share[ci] = share.get(ci, 0) + t1 - t0
-        self.map.set_data(spans, rows, edit)
+        mus = [(starts[i], m["music"]) for i, m in enumerate(s["masters"]) if m.get("music")]
+        self.map.set_data(spans, rows, edit, mus)
         if edit:
             tot = sum(share.values()) or 1
             avg = sum(share.values()) / max(1, shots)
@@ -2353,6 +2413,25 @@ class MulticamPage(QWidget):
         self.store.save()
         self.recompute()
 
+    def export_beatcheck(self):
+        s = self.p.get("sync") if self.p else None
+        if not s or not any(m.get("music") for m in s["masters"]):
+            self.status.setText("Beat check needs the music map: press Auto Edit first (it reads the beats and bars).")
+            return
+        first = next((m["path"] for m in s["masters"] if m.get("path")), None)
+        out, _ = QFileDialog.getSaveFileName(self, "Save beat check", str(Path(first).parent / f"{self.p['name']} - beat check.xml"),
+                                             "XML (*.xml)")
+        if not out:
+            return
+        try:
+            n = director.export_beatcheck(s["masters"], out)
+            self.status.setText(f"Beat check saved ({n} recorder file(s) + click track). Import the XML: A1 = recorder, A2 = clicks "
+                                "(high = beat 1 of the bar, long tone = drop). Markers = songs and drops.")
+            logging.info("beat check exported: %s", out)
+        except Exception as e:
+            logging.exception("beat check failed")
+            self.status.setText(f"Beat check failed: {e}")
+
     def export(self):
         s = self.p.get("sync")
         if not s:
@@ -2434,6 +2513,36 @@ class SettingsPage(QWidget):
         hw.addWidget(self.sw_hw)
         right.addLayout(hw)
         right.addSpacing(18)
+        right.addWidget(lbl("Auto edit on the music", "h2"))
+        right.addWidget(lbl("For every multicam project (when Cut on the beat is on). The program reads the beat, the bars, "
+                            "the build-ups and the drops of the recorder, song by song.", "muted", True))
+        ms = store.app.setdefault("music", dict(drop_beats=4, buildup="hold", energy_cuts=True))
+        dr = QHBoxLayout()
+        dr.addWidget(lbl("On a drop, change camera every"))
+        self.b_drop = {}
+        for nb_, t in ((1, "1 beat"), (2, "2 beats"), (4, "1 bar"), (8, "2 bars"), (16, "4 bars")):
+            b = btn(t, "seg", lambda _=False, x=nb_: self._set_music("drop_beats", x))
+            self.b_drop[nb_] = b
+            dr.addWidget(b)
+        dr.addStretch()
+        right.addLayout(dr)
+        bu = QHBoxLayout()
+        bu.addWidget(lbl("Build-up before a drop"))
+        self.b_bu = {"hold": btn("Hold one shot until the drop", "seg", lambda: self._set_music("buildup", "hold")),
+                     "accelerate": btn("Cut faster and faster", "seg", lambda: self._set_music("buildup", "accelerate"))}
+        for b in self.b_bu.values():
+            bu.addWidget(b)
+        bu.addStretch()
+        right.addLayout(bu)
+        en = QHBoxLayout()
+        en.addWidget(lbl("Faster cuts when the music is more intense (1 to 4 bars per shot)"))
+        en.addStretch()
+        self.sw_en = Switch(ms.get("energy_cuts", True))
+        self.sw_en.toggled.connect(lambda v: self._set_music("energy_cuts", v))
+        en.addWidget(self.sw_en)
+        right.addLayout(en)
+        self._show_music()
+        right.addSpacing(18)
         right.addWidget(lbl("Updates and problems", "h2"))
         ur = QHBoxLayout()
         ur.addWidget(btn("Check for updates", slot=lambda: self.check_updates(False)))
@@ -2455,6 +2564,22 @@ class SettingsPage(QWidget):
         self.timer.timeout.connect(self.refresh)
 
     update_found = Signal(str)
+    music_changed = Signal()
+
+    def _set_music(self, k, v):
+        self.store.app.setdefault("music", {})[k] = v
+        self.store.save_app()
+        self._show_music()
+        self.music_changed.emit()
+
+    def _show_music(self):
+        ms = self.store.app.get("music", {})
+        for v, b in self.b_drop.items():
+            b.setProperty("active", ms.get("drop_beats", 4) == v)
+            repolish(b)
+        for k, b in self.b_bu.items():
+            b.setProperty("active", ms.get("buildup", "hold") == k)
+            repolish(b)
 
     def check_updates(self, silent=True):
         self.upd.setText("Checking…")
@@ -3405,6 +3530,7 @@ class Main(QMainWindow):
         self.info = InfoPage(self.store)
         self.teaser = TeaserPage(self.store)
         self.toast = Toast(self)
+        self.settings.music_changed.connect(lambda: self.mc.p and self.mc.recompute())
         self.res.export_done = lambda name: (self.toast.show_msg(f"XML saved: {name}"), logging.info("footage export %s", name))
         self.teaser.notify.connect(self.toast.show_msg)
         for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser):

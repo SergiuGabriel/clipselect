@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.6.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.7.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -51,6 +51,8 @@ linking to https://www.instagram.com/sergiugabrielcg/.
 - `director.py` — multicam auto director + XML export.
 - `help_text.py` — Info / How to use page (HTML, Romanian + English).
 - `xmlimport.py` — import of an already synced FCP7 XML for Auto Edit.
+- `music.py` — music map of a recorder (beats with LOCAL tempo, downbeats, regions music/speech/silence, energy,
+  drops, build-ups, speech pauses). Used by director.py.
 - `teaser.py` — Teaser Studio engine (labels, music parts, beats, drop, edit, XML export).
 - `make_icons.py` — builds icon.icns / icon.ico / icon.png from `icon_source.png` (run in CI before PyInstaller).
 - `.github/workflows/build.yml` — builds macOS DMGs (Apple Silicon + Intel) and a Windows folder with PyInstaller on every push.
@@ -142,6 +144,28 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 - Info page: one page per <h2> of help_text + search bar. Analysis screen: running on top, progress middle, done below.
 - Queue "Open" bug fixed (clicked(bool) was passed as the key). Footage project button says "View analysis" while
   its analysis runs. NEW badge in the menu: fixed 30x14.
+
+## v2.7.0: Auto Edit on the music (music.py + director.py)
+- music.analyze(x at 4 kHz): spectral flux at 100 fps weighted to the LOW bins (kick / bass / snare body); hats play
+  between the beats and made the tracker lock on the off-beat. Flux frame time + 50 ms (T_OFF) = the hit. Local tempo
+  every 1 s (8 s windows, autocorrelation + harmonic, Viterbi with jump costs, mild prior around 110 BPM). Songs split
+  where the tempo PATH steps (> 3 %), tracks stop / start 2 s around it. Beat tracker: predicted from the local tempo,
+  pulled to the hit (weighted window), re-locked after 4 off-phase beats or when the tempo moves > 12 %; phase chosen
+  on kick+env over 16 beats; octave check: if every other beat has < 0.5 of the low/mid (<300 Hz) energy -> half tempo
+  (a snare on 2 and 4 has body, an off-beat hat has none). Each beat moved to the START of the hit (2 ms energy).
+  Regions: tempo confidence > 0.45 = music (speech ~0.25, ballad ~0.2, silence ~0.06). Drops: on a bar line the BASS
+  (p80 of < 150 Hz, per bar) rises >= 3 dB, stays (next bar >= 2.5, 4 bars >= 3), is the biggest rise around and in the
+  top 40 %; NOT loudness (risers are loudest before the drop). Build-up = up to 8 bars of less bass before it.
+  Tests (synthetic, /tmp/mt/*): 94-98 % of beats within 20 ms, median ~1 ms, 0 false beats, downbeats 100 %, drops exact,
+  70-140 BPM hip-hop / house / rock correct, 160-174 BPM read at half tempo (beats still real). 1 h of audio in ~2 s.
+- director.build: with st["beat"] and a music map, music regions are cut on SLOTS (_music_slots: bars by energy and
+  minshot (powers of 2, phrase-aligned), drop slots every drop_beats, build-up held or accelerating) and the camera per
+  slot comes from _slot_dp (state = camera now + camera before: staying costs, going back costs = no ping-pong;
+  vectorised, checked against brute force). Outside the music the old 0.5 s grid DP, cuts moved to speech pauses
+  (+-1.5 s), slivers < 0.6 * minshot glued to a neighbour. Cut on the beat OFF = old behaviour exactly.
+- Global settings store.app["music"] = drop_beats (1/2/4/8/16, default 4 = 1 bar), buildup (hold / accelerate),
+  energy_cuts (True). Map computed in the Auto Edit job (MCWorker._analyze) and saved in sync.masters[i]["music"].
+- Sync Map "Music" row, XML markers (Song · BPM, DROP), Beat check export (click track + recorder, one sequence).
 
 ## Rules learned the hard way
 - Every clipitem <name> is EXACTLY the file name (e.g. RS-MAIN6210.MP4). DaVinci Resolve links timeline clips to media by
