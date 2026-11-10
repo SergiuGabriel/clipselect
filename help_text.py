@@ -66,6 +66,8 @@ folosite în montajul automat. Le verifici în tab-ul Clips și le corectezi cu 
 <p><b>Export XML</b> merge și în Premiere Pro (File &gt; Import), și în DaVinci Resolve (File &gt; Import &gt; Timeline).</p>
 
 <h2>Footage Selection: ce face „Analyze Footage”</h2>
+<p><b>Ecranul de analiză:</b> sus clipurile analizate chiar acum, la mijloc progresul (Pause / Cancel), jos cele terminate.
+Analiza merge și în fundal: revii din <b>Analysis Queue &gt; Open</b> sau din proiect cu <b>View analysis</b>.</p>
 <p>„Analyze Footage” se uită la fiecare clip și dă o notă fiecărei porțiuni.</p>
 <h3>Ce face, pas cu pas</h3>
 <ol>
@@ -120,6 +122,14 @@ schimbările de melodie).</li>
   </ul>
   Dacă dai muzica ca XML, granițele dintre melodii sunt luate exact de acolo. Timpii trebuie să meargă înainte, în
   ordinea de mai sus.</li>
+<li><b>Proiecte:</b> sus ai lista de proiecte Teaser (câte unul pe nuntă): <b>+ New teaser</b>, Rename, Delete. Fiecare
+proiect ține minte footage-ul, muzica, cele șase momente și ordinea.</li>
+<li><b>Analiza selecțiilor</b> se poate opri oricând cu <b>Cancel</b>; ce s-a analizat rămâne salvat și continuă data
+viitoare de unde a rămas. Poți genera și înainte să se termine (selecțiile neanalizate se folosesc fără alegerea celei mai
+bune bucăți). O vezi și în Analysis Queue.</li>
+<li><b>AI test (experimental):</b> verifică dacă un model AI gratuit, care rulează pe Mac (nimic nu se urcă pe internet),
+recunoaște cadrele tale la fel ca etichetele tale. Prima dată descarcă modelul (~150 MB). Îți arată fiecare cadru cu
+culoarea ta și ce a crezut AI-ul (verde = la fel, roșu = diferit) și procentul pe fiecare categorie. Nu schimbă teaserul.</li>
 <li><b>Selecțiile tale:</b> poți da selecții mai lungi (de exemplu 10 s de petrecere). La import, aplicația se uită la fiecare
 selecție o singură dată (claritate, stabilitate, expunere, mișcare) și folosește partea cea mai bună din ea: cu mișcare pe
 drop și la petrecere, mai calmă la pregătiri și la biserică. Folosește întâi câte o bucată din fiecare selecție, apoi a
@@ -234,6 +244,9 @@ auto edit. Check them in the Clips tab and fix them by double-clicking Start.</p
 <p><b>Export XML</b> works in Premiere Pro (File &gt; Import) and in DaVinci Resolve (File &gt; Import &gt; Timeline).</p>
 
 <h2>Footage Selection: what "Analyze Footage" does</h2>
+<p><b>The analysis screen:</b> on top the clips being analysed right now, in the middle the progress (Pause / Cancel), at the
+bottom the finished ones. It also runs in the background: come back from <b>Analysis Queue &gt; Open</b> or from the project
+with <b>View analysis</b>.</p>
 <p>"Analyze Footage" looks at every clip and gives every part of it a score.</p>
 <h3>Step by step</h3>
 <ol>
@@ -287,6 +300,14 @@ each song starts).</li>
   </ul>
   If you give the music as an XML, the song changes are taken from it exactly. The times must go forward, in the order
   above.</li>
+<li><b>Projects:</b> at the top you have the list of teaser projects (one per wedding): <b>+ New teaser</b>, Rename,
+Delete. Every project remembers its footage, music, six moments and order.</li>
+<li><b>Looking at the selections</b> can be stopped any time with <b>Cancel</b>; what is done is saved and continues next
+time where it was. You can generate before it finishes (unanalysed selections are used without picking their best part).
+It also shows in Analysis Queue.</li>
+<li><b>AI test (experimental):</b> checks if a free AI model running on this Mac (nothing is uploaded) recognises your shots
+like your colour labels. The first time it downloads the model (~150 MB). It shows every frame with your colour and the AI's
+guess (green = same, red = different) and the score per category. It does not change the teaser.</li>
 <li><b>Your selections:</b> you can give longer selections (for example 10 s of party). On import the app looks at every
 selection once (sharpness, steadiness, exposure, movement) and uses its best part: with movement on the drop and in the
 party, calmer in getting ready and church. It uses one bit of every selection before a second one. Clips interpreted at

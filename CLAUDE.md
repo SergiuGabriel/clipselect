@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.5.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.6.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -130,6 +130,18 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 - Updates: the build workflow publishes a GitHub Release named after VER (app.py) with the DMGs + Windows zip; the
   app checks releases/latest at start and in Settings (repo must stay public). Bump VER for every release.
 - Error log: app.log (rotating) in the data folder; crashes are logged and shown; Settings > Save error report.
+
+## v2.6.0
+- ai.py: AI test (CLIP ViT-B/32, Xenova/clip-vit-base-patch32 quantized ONNX from Hugging Face, downloaded once into
+  <data>/ai_model; onnxruntime + tokenizers, lazily imported). One frame per selection (up to 25 per colour), prompts
+  per category (ai.PROMPTS), result = his colour vs AI guess. Only a TEST: it does not change the teaser. Never run on
+  the real model in Claude's sandbox (Hugging Face is not reachable there): plumbing tested with a fake ONNX model.
+  The real model's input/output names are handled flexibly (outputs containing "embeds", else first output).
+- Teaser projects (store.app["teaser_projects"], "teaser_current"); selection analysis cancellable, saved every 25
+  selections (resumes), jobs = half the cores; teaser job shows in Analysis Queue.
+- Info page: one page per <h2> of help_text + search bar. Analysis screen: running on top, progress middle, done below.
+- Queue "Open" bug fixed (clicked(bool) was passed as the key). Footage project button says "View analysis" while
+  its analysis runs. NEW badge in the menu: fixed 30x14.
 
 ## Rules learned the hard way
 - Every clipitem <name> is EXACTLY the file name (e.g. RS-MAIN6210.MP4). DaVinci Resolve links timeline clips to media by

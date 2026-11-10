@@ -128,7 +128,7 @@ def load_footage(xml_path):
     return pieces, skipped
 
 
-def analyse_pieces(pieces, cache=None, progress=None, jobs=2):
+def analyse_pieces(pieces, cache=None, progress=None, jobs=2, cancel=None, save=None):
     """Look at every selection once (quality + movement, 4 samples/s) so the best part of it is used.
     cache: {key: result} (key = file + range + file size/date), filled in place."""
     from concurrent.futures import ThreadPoolExecutor
@@ -150,6 +150,8 @@ def analyse_pieces(pieces, cache=None, progress=None, jobs=2):
             todo.append(p)
 
     def one(p):
+        if cancel and cancel():
+            return
         try:
             r = core.analyze_range(p["path"], p["a"], p["b"])
         except Exception:
@@ -158,10 +160,14 @@ def analyse_pieces(pieces, cache=None, progress=None, jobs=2):
             p["qa"] = r
             cache[p["_k"]] = r
         done[0] += 1
+        if save and done[0] % 25 == 0:        # progress is kept: a stopped analysis continues where it was
+            save(cache)
         if progress:
             progress(f"Looking at your selections: {done[0]} of {len(todo)}", done[0] / max(1, len(todo)))
     with ThreadPoolExecutor(max(1, jobs)) as ex:
         list(ex.map(one, todo))
+    if save:
+        save(cache)
     return len(todo)
 
 

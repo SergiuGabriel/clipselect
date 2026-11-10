@@ -19,16 +19,17 @@ from PySide6.QtWidgets import (QTextBrowser, QAbstractItemView, QApplication, QC
                                QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
                                QMainWindow, QProgressBar, QPushButton, QScrollArea, QSlider, QStackedWidget,
                                QTabWidget, QVBoxLayout, QWidget, QSizePolicy, QTableWidget, QTableWidgetItem,
-                               QHeaderView)
+                               QHeaderView, QCheckBox)
 
 import core
 import director
 import help_text
 import teaser
+import ai
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v2.5.0"
+APP, VER = "MoneyMakingMachine", "v2.6.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
 
@@ -629,10 +630,21 @@ class ProgressPanel(QFrame):
         self.bar.setRange(0, 1000)
         self.bar.setTextVisible(False)
         v.addWidget(self.bar)
+        dr = QHBoxLayout()
         self.detail = lbl("", "muted")
-        v.addWidget(self.detail)
+        dr.addWidget(self.detail, 1)
+        self.b_cancel = btn("Cancel")
+        self.b_cancel.hide()
+        dr.addWidget(self.b_cancel)
+        v.addLayout(dr)
+        self._cancel_cb = None
+        self.b_cancel.clicked.connect(lambda: self._cancel_cb and self._cancel_cb())
         self.t0 = time.time()
         self.hide()
+
+    def allow_cancel(self, cb):
+        self._cancel_cb = cb
+        self.b_cancel.setVisible(cb is not None)
 
     def start(self, text="Starting…"):
         self.t0 = time.time()
@@ -1276,6 +1288,7 @@ class ProjectPage(QWidget):
         self.pv.set_blocks(merged)
 
 class AnalyzingPage(QWidget):
+    """Top: the clips being analysed right now. Middle: the overall progress. Bottom: the finished clips."""
     pause = Signal(bool)
     cancel = Signal()
     back = Signal()
@@ -1283,65 +1296,74 @@ class AnalyzingPage(QWidget):
     def __init__(self):
         super().__init__()
         v = QVBoxLayout(self)
-        v.setContentsMargins(40, 24, 40, 20)
+        v.setContentsMargins(32, 18, 32, 14)
+        v.setSpacing(8)
+        # ---- top: running now
+        self.run_t = lbl("RUNNING NOW", "section")
+        v.addWidget(self.run_t)
+        rs = QScrollArea()
+        rs.setWidgetResizable(True)
+        rs.setFixedHeight(112)
+        rs.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        rw = QWidget()
+        self.run_l = QHBoxLayout(rw)
+        self.run_l.setContentsMargins(0, 0, 0, 0)
+        self.run_l.setAlignment(Qt.AlignLeft)
+        rs.setWidget(rw)
+        v.addWidget(rs)
+        # ---- middle: overall progress
+        mid = QFrame()
+        mid.setObjectName("card")
+        mv = QVBoxLayout(mid)
+        mv.setContentsMargins(20, 14, 20, 14)
+        mv.setSpacing(6)
+        hdr = QHBoxLayout()
         ic = QLabel()
-        ic.setPixmap(icon_pix("film", 48))
-        v.addWidget(ic, 0, Qt.AlignHCenter)
-        t = lbl("Analyzing Your Footage", "h2")
-        v.addWidget(t, 0, Qt.AlignHCenter)
-        v.addWidget(lbl("Now we play the waiting game...", "muted"), 0, Qt.AlignHCenter)
-        v.addSpacing(8)
-        box = QWidget()
-        box.setMaximumWidth(560)
-        box.setMinimumWidth(560)
-        bv = QVBoxLayout(box)
-        bv.setContentsMargins(0, 0, 0, 0)
+        ic.setPixmap(icon_pix("film", 40))
+        hdr.addWidget(ic)
+        tt = QVBoxLayout()
+        tt.addWidget(lbl("Analyzing Your Footage", "h2"))
+        tt.addWidget(lbl("Now we play the waiting game...", "muted"))
+        hdr.addLayout(tt, 1)
+        self.b_pause = btn("Pause Analysis", slot=self._toggle)
+        hdr.addWidget(self.b_pause)
+        hdr.addWidget(btn("Cancel", slot=self.cancel.emit))
+        mv.addLayout(hdr)
         row = QHBoxLayout()
-        row.addWidget(lbl("Overall Progress", "muted"))
-        row.addStretch()
-        self.pct = lbl("0%", "muted")
+        self.count = lbl("", "muted")
+        row.addWidget(self.count, 1)
+        self.pct = lbl("0%")
+        self.pct.setStyleSheet(f"color:{C['HOT']};font-weight:700")
         row.addWidget(self.pct)
-        bv.addLayout(row)
+        mv.addLayout(row)
         self.bar = QProgressBar()
         self.bar.setObjectName("big")
         self.bar.setRange(0, 1000)
         self.bar.setTextVisible(False)
-        bv.addWidget(self.bar)
+        mv.addWidget(self.bar)
         self.eta = lbl("", "muted")
-        bv.addWidget(self.eta, 0, Qt.AlignHCenter)
-        self.count = lbl("0 of 0 videos completed", "muted")
-        bv.addWidget(self.count, 0, Qt.AlignHCenter)
-        v.addWidget(box, 0, Qt.AlignHCenter)
-        br = QHBoxLayout()
-        br.setAlignment(Qt.AlignHCenter)
-        self.b_pause = btn("Pause Analysis", slot=self._toggle)
+        mv.addWidget(self.eta)
+        foot = QHBoxLayout()
+        foot.addWidget(lbl("It keeps running in the background: you can leave this screen and come back from Analysis "
+                           "Queue (Open) or from the project (View analysis).", "muted", True), 1)
+        foot.addWidget(btn("←  Return to project", "link", self.back.emit))
+        mv.addLayout(foot)
+        v.addWidget(mid)
+        # ---- bottom: finished
+        self.ok_t = lbl("COMPLETED", "section")
+        v.addWidget(self.ok_t)
+        os_ = QScrollArea()
+        os_.setWidgetResizable(True)
+        ow = QWidget()
+        self.ok_g = QGridLayout(ow)
+        self.ok_g.setAlignment(Qt.AlignTop)
+        self.ok_g.setContentsMargins(0, 0, 8, 0)
+        self.ok_g.setColumnStretch(0, 1)
+        self.ok_g.setColumnStretch(1, 1)
+        os_.setWidget(ow)
+        v.addWidget(os_, 1)
+        self.cards, self.total, self.fin, self.part, self.state = [], 0, 0, [], []
         self.paused = False
-        br.addWidget(self.b_pause)
-        br.addWidget(btn("Cancel", slot=self.cancel.emit))
-        v.addLayout(br)
-        note = lbl("This analysis will continue in the background.\nYou can safely return to your project and check progress from the Queue or History tab.", "muted")
-        note.setAlignment(Qt.AlignCenter)
-        note.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        v.addWidget(note, 0, Qt.AlignHCenter)
-        v.addWidget(btn("←  Return to project", "link", self.back.emit), 0, Qt.AlignHCenter)
-        cols = QHBoxLayout()
-        cols.setSpacing(20)
-        self.in_l, self.ok_l = QVBoxLayout(), QVBoxLayout()
-        self.in_t, self.ok_t = lbl("IN PROGRESS", "section"), lbl("COMPLETED", "section")
-        for title, lay in ((self.in_t, self.in_l), (self.ok_t, self.ok_l)):
-            c = QVBoxLayout()
-            c.addWidget(title)
-            sc = QScrollArea()
-            sc.setWidgetResizable(True)
-            w = QWidget()
-            lay.setAlignment(Qt.AlignTop)
-            lay.setContentsMargins(0, 0, 8, 0)
-            w.setLayout(lay)
-            sc.setWidget(w)
-            c.addWidget(sc, 1)
-            cols.addLayout(c, 1)
-        v.addLayout(cols, 1)
-        self.cards, self.total, self.fin, self.part = [], 0, 0, []
 
     def _toggle(self):
         self.paused = not self.paused
@@ -1349,13 +1371,17 @@ class AnalyzingPage(QWidget):
         self.pause.emit(self.paused)
 
     def start(self, paths):
-        for lay in (self.in_l, self.ok_l):
+        for lay in (self.run_l, self.ok_g):
             while lay.count():
-                lay.takeAt(0).widget().deleteLater()
+                w = lay.takeAt(0).widget()
+                if w:
+                    w.deleteLater()
         self.cards = [JobCard(p) for p in paths]
         for c in self.cards:
-            self.in_l.addWidget(c)
+            c.setFixedWidth(360)
+            c.hide()
         self.total, self.fin, self.part = len(paths), 0, [0.0] * len(paths)
+        self.state = ["waiting"] * len(paths)
         self.t0 = time.time()
         self.paused = False
         self.b_pause.setText("Pause Analysis")
@@ -1365,16 +1391,27 @@ class AnalyzingPage(QWidget):
         f = sum(self.part) / max(1, self.total)
         self.bar.setValue(int(f * 1000))
         self.pct.setText(f"{int(f * 100)}%")
-        self.count.setText(f"Analysing {min(self.total, self.fin + 1)} of {self.total} clips  ·  {self.fin} completed")
+        running = self.state.count("running")
+        waiting = self.state.count("waiting")
+        self.count.setText(f"{self.fin} of {self.total} clips done  ·  {running} running  ·  {waiting} waiting")
         el = time.time() - getattr(self, "t0", time.time())
         self.eta.setText(f"{_fmt_dur(el)} elapsed" + (f"  ·  about {_fmt_dur(el * (1 - f) / f)} left" if 0.03 < f < 1 and el > 3 else ""))
-        self.in_t.setText(f"IN PROGRESS  {self.total - self.fin}")
+        self.run_t.setText(f"RUNNING NOW  {running}")
         self.ok_t.setText(f"COMPLETED  {self.fin}")
+
+    def _running(self, i):
+        if self.state[i] == "waiting":           # the clip has started: show it on top
+            self.state[i] = "running"
+            self.run_l.addWidget(self.cards[i])
+            self.cards[i].show()
+            self._upd()
 
     def thumb(self, i, data):
         self.cards[i].set_thumb(data)
+        self._running(i)
 
     def progress(self, i, f):
+        self._running(i)
         self.part[i] = f
         self.cards[i].set_progress(f)
         self._upd()
@@ -1382,9 +1419,14 @@ class AnalyzingPage(QWidget):
     def finished(self, i, ok, msg=""):
         self.part[i] = 1.0
         self.fin += 1
+        self.state[i] = "done"
         c = self.cards[i]
         c.finish(ok, msg)
-        self.ok_l.insertWidget(0, c)
+        c.setMinimumWidth(0)
+        c.setMaximumWidth(16777215)
+        n = self.fin - 1
+        self.ok_g.addWidget(c, n // 2, n % 2)
+        c.show()
         self._upd()
 
 
@@ -1599,7 +1641,7 @@ class QueuePage(QWidget):
                 top = QHBoxLayout()
                 t = lbl(title, "h2")
                 top.addWidget(t, 1)
-                top.addWidget(btn("Open", slot=lambda k=k: self.open_job.emit(k)))
+                top.addWidget(btn("Open", slot=lambda _=False, k=k: self.open_job.emit(k)))
                 cv.addLayout(top)
                 s = lbl("", "muted", True)
                 cv.addWidget(s)
@@ -2512,6 +2554,8 @@ class SettingsPage(QWidget):
 # ---------------------------------------------------------------- info / how to use
 
 class InfoPage(QWidget):
+    """One page per feature (from the <h2> parts of help_text), a list on the left and a search bar."""
+
     def __init__(self, store):
         super().__init__()
         self.store = store
@@ -2526,27 +2570,82 @@ class InfoPage(QWidget):
             b.setFixedWidth(48)
             top.addWidget(b)
         v.addLayout(top)
+        body = QHBoxLayout()
+        body.setSpacing(18)
+        left = QVBoxLayout()
+        self.search = QLineEdit()
+        self.search.setPlaceholderText("Search…")
+        self.search.setClearButtonEnabled(True)
+        self.search.textChanged.connect(self.refresh_list)
+        left.addWidget(self.search)
+        self.list = QListWidget()
+        self.list.setFixedWidth(250)
+        self.list.currentRowChanged.connect(self.show_row)
+        left.addWidget(self.list, 1)
+        self.hits = lbl("", "muted")
+        left.addWidget(self.hits)
+        body.addLayout(left)
         self.view = QTextBrowser()
         self.view.setOpenExternalLinks(True)
         self.view.setStyleSheet(f"QTextBrowser{{background:{C['BG']};border:none;color:#c9c9c9;font-size:13px}}")
         self.view.document().setDefaultStyleSheet(
-            "h1{font-size:20px;color:#ececec;margin-bottom:6px} h2{font-size:16px;color:#ececec;margin-top:18px}"
+            "h1{font-size:20px;color:#ececec;margin-bottom:6px} h2{font-size:18px;color:#ececec}"
             "h3{font-size:13px;color:#d6d6d6;margin-top:10px} li{margin-bottom:4px} b{color:#ececec}")
-        v.addWidget(self.view, 1)
-        v.addWidget(QLabel(f'<span style="color:{C["MUTED"]}">{APP} {VER} · </span>'
-                           f'<a href="{AUTHOR_URL}" style="color:{C["HOT"]};text-decoration:none">by {AUTHOR}</a>'),
-                    0, Qt.AlignLeft)
-        self.findChildren(QLabel)[-1].setOpenExternalLinks(True)
+        body.addWidget(self.view, 1)
+        v.addLayout(body, 1)
+        foot = QLabel(f'<span style="color:{C["MUTED"]}">{APP} {VER} · </span>'
+                      f'<a href="{AUTHOR_URL}" style="color:{C["HOT"]};text-decoration:none">by {AUTHOR}</a>')
+        foot.setOpenExternalLinks(True)
+        v.addWidget(foot, 0, Qt.AlignLeft)
+        self.sections, self.shown = [], []
         self.set_lang(store.app.get("lang", "ro"), save=False)
+
+    @staticmethod
+    def _split(html, lang):
+        import re as _re
+        parts = _re.split(r"(?=<h2>)", html)
+        out = [("Prezentare generală" if lang == "ro" else "Overview", parts[0])]
+        for p in parts[1:]:
+            m = _re.search(r"<h2>(.*?)</h2>", p, _re.S)
+            out.append((_re.sub(r"<[^>]+>", "", m.group(1)).strip() if m else "…", p))
+        return out
 
     def set_lang(self, lang, save=True):
         for b, on in ((self.b_ro, lang == "ro"), (self.b_en, lang == "en")):
             b.setProperty("active", on)
             repolish(b)
-        self.view.setHtml(help_text.HELP[lang])
+        self.sections = self._split(help_text.HELP[lang], lang)
+        self.search.setPlaceholderText("Caută…" if lang == "ro" else "Search…")
+        self.refresh_list()
         if save:
             self.store.app["lang"] = lang
             self.store.save_app()
+
+    def refresh_list(self):
+        import re as _re
+        q = self.search.text().strip().lower()
+        plain = lambda h: _re.sub(r"\s+", " ", _re.sub(r"<[^>]+>", " ", h)).lower()
+        self.shown = [s for s in self.sections if not q or q in plain(s[1]) or q in s[0].lower()]
+        self.list.blockSignals(True)
+        self.list.clear()
+        for t, _ in self.shown:
+            self.list.addItem(t)
+        self.list.blockSignals(False)
+        self.hits.setText("" if not q else (f"{len(self.shown)} page(s) found" if self.shown else "Nothing found"))
+        if self.shown:
+            self.list.setCurrentRow(0)
+            self.show_row(0)
+        else:
+            self.view.setHtml("")
+
+    def show_row(self, r):
+        if not (0 <= r < len(self.shown)):
+            return
+        self.view.setHtml(self.shown[r][1])
+        q = self.search.text().strip()
+        if q:
+            self.view.moveCursor(self.view.textCursor().MoveOperation.Start)
+            self.view.find(q)                       # jump to and select the first match
 
 
 # ---------------------------------------------------------------- teaser studio
@@ -2659,6 +2758,106 @@ class ShotStrip(QWidget):
             x += 80
 
 
+class AITestDialog(QDialog):
+    """Shows the AI's guess on HIS frames: every thumbnail with his colour and the AI's category (green = same)."""
+
+    def __init__(self, parent, pieces, base):
+        super().__init__(parent)
+        self.setWindowTitle("AI test: does the AI see what you labelled?")
+        self.resize(1180, 820)
+        self.setStyleSheet(f"QDialog{{background:{C['BG']}}}")
+        v = QVBoxLayout(self)
+        v.setContentsMargins(20, 16, 20, 16)
+        v.addWidget(lbl("AI test (local, free)", "h1"))
+        v.addWidget(lbl("One frame from the middle of up to 25 selections per colour is shown to an image model (CLIP, runs on "
+                        "this Mac, nothing is uploaded). It guesses the kind of shot; green = same as your label, red = "
+                        "different. The first time the model is downloaded once (~150 MB).", "muted", True))
+        self.pp = ProgressPanel()
+        v.addWidget(self.pp)
+        self.table = QLabel("")
+        self.table.setTextFormat(Qt.RichText)
+        v.addWidget(self.table)
+        r = QHBoxLayout()
+        self.only = QCheckBox("Show only the shots where the AI disagrees")
+        self.only.toggled.connect(self._grid)
+        r.addWidget(self.only)
+        r.addStretch()
+        v.addLayout(r)
+        sc = QScrollArea()
+        sc.setWidgetResizable(True)
+        w = QWidget()
+        self.g = QGridLayout(w)
+        self.g.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        sc.setWidget(w)
+        v.addWidget(sc, 1)
+        self.res, self._stop = None, False
+        self.pp.start("Starting…")
+        self.pp.allow_cancel(self._cancel)
+        self.job = _Runner(lambda progress=None: ai.run_test(pieces, base, 25, progress, lambda: self._stop))
+        self.job.progress.connect(self.pp.set)
+        self.job.done.connect(self._done)
+        self.job.failed.connect(self._failed)
+        self.job.start()
+
+    def _cancel(self):
+        self._stop = True
+
+    def _failed(self, m):
+        self.pp.hide()
+        logging.error("AI test failed: %s", m)
+        hint = (" The first run needs internet to download the model." if "urlopen" in m or "resolve" in m.lower()
+                or "HTTP" in m else "")
+        self.table.setText(f'<span style="color:{C["POOR"]}">The AI test stopped: {m}.{hint} '
+                           f'Settings &gt; Save error report and send it to Claude.</span>')
+
+    def _done(self, res):
+        self.pp.hide()
+        self.res = res
+        acc = res["acc"]
+        tr, tt = sum(a for a, _ in acc.values()), sum(b for _, b in acc.values())
+        rows = "".join(f'<tr><td><span style="color:{teaser.CAT_COLOR[c]}">●</span> {teaser.CAT_NAME[c]}</td>'
+                       f'<td align="right">{r} of {t}</td><td align="right"><b>{(100 * r // t) if t else 0}%</b></td></tr>'
+                       for c, (r, t) in acc.items())
+        self.table.setText(f'<table cellspacing="10"><tr><td><b>Your colour</b></td><td><b>AI agrees</b></td><td></td></tr>'
+                           f'{rows}<tr><td><b>All</b></td><td align="right">{tr} of {tt}</td>'
+                           f'<td align="right"><b>{(100 * tr // tt) if tt else 0}%</b></td></tr></table>')
+        logging.info("AI test: %s", {k: f"{a}/{b}" for k, (a, b) in acc.items()})
+        self._grid()
+
+    def _grid(self):
+        while self.g.count():
+            w = self.g.takeAt(0).widget()
+            if w:
+                w.deleteLater()
+        if not self.res:
+            return
+        rows = [r for r in self.res["rows"] if not self.only.isChecked() or r[2] != r[3]]
+        for n, (p, img, his, g, conf) in enumerate(rows):
+            box = QFrame()
+            ok = his == g
+            box.setStyleSheet(f"QFrame{{border:2px solid {C['GOOD'] if ok else C['POOR']};border-radius:6px;background:#202020}}")
+            bv = QVBoxLayout(box)
+            bv.setContentsMargins(4, 4, 4, 4)
+            pic = QLabel()
+            qi = QImage(img.tobytes(), img.shape[1], img.shape[0], img.shape[1] * 3, QImage.Format_RGB888).copy()
+            pic.setPixmap(QPixmap.fromImage(qi).scaled(160, 160, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            pic.setStyleSheet("border:none")
+            bv.addWidget(pic)
+            cap = QLabel(f'<span style="color:{teaser.CAT_COLOR[his]}">You: {teaser.CAT_NAME[his]}</span><br>'
+                         f'<span style="color:{C["GOOD"] if ok else C["POOR"]}">AI: {teaser.CAT_NAME[g]}</span>'
+                         f'<span style="color:{C["MUTED"]}"> · {int(conf * 100)}%</span>')
+            cap.setStyleSheet("border:none;font-size:11px")
+            bv.addWidget(cap)
+            name = QLabel(Path(p["path"]).name)
+            name.setStyleSheet(f"border:none;font-size:10px;color:{C['MUTED']}")
+            bv.addWidget(name)
+            self.g.addWidget(box, n // 6, n % 6)
+
+    def closeEvent(self, e):
+        self._stop = True
+        super().closeEvent(e)
+
+
 class TeaserPage(QWidget):
     notify = Signal(str)
 
@@ -2691,6 +2890,17 @@ class TeaserPage(QWidget):
         sv.addWidget(lbl("Builds your shortmovie structure (teaser with drop → getting ready → church → party) from your colour "
                          "labels, cut on the beat of your music. Testimonials and vows: add them in Premiere afterwards "
                          "(the export has a marker for every part).", "muted", True))
+        pr = QHBoxLayout()
+        pr.addWidget(lbl("Project", "section"))
+        self.pcombo = QComboBox()
+        self.pcombo.setMinimumWidth(260)
+        self.pcombo.currentIndexChanged.connect(self.switch_project)
+        pr.addWidget(self.pcombo)
+        pr.addWidget(btn("+  New teaser", slot=self.new_project))
+        pr.addWidget(btn("Rename", "link", self.rename_project))
+        pr.addWidget(btn("Delete", "link", self.delete_project))
+        pr.addStretch()
+        sv.addLayout(pr)
         body = QHBoxLayout()
         body.setSpacing(18)
         sv.addLayout(body, 1)
@@ -2768,6 +2978,11 @@ class TeaserPage(QWidget):
         l4.addLayout(r)
         self.order_lbl = lbl("", "muted", True)
         l4.addWidget(self.order_lbl)
+        l5 = card(5, "AI test (experimental)")
+        l5.addWidget(lbl("Checks if a free AI model, running on this Mac, recognises your shots like your colour labels. "
+                         "It does not change your teaser.", "muted", True))
+        self.b_ai = btn("Test the AI on my labelled clips", slot=self.ai_test)
+        l5.addWidget(self.b_ai)
         left.addStretch()
         lscroll.setWidget(lw)
         body.addWidget(lscroll)
@@ -2790,13 +3005,16 @@ class TeaserPage(QWidget):
         self.set_order(store.app.get("teaser_chrono", True))
         self.stack.setCurrentIndex(0)
         self.auto_bounds = None
+        self._fill_projects()
         self._buttons()
         QTimer.singleShot(0, self.restore)
 
     def restore(self):
         """Reload the footage XML, the music and your six moments from last time."""
-        t = self.store.app.get("teaser", {})
+        t = self._cur()
         foot, mus, b = t.get("footage"), t.get("music"), t.get("bounds")
+        if t.get("chrono") is not None:
+            self.set_order(t["chrono"])
         then = (lambda: self._load_music_file(mus, b)) if mus and Path(mus).exists() else None
         if foot and Path(foot).exists():
             self._load_footage(foot, then)
@@ -2813,14 +3031,118 @@ class TeaserPage(QWidget):
         self.pp.set(text, 0.3)
         self.runner = _Runner(fn, *args)
         self.runner.progress.connect(self.pp.set)
-        self.runner.done.connect(lambda r: (self.pp.hide(), done(r)))
+        self.pp.allow_cancel(self._cancel_job)
+        self.runner.done.connect(lambda r: (self.pp.hide(), self.pp.allow_cancel(None), done(r)))
         self.runner.failed.connect(lambda m: (self.pp.hide(), self.summary.setText("Error: " + m)))
         self.runner.start()
 
-    def _remember(self, **kw):
-        t = self.store.app.setdefault("teaser", {})
-        t.update(kw)
+    # ---- projects (one per wedding)
+    def _projects(self):
+        app = self.store.app
+        if "teaser_projects" not in app:
+            old = app.pop("teaser", {})
+            app["teaser_projects"] = [dict(id=uuid.uuid4().hex, name="My first teaser", **old)]
+            app["teaser_current"] = app["teaser_projects"][0]["id"]
+        return app["teaser_projects"]
+
+    def _cur(self):
+        ps = self._projects()
+        return next((p for p in ps if p["id"] == self.store.app.get("teaser_current")), ps[0])
+
+    def _fill_projects(self):
+        self.pcombo.blockSignals(True)
+        self.pcombo.clear()
+        ps = self._projects()
+        for p in ps:
+            self.pcombo.addItem(p["name"], p["id"])
+        self.pcombo.setCurrentIndex(max(0, [p["id"] for p in ps].index(self._cur()["id"])))
+        self.pcombo.blockSignals(False)
+
+    def _busy(self):
+        return bool(self.runner and self.runner.isRunning())
+
+    def switch_project(self, idx):
+        if self._busy():
+            self.summary.setText("Wait for the current job to finish (or Cancel it) before switching projects.")
+            self._fill_projects()
+            return
+        self.store.app["teaser_current"] = self.pcombo.itemData(idx)
         self.store.save_app()
+        self._clear()
+        self.restore()
+
+    def new_project(self):
+        from PySide6.QtWidgets import QInputDialog
+        name, ok = QInputDialog.getText(self, "New teaser", "Name (e.g. the couple):")
+        if not ok or not name.strip() or self._busy():
+            return
+        p = dict(id=uuid.uuid4().hex, name=name.strip())
+        self._projects().append(p)
+        self.store.app["teaser_current"] = p["id"]
+        self.store.save_app()
+        self._fill_projects()
+        self._clear()
+
+    def rename_project(self):
+        from PySide6.QtWidgets import QInputDialog
+        p = self._cur()
+        name, ok = QInputDialog.getText(self, "Rename teaser", "Name:", text=p["name"])
+        if ok and name.strip():
+            p["name"] = name.strip()
+            self.store.save_app()
+            self._fill_projects()
+
+    def delete_project(self):
+        from PySide6.QtWidgets import QMessageBox
+        ps = self._projects()
+        if self._busy() or len(ps) < 2:
+            self.summary.setText("You need at least one teaser project." if len(ps) < 2 else "Wait for the current job.")
+            return
+        p = self._cur()
+        if QMessageBox.question(self, "Delete teaser", f"Delete \"{p['name']}\"? Your files are not touched.") != QMessageBox.Yes:
+            return
+        ps.remove(p)
+        self.store.app["teaser_current"] = ps[0]["id"]
+        self.store.save_app()
+        self._fill_projects()
+        self._clear()
+        self.restore()
+
+    def _clear(self):
+        self.pieces, self.music, self.edit, self.auto_bounds = [], None, None, None
+        self.foot_lbl.setText("")
+        self.mus_lbl.setText("")
+        self.mv.env = None
+        self.mv.set_parts([], None)
+        self.strip.set([], 1.0)
+        for e in self.f.values():
+            e.clear()
+            e.setEnabled(False)
+            e.setStyleSheet("")
+        self.b_detect.setEnabled(False)
+        self.parts_note.setText("")
+        self._buttons()
+
+    def _remember(self, **kw):
+        self._cur().update(kw)
+        self.store.save_app()
+
+    def ai_test(self):
+        if not self.pieces:
+            self.summary.setText("Import your labelled XML first (card 1), then run the AI test.")
+            return
+        try:
+            import onnxruntime  # noqa: F401
+            import tokenizers  # noqa: F401
+        except Exception as e:
+            self.summary.setText(f"The AI parts are missing from this build ({e}).")
+            return
+        AITestDialog(self, self.pieces, self.store.dir).exec()
+
+    def _cancel_job(self):
+        """Stop looking at the selections: what is analysed so far is kept (and the rest continues next time)."""
+        self._stop = True
+        self.pp.title.setText("Stopping… (what is done is kept)")
 
     def pick_footage(self):
         f, _ = QFileDialog.getOpenFileName(self, "Labelled footage XML (from Premiere)", "", "XML (*.xml)")
@@ -2828,6 +3150,7 @@ class TeaserPage(QWidget):
             self._load_footage(f)
 
     def _load_footage(self, f, then=None):
+        self._stop = False                       # reset before the job: a Cancel pressed while reading is kept
         self._foot_path = f
         self._run("Reading your labelled clips and their recording times…", self._read_footage, (f,),
                   lambda r: (self.footage_loaded(r), then and then()))
@@ -2839,9 +3162,9 @@ class TeaserPage(QWidget):
             cache = json.loads(cache_file.read_text("utf-8"))
         except Exception:
             cache = {}
-        n = teaser.analyse_pieces(pieces, cache, progress, self.store.app.get("jobs", 2))
-        if n:
-            cache_file.write_text(json.dumps(cache), "utf-8")
+        save = lambda c: cache_file.write_text(json.dumps(c), "utf-8")
+        jobs = max(2, (os.cpu_count() or 4) // 2)        # light work per clip: use half of the cores
+        teaser.analyse_pieces(pieces, cache, progress, jobs, cancel=lambda: self._stop, save=save)
         return pieces, skipped
 
     def footage_loaded(self, r):
@@ -2856,7 +3179,8 @@ class TeaserPage(QWidget):
         ign = ", ".join(f"{k} {v}" for k, v in skipped.items())
         looked = sum(1 for p in self.pieces if p.get("qa"))
         rows.append(f'<span style="color:{C["MUTED"]}">{looked} of {len(self.pieces)} selections analysed: the best part of each '
-                    f'one is used</span>')
+                    f'one is used' + (" (stopped: the rest continues next time you open this project)" if looked < len(self.pieces) else "")
+                    + '</span>')
         self.foot_lbl.setText(f'<b>{Path(self._foot_path).name}</b><br>' + "<br>".join(rows) +
                               (f'<br><span style="color:{C["MUTED"]}">Ignored: {ign}</span>' if ign else ""))
         self._remember(footage=self._foot_path)
@@ -2948,8 +3272,8 @@ class TeaserPage(QWidget):
             "The teaser is always mixed." if chrono else
             "Mixed: every part keeps its kind of shots (bride, church, party…) but picks them in random order. "
             "Press Shuffle shots for another mix.")
-        self.store.app["teaser_chrono"] = chrono
-        self.store.save_app()
+        if hasattr(self, "pcombo"):
+            self._remember(chrono=chrono)
 
     # ---- build / export
     def _buttons(self):
@@ -3064,7 +3388,9 @@ class Main(QMainWindow):
         new = QLabel("NEW")
         new.setStyleSheet(f"background:{C['POOR']};color:white;font-size:8px;font-weight:800;border-radius:5px;padding:0px 4px")
         new.setAttribute(Qt.WA_TransparentForMouseEvents)
-        nb.addWidget(new)
+        new.setFixedSize(30, 14)
+        new.setAlignment(Qt.AlignCenter)
+        nb.addWidget(new, 0, Qt.AlignVCenter)
         sv.addStretch()
         sv.addWidget(lbl("Local workspace", "muted"))
         h.addWidget(side)
@@ -3094,7 +3420,7 @@ class Main(QMainWindow):
         self.anl.pause.connect(lambda on: self.worker and self.worker.pause(on))
         self.anl.cancel.connect(lambda: self.worker and self.worker.cancel())
         self.res.back.connect(lambda: self.show_page(self.proj))
-        self.queue.open_job.connect(lambda k: self.show_page(self.anl if k == "footage" else self.mc))
+        self.queue.open_job.connect(lambda k: self.show_page({"footage": self.anl, "teaser": self.teaser}.get(k, self.mc)))
         self.qtimer = QTimer(interval=700)
         self.qtimer.timeout.connect(self.refresh_queue)
         self.qtimer.start()
@@ -3109,6 +3435,11 @@ class Main(QMainWindow):
             jp = getattr(self.mc, "_job_p", None) or self.mc.p
             jobs["multicam"] = (f"{'Sync' if mw.mode == 'sync' else 'Auto Edit'} · {jp['name']}", self.mc.job_status,
                                 self.mc.job_progress)
+        tr = getattr(self.teaser, "runner", None)
+        if tr and tr.isRunning():
+            jobs["teaser"] = ("Teaser Studio", self.teaser.pp.title.text(), self.teaser.pp.bar.value() / 1000)
+        running_here = bool(self.worker and self.worker.isRunning() and self.job and self.proj.p is self.job["p"])
+        self.proj.b_an.setText("View analysis" if running_here else "Analyze Footage")
         self.queue.set_jobs(jobs)
         self.nav["queue"].setText(f"Analysis Queue ({len(jobs)})" if jobs else "Analysis Queue")
 
