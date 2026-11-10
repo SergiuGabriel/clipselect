@@ -1990,15 +1990,20 @@ class MulticamPage(QWidget):
         sc.setWidget(holder)
         t1v.addWidget(sc, 1)
         dot = lambda c: f'<span style="color:{c}">●</span>'
-        legend = QLabel(
-            f'{dot(CONF_COL["high"])} <b>High</b> sure &nbsp;&nbsp; {dot(CONF_COL["medium"])} <b>Medium</b> very likely right &nbsp;&nbsp; '
-            f'{dot(CONF_COL["low"])} <b>Check</b> position unsure: on the "check sync" track, not used in the auto edit &nbsp;&nbsp; '
-            f'{dot(CONF_COL["approx"])} <b>By time</b> no usable sound, placed approximately by its clock, not used in the auto edit &nbsp;&nbsp; '
-            f'{dot(CONF_COL["fail"])} <b>Failed</b> not placed (see the Clips tab) &nbsp;&nbsp;·&nbsp;&nbsp; '
-            f'<b>Auto edit</b> row: one colour per camera &nbsp;&nbsp;·&nbsp;&nbsp; <b>Music</b> row (after Auto Edit): every song with its '
-            f'tempo, brighter = more intense, grey = speech, <span style="color:#ff5c8a">pink line</span> = drop')
+        # the legend, one line per item (there is room under the map)
+        rows_ = [(CONF_COL["high"], "High", "sure"),
+                 (CONF_COL["medium"], "Medium", "very likely right"),
+                 (CONF_COL["low"], "Check", "position unsure: on the \"check sync\" track, not used in the auto edit"),
+                 (CONF_COL["approx"], "By time", "no usable sound, placed approximately by its clock, not used in the auto edit"),
+                 (CONF_COL["fail"], "Failed", "not placed (see the Clips tab)"),
+                 (None, "Auto edit row", "one colour per camera"),
+                 (None, "Music row", "after Auto Edit: every song with its tempo, brighter = more intense, grey = speech"),
+                 ("#ff5c8a", "Pink line", "a drop")]
+        legend = QLabel("<table cellspacing='0' cellpadding='3'>" + "".join(
+            f"<tr><td width='18'>{dot(c) if c else ''}</td><td><b style='color:#d6d6d6'>{t}</b></td><td>{d}</td></tr>"
+            for c, t, d in rows_) + "</table>")
         legend.setWordWrap(True)
-        legend.setStyleSheet(f"color:{C['MUTED']};font-size:11px")
+        legend.setStyleSheet(f"color:{C['MUTED']};font-size:12px")
         hv_.addSpacing(6)
         hv_.addWidget(legend)
         hv_.addStretch()

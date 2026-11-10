@@ -124,7 +124,47 @@ intens), vorbirea (gri) și drop-urile (linie roz).</p>
 <p><b>Beat check</b> (sus în proiect): exportă recorder-ul plus un clic pe fiecare beat (mai înalt pe primul beat din măsură,
 un ton lung pe drop) într-un sequence. Îl asculți sau te uiți la waveform în Premiere / DaVinci ca să vezi dacă beat-urile
 cad corect pe muzica ta.</p>
+<h2>On the music: ce înseamnă opțiunile (pe înțelesul tuturor)</h2>
+<p><b>Beat</b> = bătaia pe care o bați din palme pe melodie (1, 2, 3, 4). <b>Măsură</b> (bar) = 4 beat-uri la rând.
+La o melodie de club (128 BPM): 1 beat ≈ 0,5 s, 1 măsură ≈ 2 s. Opțiunile sunt în <b>Auto Director &gt; On the music · all
+projects</b>, contează doar cu <b>Cut on the beat</b> pornit și sunt aceleași pentru toate proiectele.</p>
+<h3>On a drop, change camera every</h3>
+<p>Drop-ul = momentul în care intră basul tare după ce muzica „urcă" și lumea sare. Opțiunea spune cât de des se schimbă
+camera <b>în timpul drop-ului</b>:</p>
+<ul>
+<li><b>1 beat</b> (~0,5 s): foarte agresiv; doar cu multe camere bune (5+), pentru efect scurt.</li>
+<li><b>2 beats</b> (~1 s): energic, ritm de clip; DJ / muzică electronică, 4+ camere.</li>
+<li><b>1 bar</b> (~2 s, implicit): energic dar ușor de urmărit; de obicei o lași așa.</li>
+<li><b>2 bars</b> (~4 s): mai calm; 2-3 camere sau petrecere mai liniștită.</li>
+<li><b>4 bars</b> (~8 s): aproape fără accelerare pe drop.</li>
+</ul>
+<p>Regula: cu cât ai mai multe camere cu cadre bune, cu atât poți merge mai repede. Pe drop, opțiunea are prioritate față
+de Minimum shot.</p>
+<h3>Build-up before a drop</h3>
+<p>Build-up-ul = partea de dinainte de drop în care muzica „crește" (tobe tot mai dese, sunet care urcă, de obicei fără
+bas), cam 4-8 măsuri.</p>
+<ul>
+<li><b>Hold one shot until the drop</b> (implicit): o singură cameră tot build-up-ul, apoi tăietură fix pe drop. Contrastul
+face drop-ul să „lovească"; varianta sigură, merge și cu puține camere.</li>
+<li><b>Cut faster and faster</b>: tăieturi tot mai dese (2 măsuri, 1 măsură, 2 beat-uri) până la drop. Tensiune ca într-un
+teaser; bine la DJ și cu multe camere.</li>
+</ul>
+<h3>Faster cuts when the music is more intense</h3>
+<p>Pentru restul melodiei (nu pentru drop). <b>Pornit</b> (implicit): pe părțile intense cadrele sunt mai scurte (până la
+1 măsură), pe cele calme mai lungi (până la 4 măsuri). <b>Oprit</b>: ritm constant, dat de Minimum shot și Cut pace.
+Oprește-l dacă montajul ți se pare prea agitat sau la evenimente mai elegante.</p>
+<h3>Exemplu</h3>
+<p>DJ, 4 camere, setările implicite: strofa calmă cu cadre de 2-4 măsuri, build-up-ul ținut pe o cameră, tăietură fix pe
+drop, apoi altă cameră la fiecare măsură, după drop iar mai liniștit. Sfat: încearcă „1 bar" și „2 beats": schimbarea e
+instantă, fără să refaci analiza.</p>
 <h2>Teaser Studio</h2>
+<h3>Culorile recomandate (pentru tine și pentru colegi)</h3>
+<p>Teaser Studio știe ce e în cadre doar după <b>culoarea etichetei din Premiere</b>. Ca să meargă la fel pentru oricine,
+folosiți aceleași culori (în Premiere: click dreapta pe clip &gt; <b>Label</b> &gt; culoarea):</p>
+<table cellspacing='0' cellpadding='4'><tr><td><span style='color:#e384b6'>■</span></td><td><b>Rose</b></td><td>mireasa (pregătiri)</td></tr><tr><td><span style='color:#4a6fd6'>■</span></td><td><b>Blue</b></td><td>mirele (pregătiri)</td></tr><tr><td><span style='color:#9638c4'>■</span></td><td><b>Purple</b></td><td>cuplu (first look, ședință, după biserică)</td></tr><tr><td><span style='color:#9a6a3a'>■</span></td><td><b>Brown</b></td><td>biserica</td></tr><tr><td><span style='color:#e3c74a'>■</span></td><td><b>Yellow</b></td><td>sala / locația</td></tr><tr><td><span style='color:#1dc6a8'>■</span></td><td><b>Caribbean</b></td><td>tot sala / locația (ca Yellow)</td></tr><tr><td><span style='color:#6f86e8'>■</span></td><td><b>Iris</b></td><td>petrecerea (doar cadrele de seară)</td></tr><tr><td><span style='color:#a990dd'>■</span></td><td><b>Violet</b></td><td>drona</td></tr><tr><td><span style='color:#c9a77c'>■</span></td><td><b>Tan</b></td><td>interviuri cu invitații · ignorat</td></tr><tr><td><span style='color:#4f8a2f'>■</span></td><td><b>Forest</b></td><td>nest-uri (nested sequences) · ignorat</td></tr><tr><td><span style='color:#d7a6e8'>■</span></td><td><b>Lavender</b></td><td>adjustment layers · ignorat</td></tr></table>
+<p>Sfaturi: etichetați clipurile în bin înainte să le puneți în sequence-ul de selecții; o selecție poate fi și mai lungă
+(de exemplu 10 s de petrecere), aplicația alege singură partea cea mai bună. Clipurile fără culoare sunt ignorate.</p>
+
 <ol>
 <li><b>Footage:</b> în Premiere pui clipurile etichetate pe culori într-un sequence (selects) și dai Export XML. Culori:
 Rose mireasă, Blue mire, Purple cuplu, Brown biserică, Yellow sală, Iris petrecere, Violet dronă. Tan, Forest și Lavender
@@ -323,7 +363,46 @@ intense), speech (grey) and the drops (pink line).</p>
 <p><b>Beat check</b> (top of the project): exports the recorder plus a click on every beat (higher on beat 1 of the bar, a long
 tone on a drop) as one sequence. Listen or look at the waveform in Premiere / DaVinci to see if the beats fall right on your
 music.</p>
+<h2>On the music: what the options mean (in plain words)</h2>
+<p><b>Beat</b> = the pulse you clap to (1, 2, 3, 4). <b>Bar</b> = 4 beats in a row. In a club song (128 BPM): 1 beat ≈ 0.5 s,
+1 bar ≈ 2 s. The options are in <b>Auto Director &gt; On the music · all projects</b>, they only matter with <b>Cut on the
+beat</b> on and they are the same for every project.</p>
+<h3>On a drop, change camera every</h3>
+<p>The drop = the moment the big bass comes in after the music "rises" and people jump. The option says how often the
+camera changes <b>during the drop</b>:</p>
+<ul>
+<li><b>1 beat</b> (~0.5 s): very aggressive; only with many good cameras (5+), for a short effect.</li>
+<li><b>2 beats</b> (~1 s): energetic, music-video rhythm; DJ / electronic music, 4+ cameras.</li>
+<li><b>1 bar</b> (~2 s, default): energetic but easy to watch; usually leave it here.</li>
+<li><b>2 bars</b> (~4 s): calmer; 2-3 cameras or a quieter party.</li>
+<li><b>4 bars</b> (~8 s): almost no speed-up on the drop.</li>
+</ul>
+<p>The rule: the more cameras with good shots, the faster you can go. On a drop this option wins over Minimum shot.</p>
+<h3>Build-up before a drop</h3>
+<p>The build-up = the part before the drop where the music "grows" (faster and faster drums, rising sound, usually no bass),
+about 4-8 bars.</p>
+<ul>
+<li><b>Hold one shot until the drop</b> (default): one camera for the whole build-up, then a cut exactly on the drop. The
+contrast makes the drop hit; the safe choice, works with few cameras too.</li>
+<li><b>Cut faster and faster</b>: cuts closer and closer (2 bars, 1 bar, 2 beats) until the drop. Tension like a teaser;
+good for DJ sets and many cameras.</li>
+</ul>
+<h3>Faster cuts when the music is more intense</h3>
+<p>For the rest of the song (not the drop). <b>On</b> (default): intense parts get shorter shots (down to 1 bar), calm parts
+longer ones (up to 4 bars). <b>Off</b>: a steady rhythm from Minimum shot and Cut pace. Turn it off if the edit feels too
+nervous or for more elegant events.</p>
+<h3>Example</h3>
+<p>DJ, 4 cameras, default settings: calm verse with 2-4 bar shots, the build-up held on one camera, a cut exactly on the
+drop, then another camera every bar, after the drop calmer again. Tip: try "1 bar" and "2 beats": the change is instant,
+no new analysis needed.</p>
 <h2>Teaser Studio</h2>
+<h3>Recommended colours (for you and your colleagues)</h3>
+<p>Teaser Studio knows what is in a shot only from its <b>Premiere label colour</b>. To make it work the same for everyone,
+use the same colours (in Premiere: right-click the clip &gt; <b>Label</b> &gt; the colour):</p>
+<table cellspacing='0' cellpadding='4'><tr><td><span style='color:#e384b6'>■</span></td><td><b>Rose</b></td><td>the bride (getting ready)</td></tr><tr><td><span style='color:#4a6fd6'>■</span></td><td><b>Blue</b></td><td>the groom (getting ready)</td></tr><tr><td><span style='color:#9638c4'>■</span></td><td><b>Purple</b></td><td>the couple (first look, shoot, after church)</td></tr><tr><td><span style='color:#9a6a3a'>■</span></td><td><b>Brown</b></td><td>the church</td></tr><tr><td><span style='color:#e3c74a'>■</span></td><td><b>Yellow</b></td><td>the venue / location</td></tr><tr><td><span style='color:#1dc6a8'>■</span></td><td><b>Caribbean</b></td><td>also the venue / location (like Yellow)</td></tr><tr><td><span style='color:#6f86e8'>■</span></td><td><b>Iris</b></td><td>the party (evening shots only)</td></tr><tr><td><span style='color:#a990dd'>■</span></td><td><b>Violet</b></td><td>the drone</td></tr><tr><td><span style='color:#c9a77c'>■</span></td><td><b>Tan</b></td><td>guest interviews · ignored</td></tr><tr><td><span style='color:#4f8a2f'>■</span></td><td><b>Forest</b></td><td>nests (nested sequences) · ignored</td></tr><tr><td><span style='color:#d7a6e8'>■</span></td><td><b>Lavender</b></td><td>adjustment layers · ignored</td></tr></table>
+<p>Tips: label the clips in the bin before putting them in the selects sequence; a selection can be longer (e.g. 10 s of
+party), the app picks its best part. Clips without a colour are ignored.</p>
+
 <ol>
 <li><b>Footage:</b> in Premiere put your colour-labelled clips in a sequence (selects) and Export XML. Colours: Rose bride,
 Blue groom, Purple couple, Brown church, Yellow venue, Iris party, Violet drone. Tan, Forest and Lavender are ignored.</li>

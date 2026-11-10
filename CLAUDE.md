@@ -176,6 +176,9 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   Slivers (4 frames) from a bar cut short at the end of the music: tiny slots (< max(0.4 s, 0.9 beat)) glued to the
   slot before; only drop / build slots are protected from the sliver clean-up. Whole camera clips on a track (cameras
   not in the edit: check sync / by time) overlapping the edit are expected, not a bug.
+- Sync Map legend: one row per item (table under the map). Info > Teaser Studio: recommended Premiere label colours
+  for colleagues (Rose bride, Blue groom, Purple couple, Brown church, Yellow/Caribbean venue, Iris party, Violet drone,
+  Tan/Forest/Lavender ignored). The owner tried 3 alternative layouts and kept the current interface.
 
 ## Rules learned the hard way
 - Every clipitem <name> is EXACTLY the file name (e.g. RS-MAIN6210.MP4). DaVinci Resolve links timeline clips to media by
