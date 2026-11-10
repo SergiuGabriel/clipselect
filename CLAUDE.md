@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.7.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.7.2), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -164,8 +164,18 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   vectorised, checked against brute force). Outside the music the old 0.5 s grid DP, cuts moved to speech pauses
   (+-1.5 s), slivers < 0.6 * minshot glued to a neighbour. Cut on the beat OFF = old behaviour exactly.
 - Global settings store.app["music"] = drop_beats (1/2/4/8/16, default 4 = 1 bar), buildup (hold / accelerate),
-  energy_cuts (True). Map computed in the Auto Edit job (MCWorker._analyze) and saved in sync.masters[i]["music"].
-- Sync Map "Music" row, XML markers (Song · BPM, DROP), Beat check export (click track + recorder, one sequence).
+  energy_cuts (True). v2.7.1: the controls live in the Auto Director panel ("On the music · all projects", greyed when
+  Cut on the beat is off), NOT in Settings. Auto Director panel and Settings right column are scroll areas (nothing
+  squeezed on small screens). Update check + AI download use certifi (packed apps have no system certificates). Map computed in the Auto Edit job (MCWorker._analyze) and saved in sync.masters[i]["music"].
+- Sync Map "Music" row, Beat check export (click track + recorder, one sequence).
+- v2.7.2 (from his real 9.5 h party XML): NO markers in the multicam export or the beat check (owner's choice; Teaser
+  Studio keeps its 7 part markers). Per-beat tempo wobbled on real music (243 "Song" markers, and the downbeat count
+  restarted at every wobble): music.py now keeps a song id per beat (the tracked song), one tempo per song, downbeats
+  per tracked song. Holes of 2-8 frames: a slot accepted a camera covering 90 %; now slot cost uses the EXACT clip
+  coverage (cover_frac) and a final pass fills any hole with the camera before / after / best that filmed it.
+  Slivers (4 frames) from a bar cut short at the end of the music: tiny slots (< max(0.4 s, 0.9 beat)) glued to the
+  slot before; only drop / build slots are protected from the sliver clean-up. Whole camera clips on a track (cameras
+  not in the edit: check sync / by time) overlapping the edit are expected, not a bug.
 
 ## Rules learned the hard way
 - Every clipitem <name> is EXACTLY the file name (e.g. RS-MAIN6210.MP4). DaVinci Resolve links timeline clips to media by

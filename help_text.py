@@ -112,15 +112,15 @@ beat, primul beat din fiecare măsură, build-up-urile și drop-urile, plus zone
 <li><b>Pe muzică:</b> cadrele încep pe beat, de obicei pe începutul măsurii, și durează 1–4 măsuri (mai scurt când melodia
 e mai intensă, mai lung când e calmă).</li>
 <li><b>Pe drop:</b> o tăietură exact pe drop, apoi o schimbare de cameră la fiecare 1 beat / 2 beat-uri / 1 măsură / 2 măsuri /
-4 măsuri (Settings).</li>
-<li><b>Build-up:</b> un singur cadru până la drop (Hold) sau tăieturi tot mai dese (Accelerate), din Settings.</li>
+4 măsuri (Auto Director).</li>
+<li><b>Build-up:</b> un singur cadru până la drop (Hold) sau tăieturi tot mai dese, din Auto Director.</li>
 <li><b>Pe vorbire</b> (discursuri, toasturi): tăieturile cad în pauzele dintre fraze. Unde beat-ul nu e clar (o baladă fără
 tobe) nu se inventează beat-uri: acolo se taie ca înainte.</li>
 <li><b>Cut on the beat oprit:</b> Auto Edit lucrează exact ca înainte.</li>
 </ul>
-<p><b>Settings &gt; Auto edit on the music</b> e valabil pentru toate proiectele: alegi o dată și rămâne.</p>
+<p>Opțiunile sunt în panoul <b>Auto Director</b> (dreapta, în proiectul Multicam), la <b>On the music · all projects</b>: sunt aceleași pentru toate proiectele, alegi o dată și rămân. Sunt active doar când Cut on the beat e pornit.</p>
 <p><b>Rândul Music</b> de pe Sync Map (după Auto Edit) arată fiecare melodie cu tempo-ul ei, intensitatea (mai luminos = mai
-intens), vorbirea (gri) și drop-urile (linie roz). În XML-ul exportat ai markere pe fiecare melodie și pe fiecare drop.</p>
+intens), vorbirea (gri) și drop-urile (linie roz).</p>
 <p><b>Beat check</b> (sus în proiect): exportă recorder-ul plus un clic pe fiecare beat (mai înalt pe primul beat din măsură,
 un ton lung pe drop) într-un sequence. Îl asculți sau te uiți la waveform în Premiere / DaVinci ca să vezi dacă beat-urile
 cad corect pe muzica ta.</p>
@@ -311,15 +311,15 @@ and the drops, and the parts with speech.</p>
 <li><b>On music:</b> shots start on a beat, usually on beat 1 of the bar, and last 1-4 bars (shorter when the music is more
 intense, longer when it is calm).</li>
 <li><b>On a drop:</b> a cut exactly on the drop, then a camera change every 1 beat / 2 beats / 1 bar / 2 bars / 4 bars
-(Settings).</li>
-<li><b>Build-up:</b> one shot until the drop (Hold) or faster and faster cuts (Accelerate), in Settings.</li>
+(Auto Director).</li>
+<li><b>Build-up:</b> one shot until the drop (Hold) or faster and faster cuts, in Auto Director.</li>
 <li><b>On speech</b> (speeches, toasts): cuts fall in the pauses between sentences. Where the beat is not clear (a ballad
 without drums) no beat is invented: cuts work as before there.</li>
 <li><b>Cut on the beat off:</b> Auto Edit works exactly as before.</li>
 </ul>
-<p><b>Settings &gt; Auto edit on the music</b> is for every project: choose once and it stays.</p>
+<p>The options are in the <b>Auto Director</b> panel (right side of a Multicam project), under <b>On the music · all projects</b>: the same for every project, choose once and they stay. They work when Cut on the beat is on.</p>
 <p>The <b>Music row</b> on the Sync Map (after Auto Edit) shows every song with its tempo, its intensity (brighter = more
-intense), speech (grey) and the drops (pink line). The exported XML has markers on every song and every drop.</p>
+intense), speech (grey) and the drops (pink line).</p>
 <p><b>Beat check</b> (top of the project): exports the recorder plus a click on every beat (higher on beat 1 of the bar, a long
 tone on a drop) as one sequence. Listen or look at the waveform in Premiere / DaVinci to see if the beats fall right on your
 music.</p>

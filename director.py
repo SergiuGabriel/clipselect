@@ -194,7 +194,17 @@ def _music_slots(mm, r0, r1, st, en_at):
         j = max(i + 1, min(j, len(bars_l) - 1))
         slots.append((float(t), float(bars_l[j]), "bar"))
         i = j
-    return slots
+    tiny = max(0.4, 0.9 * bar_len / 4)
+    out = []
+    for sl in slots:
+        if out and sl[1] - sl[0] < tiny:
+            out[-1] = (out[-1][0], sl[1], out[-1][2])
+        else:
+            out.append(sl)
+    if len(out) > 1 and out[0][1] - out[0][0] < tiny:
+        out[1] = (out[0][0], out[1][1], out[1][2])
+        out.pop(0)
+    return out
 
 
 def _slot_dp(cost, kinds, pace, C):
@@ -268,6 +278,17 @@ def build(cams, results, analyses, masters, st):
         mx = max(mn + 1, int(round(st["maxshot"] / GRID)))
         pen = 2 + (100 - st["pace"]) / 100 * 18
         path = _limit_long_shots(_dp(cost, mn, pen), np.where(avail, q, -1e9), avail, mn, mx)
+        cspans = {ci: sorted((off, off + dur) for c2, p, off, dur, a in mem if c2 == ci) for ci in range(C)}
+
+        def cover_frac(ci, a_, b_):
+            """Exact share of [a_, b_] filmed by camera ci (from the clip ends, not the 0.5 s grid)."""
+            tot, cur = 0.0, a_
+            for s0, s1 in cspans[ci]:
+                lo_, hi_ = max(cur, s0), min(b_, s1)
+                if hi_ > lo_:
+                    tot += hi_ - lo_
+                    cur = hi_
+            return tot / max(1e-9, b_ - a_)
         mm = m.get("music") if st["beat"] else None
         music_spans = []
         if mm and mm.get("beats"):
@@ -286,11 +307,12 @@ def build(cams, results, analyses, masters, st):
                     c0, c1 = max(0, c0), min(nT, c1)
                     if c1 <= c0:
                         continue
-                    av = avail[:, c0:c1].mean(1)
+                    av = np.array([cover_frac(ci, a_, b_) for ci in range(C)])
                     qm = np.array([q[ci, c0:c1][avail[ci, c0:c1]].mean() if avail[ci, c0:c1].any() else -1e3 for ci in range(C)])
-                    cst[:, k_] = np.where(av >= 0.9, 100 - qm, 1e4 * (1 - av) + 100 - np.maximum(qm, -100))
+                    # a camera that films the WHOLE slot; one that starts / stops inside it only if nobody else can
+                    cst[:, k_] = np.where(av >= 0.999, 100 - qm, 1e3 + 1e4 * (1 - av) + 100 - np.maximum(qm, -100))
                 cpath = _slot_dp(cst, [x[2] for x in sl], st["pace"], C)
-                music_spans.append((sl[0][0], sl[-1][1], [(a_, b_, cpath[k_]) for k_, (a_, b_, _) in enumerate(sl)]))
+                music_spans.append((sl[0][0], sl[-1][1], [(a_, b_, cpath[k_], kd_) for k_, (a_, b_, kd_) in enumerate(sl)]))
         # segments (skip cells where the chosen camera has no footage)
         segs = []
         for t in range(nT):
@@ -317,7 +339,7 @@ def build(cams, results, analyses, masters, st):
                     pieces_ = nxt
                 out_segs += [[u0, u1, c_] for u0, u1 in pieces_ if u1 - u0 > 0.04]
             for s0, s1, sl in music_spans:
-                out_segs += [[a_, b_, c_] for a_, b_, c_ in sl]
+                out_segs += [[a_, b_, c_] for a_, b_, c_, _k in sl]
             out_segs.sort(key=lambda x: x[0])
             segs = []
             for x in out_segs:                           # merge same camera
@@ -344,7 +366,7 @@ def build(cams, results, analyses, masters, st):
                                 prev[1] = cur[0] = nb
                                 break
             # slivers left where the grid edit meets the music: glued to the shot before (never inside a drop)
-            protect = [(a_, b_) for _, _, sl in music_spans for a_, b_, _c in sl]
+            protect = [(a_, b_) for _, _, sl in music_spans for a_, b_, _c, k_ in sl if k_ in ("drop", "build")]
             short = lambda sg: sg[1] - sg[0] < 0.6 * st["minshot"] and not any(abs(sg[0] - a_) < 1e-6 and abs(sg[1] - b_) < 1e-6 for a_, b_ in protect)
             k = 0
             while k < len(segs):
@@ -382,6 +404,60 @@ def build(cams, results, analyses, masters, st):
                 who = cur[2] if nb < b else prev[2]
                 if 0 <= cell_new < nT and avail[who, cell_new] and nb - prev[0] >= 0.8 * st["minshot"] and cur[1] - nb >= 0.8 * st["minshot"]:
                     prev[1] = cur[0] = float(nb)
+        # no holes: where the chosen camera has no footage (a slot only needs 90 % of it, a clip starts a few frames
+        # late...), the camera before fills in, else the camera after, else the best one that filmed
+        spans = cspans
+
+        def holes(ci, a_, b_):
+            res, cur = [], a_
+            for s0, s1 in spans[ci]:
+                if s1 <= cur:
+                    continue
+                if s0 >= b_:
+                    break
+                if s0 > cur:
+                    res.append((cur, min(s0, b_)))
+                cur = max(cur, s1)
+                if cur >= b_:
+                    break
+            if cur < b_:
+                res.append((cur, b_))
+            return [h for h in res if h[1] - h[0] > 1e-3]
+
+        def covers(ci, a_, b_):
+            return not holes(ci, a_, b_)
+
+        def qmean(ci, a_, b_):
+            c0, c1 = max(0, int((a_ - T0) / GRID)), min(nT, max(int((a_ - T0) / GRID) + 1, int(np.ceil((b_ - T0) / GRID))))
+            v = q[ci, c0:c1]
+            v = v[np.isfinite(v)]
+            return float(v.mean()) if len(v) else -1e9
+        filled = []
+        for k_, (t0, t1, ci) in enumerate(segs):
+            hs = holes(ci, t0, t1)
+            if not hs:
+                filled.append([t0, t1, ci])
+                continue
+            pts = sorted(set([t0, t1] + [x for h in hs for x in h]))
+            nxt = segs[k_ + 1][2] if k_ + 1 < len(segs) else None
+            for a_, b_ in zip(pts, pts[1:]):
+                if b_ - a_ < 1e-3:
+                    continue
+                if not any(h0 - 1e-6 <= a_ and b_ <= h1 + 1e-6 for h0, h1 in hs):
+                    filled.append([a_, b_, ci])
+                    continue
+                prv = filled[-1][2] if filled and abs(filled[-1][1] - a_) < 1e-6 else None
+                cands = [c for c in range(C) if c != ci and covers(c, a_, b_)]
+                if not cands:
+                    continue                       # nobody filmed this moment: a real gap
+                pick = prv if prv in cands else (nxt if nxt in cands else max(cands, key=lambda c: qmean(c, a_, b_)))
+                filled.append([a_, b_, pick])
+        segs = []
+        for x_ in filled:
+            if segs and segs[-1][2] == x_[2] and abs(segs[-1][1] - x_[0]) < 1e-6:
+                segs[-1][1] = x_[1]
+            else:
+                segs.append(list(x_))
         # map to clip pieces
         pieces = []
         for t0, t1, ci in segs:
@@ -408,9 +484,15 @@ def build(cams, results, analyses, masters, st):
 def song_starts(mm):
     """(time, tempo) where every song starts: a tempo change (> 4 %) or a gap in the beats."""
     b, bp = mm.get("beats", []), mm.get("bpm", [])
+    sg = mm.get("song") or [None] * len(b)
     out = []
     for i in range(len(b)):
-        if i == 0 or abs(bp[i] - bp[i - 1]) / max(1e-6, bp[i - 1]) > 0.04 or b[i] - b[i - 1] > 2.5 * 60 / max(1e-6, bp[i - 1]):
+        new = i == 0 or b[i] - b[i - 1] > 2.5 * 60 / max(1e-6, bp[i - 1])
+        if sg[i] is not None:
+            new = new or sg[i] != sg[i - 1]
+        else:                                    # maps made before v2.7.2: no song ids
+            new = new or abs(bp[i] - bp[i - 1]) / max(1e-6, bp[i - 1]) > 0.04
+        if new:
             seg = [x for x, t in zip(bp[i:i + 32], b[i:i + 32])]
             out.append((b[i], float(np.median(seg))))
     return out
@@ -483,7 +565,7 @@ def export_beatcheck(masters, out_xml, fps=25.0):
     total = max(round((starts[i] + m["duration"]) * fps) for i, m in enumerate(masters))
     trk = lambda its: f'<track>{"".join(its)}<enabled>TRUE</enabled><locked>FALSE</locked></track>'
     xml = (f'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4"><sequence id="sequence-1">'
-           f'<name>{escape(Path(out_xml).stem)}</name><duration>{total}</duration>{rate_xml}{music_markers(masters, starts, 0.0, fps)}'
+           f'<name>{escape(Path(out_xml).stem)}</name><duration>{total}</duration>{rate_xml}'
            f'<media><video><format>{core._sc(rate_xml, 1920, 1080, "none")}</format><track></track></video>'
            f'<audio><numOutputChannels>2</numOutputChannels>{trk(a1)}{trk(a2)}</audio></media></sequence></xmeml>')
     Path(out_xml).write_text(xml, encoding="utf-8")
@@ -670,7 +752,7 @@ def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=N
     end = max([g + dur(p) for _, p, g in placed] + [starts[i] + m["duration"] for i, m in enumerate(masters)])
     total = int(np.ceil((end - T0) * fps))
     xml = (f'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4"><sequence id="sequence-1">'
-           f'<name>{escape(name)}</name><duration>{total}</duration>{rate_xml}{music_markers(masters, starts, T0, fps)}'
+           f'<name>{escape(name)}</name><duration>{total}</duration>{rate_xml}'
            f'<media><video><format>{sc}</format>{"".join(v_tracks)}</video>'
            f'<audio><numOutputChannels>2</numOutputChannels><format><samplecharacteristics><depth>16</depth><samplerate>{arate}</samplerate>'
            f'</samplecharacteristics></format>{"".join(a_tracks)}</audio></media></sequence></xmeml>')

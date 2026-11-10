@@ -4,3 +4,4 @@ imageio-ffmpeg
 psutil
 onnxruntime
 tokenizers
+certifi

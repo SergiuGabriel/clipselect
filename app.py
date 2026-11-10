@@ -4,6 +4,7 @@ import logging
 import logging.handlers
 import os
 import platform
+import re
 import sys
 import threading
 import time
@@ -30,7 +31,7 @@ import ai
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v2.7.0"
+APP, VER = "MoneyMakingMachine", "v2.7.2"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
 
@@ -44,10 +45,16 @@ def _ver(v):
 
 def latest_release():
     """(tag, page url) of the newest published version, or None."""
+    import ssl
     import urllib.request
+    try:                                  # the packed app has no system certificates: bring our own (certifi)
+        import certifi
+        ctx = ssl.create_default_context(cafile=certifi.where())
+    except Exception:
+        ctx = ssl.create_default_context()
     req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/releases/latest",
                                  headers={"User-Agent": "MoneyMakingMachine", "Accept": "application/vnd.github+json"})
-    with urllib.request.urlopen(req, timeout=8) as r:
+    with urllib.request.urlopen(req, timeout=10, context=ctx) as r:
         d = json.loads(r.read().decode("utf-8"))
     return d.get("tag_name", ""), d.get("html_url", "")
 C = dict(BG="#1d1d1d", PANEL="#232323", CARD="#2a2a2a", BORDER="#3a3a3a", TEXT="#d6d6d6", MUTED="#8f8f8f",
@@ -216,10 +223,15 @@ SKIP_EXT = {".xml", ".txt", ".json", ".bim", ".xmp", ".pdf", ".jpg", ".jpeg", ".
             ".lrf", ".lrv"}   # .LRF = DJI low-res proxy, .LRV = GoPro low-res proxy: same sound as the original -> duplicates
 
 
+BEATCHECK_RE = re.compile(r" - beats \d+\.wav$", re.I)     # click tracks made by Beat check
+
+
 def is_proxy(p):
-    """Camera proxies / previews that must never be treated as footage."""
+    """Camera proxies / previews and files made by this app that must never be treated as footage."""
     p = Path(p)
     if p.suffix.lower() in (".lrf", ".lrv"):
+        return True
+    if BEATCHECK_RE.search(p.name) or p.parent.name == "Beat check":
         return True
     return p.parent.name.upper() == "SUB" and p.stem.upper().endswith("S03")   # Sony proxy (M4ROOT/SUB/C0001S03.MP4)
 
@@ -2018,9 +2030,19 @@ class MulticamPage(QWidget):
         # right: auto director
         right = QFrame()
         right.setObjectName("rightpanel")
-        right.setFixedWidth(300)
-        rv = QVBoxLayout(right)
+        right.setFixedWidth(310)
+        ro = QVBoxLayout(right)
+        ro.setContentsMargins(0, 0, 0, 0)
+        rsc = QScrollArea()                      # everything stays readable on a small screen: the panel scrolls
+        rsc.setWidgetResizable(True)
+        rsc.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        rsc.setStyleSheet("QScrollArea{background:transparent;border:none}")
+        rin = QWidget()
+        rin.setStyleSheet("background:transparent")
+        rv = QVBoxLayout(rin)
         rv.setContentsMargins(16, 14, 16, 14)
+        rsc.setWidget(rin)
+        ro.addWidget(rsc, 1)
         rv.addWidget(lbl("AUTO DIRECTOR", "section"))
         rv.addWidget(lbl("Picks the best camera for every moment. Changes apply instantly.", "muted", True))
         rv.addSpacing(6)
@@ -2038,12 +2060,12 @@ class MulticamPage(QWidget):
         br.addWidget(lbl("Cut on the beat"))
         bq = lbl("?", "muted")
         bq.setToolTip("On music: shots follow the bars and beats of the recorder (tempo followed song by song), a cut exactly "
-                      "on every drop, faster cuts when the music is intense (Settings > Auto edit on the music). "
+                      "on every drop, faster cuts when the music is intense (options below). "
                       "On speech: cuts in the pauses between sentences. Off: the old way, on a 0.5 s grid.")
         br.addWidget(bq)
         br.addStretch()
         self.sw_beat = Switch(True)
-        self.sw_beat.toggled.connect(lambda v: self.set_d("beat", v))
+        self.sw_beat.toggled.connect(lambda v: (self.set_d("beat", v), self._music_enabled()))
         br.addWidget(self.sw_beat)
         rv.addLayout(br)
         sb = QHBoxLayout()
@@ -2056,12 +2078,54 @@ class MulticamPage(QWidget):
         self.sw_backup.toggled.connect(lambda v: self.set_d("static_backup", v))
         sb.addWidget(self.sw_backup)
         rv.addLayout(sb)
+        # ---- on the music (the same for every project)
+        rv.addSpacing(12)
+        rv.addWidget(lbl("ON THE MUSIC  ·  ALL PROJECTS", "section"))
+        rv.addWidget(lbl("Used when Cut on the beat is on.", "muted", True))
+        ms = self.store.app.setdefault("music", dict(drop_beats=4, buildup="hold", energy_cuts=True))
+        self.music_box = QWidget()
+        mb = QVBoxLayout(self.music_box)
+        mb.setContentsMargins(0, 4, 0, 0)
+        mb.setSpacing(6)
+        mb.addWidget(lbl("On a drop, change camera every"))
+        self.c_drop = QComboBox()
+        self._drop_vals = [1, 2, 4, 8, 16]
+        self.c_drop.addItems(["1 beat", "2 beats", "1 bar (4 beats)", "2 bars", "4 bars"])
+        self.c_drop.setCurrentIndex(self._drop_vals.index(ms.get("drop_beats", 4)) if ms.get("drop_beats", 4) in self._drop_vals else 2)
+        self.c_drop.currentIndexChanged.connect(lambda i: self._set_music("drop_beats", self._drop_vals[i]))
+        mb.addWidget(self.c_drop)
+        mb.addWidget(lbl("Build-up before a drop"))
+        self.c_build = QComboBox()
+        self.c_build.addItems(["Hold one shot until the drop", "Cut faster and faster"])
+        self.c_build.setCurrentIndex(0 if ms.get("buildup", "hold") == "hold" else 1)
+        self.c_build.currentIndexChanged.connect(lambda i: self._set_music("buildup", "hold" if i == 0 else "accelerate"))
+        mb.addWidget(self.c_build)
+        er = QHBoxLayout()
+        er.addWidget(lbl("Faster cuts when the music is more intense", "", True), 1)
+        self.sw_energy = Switch(ms.get("energy_cuts", True))
+        self.sw_energy.toggled.connect(lambda v: self._set_music("energy_cuts", v))
+        er.addWidget(self.sw_energy, 0, Qt.AlignTop)
+        mb.addLayout(er)
+        rv.addWidget(self.music_box)
         rv.addSpacing(10)
         self.stats = lbl("Press Auto Edit to build the edit.", "muted", True)
         rv.addWidget(self.stats)
         rv.addStretch()
-        rv.addWidget(btn("Export XML", "primary", self.export))
+        eb = QHBoxLayout()
+        eb.setContentsMargins(16, 6, 16, 12)
+        eb.addWidget(btn("Export XML", "primary", self.export))
+        ro.addLayout(eb)
         body.addWidget(right)
+
+    def _set_music(self, k, v):
+        """Music options are global: every multicam project uses them."""
+        self.store.app.setdefault("music", {})[k] = v
+        self.store.save_app()
+        if self.p and self.p.get("sync"):
+            self.timer.start()
+
+    def _music_enabled(self):
+        self.music_box.setEnabled(bool(self.sw_beat.on))
 
     # ---- load / migrate
     def load(self, p):
@@ -2073,6 +2137,7 @@ class MulticamPage(QWidget):
         p.setdefault("dir", dict(director.DEFAULTS))
         p["dir"] = {**director.DEFAULTS, **p["dir"]}
         self.title.setText(p["name"])
+        QTimer.singleShot(0, self._music_enabled)
         for k, r in self.d_rows.items():
             r.set(p["dir"][k])
         self.sw_beat.set(p["dir"]["beat"])
@@ -2419,14 +2484,19 @@ class MulticamPage(QWidget):
             self.status.setText("Beat check needs the music map: press Auto Edit first (it reads the beats and bars).")
             return
         first = next((m["path"] for m in s["masters"] if m.get("path")), None)
-        out, _ = QFileDialog.getSaveFileName(self, "Save beat check", str(Path(first).parent / f"{self.p['name']} - beat check.xml"),
+        folder = Path(first).parent / "Beat check"           # its own folder: never mixed with the footage
+        try:
+            folder.mkdir(exist_ok=True)
+        except Exception:
+            folder = Path(first).parent
+        out, _ = QFileDialog.getSaveFileName(self, "Save beat check", str(folder / f"{self.p['name']} - beat check.xml"),
                                              "XML (*.xml)")
         if not out:
             return
         try:
             n = director.export_beatcheck(s["masters"], out)
             self.status.setText(f"Beat check saved ({n} recorder file(s) + click track). Import the XML: A1 = recorder, A2 = clicks "
-                                "(high = beat 1 of the bar, long tone = drop). Markers = songs and drops.")
+                                "(high = beat 1 of the bar, long tone = drop).")
             logging.info("beat check exported: %s", out)
         except Exception as e:
             logging.exception("beat check failed")
@@ -2501,7 +2571,7 @@ class SettingsPage(QWidget):
                             "for the formats it supports (not every camera codec is supported, the app falls back automatically).\n"
                             "• Sync alone is fast. Only Auto Edit needs the full video analysis.", "muted", True))
         right.addSpacing(8)
-        self.r_jobs = SliderRow("Parallel jobs", f"How many clips are analysed / read at the same time (your Mac has {self.cores} cores).",
+        self.r_jobs = SliderRow("Parallel jobs", f"How many clips are analysed / read at the same time (your Mac has {self.cores} core{"s" if self.cores != 1 else ""}).",
                                 store.app["jobs"], lo=1, hi=max(2, self.cores), suffix="")
         self.r_jobs.changed.connect(self.set_jobs)
         right.addWidget(self.r_jobs)
@@ -2512,36 +2582,6 @@ class SettingsPage(QWidget):
         self.sw_hw.toggled.connect(self.set_hw)
         hw.addWidget(self.sw_hw)
         right.addLayout(hw)
-        right.addSpacing(18)
-        right.addWidget(lbl("Auto edit on the music", "h2"))
-        right.addWidget(lbl("For every multicam project (when Cut on the beat is on). The program reads the beat, the bars, "
-                            "the build-ups and the drops of the recorder, song by song.", "muted", True))
-        ms = store.app.setdefault("music", dict(drop_beats=4, buildup="hold", energy_cuts=True))
-        dr = QHBoxLayout()
-        dr.addWidget(lbl("On a drop, change camera every"))
-        self.b_drop = {}
-        for nb_, t in ((1, "1 beat"), (2, "2 beats"), (4, "1 bar"), (8, "2 bars"), (16, "4 bars")):
-            b = btn(t, "seg", lambda _=False, x=nb_: self._set_music("drop_beats", x))
-            self.b_drop[nb_] = b
-            dr.addWidget(b)
-        dr.addStretch()
-        right.addLayout(dr)
-        bu = QHBoxLayout()
-        bu.addWidget(lbl("Build-up before a drop"))
-        self.b_bu = {"hold": btn("Hold one shot until the drop", "seg", lambda: self._set_music("buildup", "hold")),
-                     "accelerate": btn("Cut faster and faster", "seg", lambda: self._set_music("buildup", "accelerate"))}
-        for b in self.b_bu.values():
-            bu.addWidget(b)
-        bu.addStretch()
-        right.addLayout(bu)
-        en = QHBoxLayout()
-        en.addWidget(lbl("Faster cuts when the music is more intense (1 to 4 bars per shot)"))
-        en.addStretch()
-        self.sw_en = Switch(ms.get("energy_cuts", True))
-        self.sw_en.toggled.connect(lambda v: self._set_music("energy_cuts", v))
-        en.addWidget(self.sw_en)
-        right.addLayout(en)
-        self._show_music()
         right.addSpacing(18)
         right.addWidget(lbl("Updates and problems", "h2"))
         ur = QHBoxLayout()
@@ -2558,29 +2598,19 @@ class SettingsPage(QWidget):
         right.addWidget(lbl("When something does not work: save the report and send it to Claude. It contains the app's log "
                             "(what it did and any errors) and basic info about your computer, no video.", "muted", True))
         right.addStretch()
-        body.addLayout(right, 1)
+        rw_ = QWidget()
+        rw_.setLayout(right)
+        rs_ = QScrollArea()                       # nothing gets squeezed: the column scrolls on a small screen
+        rs_.setWidgetResizable(True)
+        rs_.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        rs_.setStyleSheet("QScrollArea{border:none}")
+        rs_.setWidget(rw_)
+        body.addWidget(rs_, 1)
         v.addLayout(body, 1)
         self.timer = QTimer(interval=2000)
         self.timer.timeout.connect(self.refresh)
 
     update_found = Signal(str)
-    music_changed = Signal()
-
-    def _set_music(self, k, v):
-        self.store.app.setdefault("music", {})[k] = v
-        self.store.save_app()
-        self._show_music()
-        self.music_changed.emit()
-
-    def _show_music(self):
-        ms = self.store.app.get("music", {})
-        for v, b in self.b_drop.items():
-            b.setProperty("active", ms.get("drop_beats", 4) == v)
-            repolish(b)
-        for k, b in self.b_bu.items():
-            b.setProperty("active", ms.get("buildup", "hold") == k)
-            repolish(b)
-
     def check_updates(self, silent=True):
         self.upd.setText("Checking…")
         self._uw = _Runner(lambda: latest_release())
@@ -2594,8 +2624,10 @@ class SettingsPage(QWidget):
             why = "no version has been published on GitHub yet (the first one appears after the next build)"
         elif "403" in m or "429" in m:
             why = "GitHub refused the check for now (too many checks), try again later"
+        elif "CERTIFICATE" in m.upper() or "SSL" in m.upper():
+            why = "the secure connection could not be checked (certificates), send the error report to Claude"
         else:
-            why = "no internet connection or GitHub did not answer"
+            why = f"no internet connection or GitHub did not answer ({m[:60]})"
         self.upd.setText(f"You have {VER}. Could not check for updates: {why}.")
 
     def _update_result(self, r, silent):
@@ -2648,7 +2680,7 @@ class SettingsPage(QWidget):
 
     def refresh(self):
         gb = lambda b: f"{b / 1024 ** 3:.1f} GB"
-        self.cards["cpu"].setText(f"{self.cores} cores")
+        self.cards["cpu"].setText(f"{self.cores} core{'s' if self.cores != 1 else ''}")
         try:
             import psutil
         except Exception:
@@ -3530,7 +3562,6 @@ class Main(QMainWindow):
         self.info = InfoPage(self.store)
         self.teaser = TeaserPage(self.store)
         self.toast = Toast(self)
-        self.settings.music_changed.connect(lambda: self.mc.p and self.mc.recompute())
         self.res.export_done = lambda name: (self.toast.show_msg(f"XML saved: {name}"), logging.info("footage export %s", name))
         self.teaser.notify.connect(self.toast.show_msg)
         for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser):

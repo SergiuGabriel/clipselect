@@ -152,7 +152,7 @@ def analyze(x, progress=None):
     regions = merged
     per_at = lambda t: float(np.interp(t, centers, period))
     # ---- beats, region by region
-    beats, bpms = [], []
+    beats, bpms, sid = [], [], []
     songs = []
     for r0, r1, k in regions:
         if k != 2:
@@ -171,7 +171,7 @@ def analyze(x, progress=None):
             v = edges[k + 1] - (2.0 if k + 1 < len(cuts) else 0.0)
             if v - u > 6:
                 songs.append((u, v))
-    for r0, r1 in songs:
+    for si, (r0, r1) in enumerate(songs):
         a, b = int(r0 * FPS), int(r1 * FPS)
         P = per_at(r0 + 4)
         first = env[a:a + int(16 * P) + 1]
@@ -205,6 +205,7 @@ def analyze(x, progress=None):
             tt = t / FPS + T_OFF
             beats.append(tt)
             bpms.append(60 * FPS / P)
+            sid.append(si)
             Pl = per_at(t / FPS)
             P = 0.7 * Pl + 0.3 * last_int if abs(last_int - Pl) < 0.15 * Pl else Pl
             nt = t + P
@@ -214,7 +215,7 @@ def analyze(x, progress=None):
         progress(0.75)
     # octave check per song: if every other beat is much weaker, those are off-beats (hats): keep the strong half
     if beats:
-        bt, bp = np.array(beats), np.array(bpms)
+        bt, bp, sd = np.array(beats), np.array(bpms), np.array(sid)
         keep = np.ones(len(bt), bool)
         for r0, r1 in songs:
             k = np.where((bt >= r0) & (bt < r1 + T_OFF + 0.1))[0]
@@ -227,9 +228,10 @@ def analyze(x, progress=None):
                 weak = k[1::2] if e > o else k[0::2]
                 keep[weak] = False
                 bp[k] = bp[k] / 2
-        beats, bpms = list(bt[keep]), list(bp[keep])
+        beats, bpms, sid = list(bt[keep]), list(bp[keep]), list(sd[keep])
     beats = np.array(beats)
     bpms = np.array(bpms)
+    sid = np.array(sid, int)
     if len(beats):
         strength = np.array([env[max(0, int((b - T_OFF) * FPS) - 3):int((b - T_OFF) * FPS) + 4].max(initial=0) for b in beats])
         good = strength >= 0.15 * np.median(strength)
@@ -237,15 +239,19 @@ def analyze(x, progress=None):
         keep = good.copy()
         run = np.convolve(good.astype(int), np.ones(5, int), "same")
         keep |= run >= 3
-        beats, bpms = beats[keep], bpms[keep]
+        beats, bpms, sid = beats[keep], bpms[keep], sid[keep]
     if len(beats):
         beats = np.array([_attack(x, b, 60 / max(1, bp)) for b, bp in zip(beats, bpms)])
         keep = np.r_[True, np.diff(beats) > 0.18]
-        beats, bpms = beats[keep], bpms[keep]
+        beats, bpms, sid = beats[keep], bpms[keep], sid[keep]
+    # one tempo per song (the tracker's per-beat value wobbles a little on real music)
+    for k in set(sid.tolist()):
+        m_ = sid == k
+        bpms[m_] = np.median(bpms[m_])
     # ---- songs (tempo steady inside) and downbeats
     down = np.zeros(len(beats), bool)
     if len(beats):
-        cut = [0] + [i for i in range(1, len(beats)) if abs(bpms[i] - bpms[i - 1]) / bpms[i - 1] > 0.04
+        cut = [0] + [i for i in range(1, len(beats)) if sid[i] != sid[i - 1]
                      or beats[i] - beats[i - 1] > 2.5 * 60 / bpms[i - 1]] + [len(beats)]
         fb = lambda t: int(min(len(bass) - 1, max(0, (t - T_OFF) * FPS)))
         for s, e in zip(cut, cut[1:]):
@@ -344,5 +350,6 @@ def analyze(x, progress=None):
     if progress:
         progress(1.0)
     return dict(beats=np.round(beats, 4).tolist(), down=[int(i) for i in np.where(down)[0]], bpm=np.round(bpms, 1).tolist(),
+                song=[int(i) for i in sid],
                 regions=reg_out, drops=drops, builds=builds, energy=dict(rate=2, v=np.round(energy, 3).tolist()),
                 pauses=pauses, duration=round(dur, 3))

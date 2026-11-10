@@ -56,7 +56,13 @@ def ensure_model(base, progress=None, cancel=None):
             continue
         req = urllib.request.Request(URL.format(repo=REPO, file=f), headers={"User-Agent": "MoneyMakingMachine"})
         tmp = dest.with_suffix(dest.suffix + ".part")
-        with urllib.request.urlopen(req, timeout=60) as r, open(tmp, "wb") as out:
+        try:
+            import ssl
+            import certifi
+            ctx = ssl.create_default_context(cafile=certifi.where())
+        except Exception:
+            ctx = None
+        with urllib.request.urlopen(req, timeout=60, context=ctx) as r, open(tmp, "wb") as out:
             total = int(r.headers.get("Content-Length") or 0)
             got = 0
             while True:
