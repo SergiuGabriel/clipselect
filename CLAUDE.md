@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.10.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.10.1), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -254,6 +254,9 @@ Later, only if the owner asks: interviews (local Whisper transcription + stories
 Teaser Studio (only if the AI test scores well).
 Premiere automation: prefer UXP / ExtendScript scripts written by Claude Code over screen-clicking computer use.
 (The notifications, AI test v2 and the Beat check removal were done in v2.10.0.)
+v2.10.1: on the owner's Mac the Core ML provider LOADED SigLIP 2 but FAILED at the first image ("Unable to compute the
+prediction"). ai.Siglip now falls back to the CPU at run time too and writes <data>/ai_model/siglip2/coreml_failed so
+the next runs start on the CPU.
 
 ## Rules learned the hard way
 - Every clipitem <name> is EXACTLY the file name (e.g. RS-MAIN6210.MP4). DaVinci Resolve links timeline clips to media by

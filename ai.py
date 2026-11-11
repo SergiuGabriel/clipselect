@@ -169,16 +169,21 @@ class Siglip:
         import onnxruntime as ort
         from tokenizers import Tokenizer
         folder = Path(folder)
+        self._ort, self._vpath, self._flag = ort, str(folder / plan["vision"]), folder / "coreml_failed"
         prov = ort.get_available_providers()
-        tries = ([["CoreMLExecutionProvider", "CPUExecutionProvider"]] if "CoreMLExecutionProvider" in prov else []) + \
-                [["CPUExecutionProvider"]]
-        self.vis = self.txt = None
-        for p in tries:
+        # Core ML (Mac GPU) is faster but can fail on this big model, at load OR at the first image: then the processor,
+        # and remember it so the next run goes straight to the processor
+        use_coreml = "CoreMLExecutionProvider" in prov and not self._flag.exists()
+        self.vis = None
+        self.on_coreml = False
+        if use_coreml:
             try:
-                self.vis = ort.InferenceSession(str(folder / plan["vision"]), providers=p)
-                break
+                self.vis = ort.InferenceSession(self._vpath, providers=["CoreMLExecutionProvider", "CPUExecutionProvider"])
+                self.on_coreml = True
             except Exception:
-                continue
+                self._flag.write_text("load")
+        if self.vis is None:
+            self.vis = ort.InferenceSession(self._vpath, providers=["CPUExecutionProvider"])
         self.txt = ort.InferenceSession(str(folder / plan["text"]), providers=["CPUExecutionProvider"])
         pc = json.loads((folder / "preprocessor_config.json").read_text("utf-8"))
         sz = pc.get("size", {})
@@ -217,7 +222,16 @@ class Siglip:
         inp = self.vis.get_inputs()[0]
         if "16" in (inp.type or ""):
             x = x.astype(np.float16)
-        out = self.vis.run(None, {inp.name: x})
+        try:
+            out = self.vis.run(None, {inp.name: x})
+        except Exception:
+            if not self.on_coreml:
+                raise
+            self._flag.write_text("run")                    # Core ML cannot run it here: processor from now on
+            self.vis = self._ort.InferenceSession(self._vpath, providers=["CPUExecutionProvider"])
+            self.on_coreml = False
+            inp = self.vis.get_inputs()[0]
+            out = self.vis.run(None, {inp.name: x})
         e = np.asarray(self._pick(out, [o.name for o in self.vis.get_outputs()]), np.float32)
         if e.ndim == 3:
             e = e[:, 0]

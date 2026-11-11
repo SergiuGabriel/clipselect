@@ -33,7 +33,7 @@ import ai
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v2.10.0"
+APP, VER = "MoneyMakingMachine", "v2.10.1"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
 
@@ -3283,6 +3283,7 @@ class AITestDialog(QDialog):
         v.addWidget(self.pp)
         self.table = QLabel("")
         self.table.setTextFormat(Qt.RichText)
+        self.table.setWordWrap(True)
         v.addWidget(self.table)
         r = QHBoxLayout()
         self.only = QCheckBox("Show only the shots where the AI disagrees")
