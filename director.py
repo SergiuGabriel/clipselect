@@ -16,7 +16,10 @@ import sync
 GRID = 0.5
 SR = core.SAMPLE_FPS
 DEFAULTS = dict(minshot=3, maxshot=30, pace=50, energy=60, beat=True, static_backup=False,
-                drop_beats=4, buildup="hold", energy_cuts=True)       # the last three: global (Settings > Auto edit music)
+                drop_beats=4, buildup="hold", energy_cuts=True, pre_frames=0)
+SEQ_FPS = 25.0      # the owner's final sequences are always 25 fps
+PRE_BEAT = 1 / SEQ_FPS   # cuts on the music fall 1 frame (40 ms) before the beat: the eye sees a cut a little late
+SLOW_MIN = 6.0      # shortest shot inside a "Slower cuts" zone (and at least 2 x Minimum shot)       # the last three: global (Settings > Auto edit music)
 CAM_COLORS = ["#a78bfa", "#2dd4bf", "#fb923c", "#22c55e", "#818cf8", "#f472b6", "#38bdf8", "#c4b5fd"]  # = sync.CAM_LABELS
 
 
@@ -176,7 +179,7 @@ def _music_slots(mm, r0, r1, st, en_at):
         k = 1
         while k * bar_len < st["minshot"] * 0.95 and k < 8:
             k *= 2
-        if st.get("energy_cuts", True):
+        if True:                                       # faster cuts when the music is intense: always on
             e = en_at(t, t + k * bar_len)
             if e >= 0.7:
                 k = max(1, k // 2)
@@ -259,7 +262,7 @@ def build(cams, results, analyses, masters, st):
         C = len(cams)
         q = np.full((C, nT), -np.inf)
         bias = (st["energy"] - 50) / 50 * 25
-        static_pen = 40 if st.get("static_backup") else 0
+        static_pen = 0                                  # "static only as backup" was removed: the slider does it
         refs = {}
         for ci in range(C):
             js = [_smooth_jitter(x[4].fs) for x in mem if x[0] == ci]
@@ -289,18 +292,40 @@ def build(cams, results, analyses, masters, st):
                     tot += hi_ - lo_
                     cur = hi_
             return tot / max(1e-9, b_ - a_)
+        g0 = sync.master_starts(masters)[mi]
+        zones = [(max(T0, z0 - g0), min(T1, z1 - g0)) for z0, z1 in st.get("zones", []) if z1 - g0 > T0 and z0 - g0 < T1]
+        in_zone = lambda t: any(z0 - 1e-6 <= t <= z1 + 1e-6 for z0, z1 in zones)
+        pre = PRE_BEAT
         mm = m.get("music") if st["beat"] else None
         music_spans = []
         if mm and mm.get("beats"):
             ev = np.asarray(mm["energy"]["v"], float)
             er = mm["energy"]["rate"]
             en_at = lambda a, b: float(ev[int(a * er):max(int(a * er) + 1, int(b * er))].mean()) if int(a * er) < len(ev) else 0.5
+            parts_ = []
             for r0_, r1_, kind_, _bpm in mm["regions"]:
                 if kind_ != "music":
                     continue
-                sl = _music_slots(mm, max(r0_, T0), min(r1_, T1), st, en_at)
+                pieces_ = [(max(r0_, T0), min(r1_, T1))]
+                for z0, z1 in zones:                     # "Slower cuts" zones: the old way, not on bars
+                    nxt = []
+                    for u0, u1 in pieces_:
+                        if z1 <= u0 or z0 >= u1:
+                            nxt.append((u0, u1))
+                        else:
+                            if z0 > u0:
+                                nxt.append((u0, z0))
+                            if z1 < u1:
+                                nxt.append((z1, u1))
+                    pieces_ = nxt
+                parts_ += [x for x in pieces_ if x[1] - x[0] > 8]
+            for r0_, r1_ in parts_:
+                sl = _music_slots(mm, r0_, r1_, st, en_at)
                 if len(sl) < 2:
                     continue
+                if pre > 0:                              # every cut 1-2 frames BEFORE the beat (looks tighter)
+                    sl = [(a_ - (pre if k_ > 0 else 0), b_ - (pre if k_ < len(sl) - 1 else 0), kd_)
+                          for k_, (a_, b_, kd_) in enumerate(sl)]
                 cst = np.full((C, len(sl)), 1e4)
                 for k_, (a_, b_, _) in enumerate(sl):
                     c0, c1 = int((a_ - T0) / GRID), max(int((a_ - T0) / GRID) + 1, int(np.ceil((b_ - T0) / GRID)))
@@ -388,13 +413,46 @@ def build(cams, results, analyses, masters, st):
                     merged_.append(x_)
             segs = merged_
         # cuts on the beat (old way, only without a music map)
+        # "Slower cuts" zones (folk music...): longer shots, glued to the longer neighbour
+        if zones:
+            slow = max(SLOW_MIN, 2 * st["minshot"])
+            changed = True
+            while changed and len(segs) > 1:
+                changed = False
+                for k, sg in enumerate(segs):
+                    if sg[1] - sg[0] >= slow or not (in_zone(sg[0] + 1e-3) and in_zone(sg[1] - 1e-3)):
+                        continue
+                    nb = [j for j in (k - 1, k + 1) if 0 <= j < len(segs) and abs(segs[j][1 if j < k else 0] - (sg[0] if j < k else sg[1])) < 1e-6
+                          and in_zone(segs[j][0] + 1e-3 if j > k else segs[j][1] - 1e-3)]
+                    if not nb:
+                        continue
+                    nb = [j for j in nb if (segs[j][1] - segs[j][0]) + (sg[1] - sg[0]) <= st["maxshot"]]   # never past Maximum shot
+                    if not nb:
+                        continue
+                    j = max(nb, key=lambda j: segs[j][1] - segs[j][0])
+                    if j < k:
+                        segs[j][1] = sg[1]
+                    else:
+                        segs[j][0] = sg[0]
+                    segs.pop(k)
+                    changed = True
+                    break
+            merged_ = []
+            for x_ in segs:
+                if merged_ and merged_[-1][2] == x_[2] and abs(merged_[-1][1] - x_[0]) < 1e-6:
+                    merged_[-1][1] = x_[1]
+                else:
+                    merged_.append(x_)
+            segs = merged_
         on = np.array(m.get("onsets") or [])
-        if st["beat"] and len(on) and not music_spans:
+        if st["beat"] and len(on) and (not music_spans or zones):
             for k in range(1, len(segs)):
                 prev, cur = segs[k - 1], segs[k]
                 if abs(prev[1] - cur[0]) > 1e-6:
                     continue
                 b = cur[0]
+                if music_spans and not in_zone(b):       # on the music the bars decide; the old snapping only in zones
+                    continue
                 i = np.searchsorted(on, b)
                 cand = [on[j] for j in (i - 1, i) if 0 <= j < len(on) and abs(on[j] - b) <= 0.3]
                 if not cand:
@@ -465,11 +523,24 @@ def build(cams, results, analyses, masters, st):
                 s0, s1 = max(t0, off), min(t1, off + dur)
                 if s1 - s0 > 0.04:
                     pieces.append((ci, p, s0 - off, s1 - off, s0))
+        alt_segs = []
+        for t0, t1, ci in segs:
+            if cams[ci].get("role") == "Static":
+                continue                                    # a static camera is always the safe shot
+            cands = [c for c in range(C) if c != ci and cams[c].get("role") != "Audio" and cover_frac(c, t0, t1) >= 0.999]
+            if cands:
+                alt_segs.append((t0, t1, max(cands, key=lambda c: qmean(c, t0, t1))))
+        alt = []
+        for t0, t1, ci in alt_segs:
+            for c2, p, off, dur, a in sorted((x for x in mem if x[0] == ci), key=lambda x: x[2]):
+                s0, s1 = max(t0, off), min(t1, off + dur)
+                if s1 - s0 > 0.04:
+                    alt.append((ci, p, s0 - off, s1 - off, s0))
         shots = [s[1] - s[0] for s in segs]
         share = {}
         for t0, t1, ci in segs:
             share[ci] = share.get(ci, 0) + t1 - t0
-        out.append(dict(master=mi, T0=T0, T1=T1, segs=[tuple(s) for s in segs], pieces=pieces, music=bool(music_spans),
+        out.append(dict(master=mi, T0=T0, T1=T1, segs=[tuple(s) for s in segs], pieces=pieces, music=bool(music_spans), alt=alt,
                         stats=dict(shots=len(segs), avg=float(np.mean(shots)) if shots else 0.0,
                                    share={ci: v / max(1e-9, sum(share.values())) for ci, v in share.items()})))
     return out
@@ -572,6 +643,11 @@ def export_beatcheck(masters, out_xml, fps=25.0):
     return n
 
 
+def seq_fps(cams=None, results=None, analyses=None):
+    """The sequence frame rate of the export: always 25 fps."""
+    return SEQ_FPS
+
+
 def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=None):
     starts = starts or sync.master_starts(masters)
     ids = dict(clip=0, file=0)
@@ -616,7 +692,7 @@ def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=N
     if not placed:
         raise ValueError("Nothing to export yet: run Sync first.")
     first = vinfo(placed[0][1])
-    rate_xml, fps = core._rate(first.fps)
+    rate_xml, fps = core._rate(SEQ_FPS)                 # final sequences are 25 fps (every camera is conformed)
     T0 = min([0.0] + [g for _, _, g in placed] +
              [starts[results[p]["master"]] + results[p]["offset"] for c in cams if c.get("role") == "Audio"
               for p in c["clips"] if results.get(p) and results[p]["conf"] != "fail"])
@@ -693,6 +769,22 @@ def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=N
                    for c, p, g in sorted(placed, key=lambda x: x[2]) if c == ci]
         v_tracks.append(track(its))
     edit_items = has_edit
+    # "Alternative angle": for every shot on a handheld camera, the second best camera for the same moment, on a
+    # track ABOVE the edit, switched off: enable it / copy a shot down where the first choice is not good
+    altp = []
+    for e in edits or []:
+        if e and e.get("alt"):
+            g0 = starts[e["master"]]
+            altp += [[g0 + s0, g0 + s0 + (b - a), ci, p, a, b] for ci, p, a, b, s0 in e["alt"]]
+    if altp:
+        altp.sort(key=lambda x: x[0])
+        af = [[fr(x[0]), fr(x[1])] for x in altp]
+        for k in range(len(altp) - 1):
+            if abs(altp[k][1] - altp[k + 1][0]) < 0.1:
+                af[k][1] = af[k + 1][0]
+        its = [item(p, a, b, g, lab(ci), f"ALT · {cams[ci]['name']} · {Path(p).stem}", frames=tuple(f))
+               for (g, gend, ci, p, a, b), f in zip(altp, af) if f[1] > f[0]]
+        v_tracks.append(track(its, enabled=False))
     # recorder (an imported XML may have none: the timeline itself was the reference)
     real = [mi for mi, m in enumerate(masters) if m.get("path")]
     arate, ach = ai(masters[real[0]]["path"]) if real else (48000, 0)

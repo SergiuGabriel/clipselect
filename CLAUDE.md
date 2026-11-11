@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.7.2), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.8.1), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -53,6 +53,8 @@ linking to https://www.instagram.com/sergiugabrielcg/.
 - `xmlimport.py` — import of an already synced FCP7 XML for Auto Edit.
 - `music.py` — music map of a recorder (beats with LOCAL tempo, downbeats, regions music/speech/silence, energy,
   drops, build-ups, speech pauses). Used by director.py.
+- `style.py` — Learn my editing style: measures an XML the editor cut himself (shots seen on top, music of its
+  recorder files if on disk) and proposes Auto Director settings; saved in store.app["style"] (this computer only).
 - `teaser.py` — Teaser Studio engine (labels, music parts, beats, drop, edit, XML export).
 - `make_icons.py` — builds icon.icns / icon.ico / icon.png from `icon_source.png` (run in CI before PyInstaller).
 - `.github/workflows/build.yml` — builds macOS DMGs (Apple Silicon + Intel) and a Windows folder with PyInstaller on every push.
@@ -179,6 +181,31 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 - Sync Map legend: one row per item (table under the map). Info > Teaser Studio: recommended Premiere label colours
   for colleagues (Rose bride, Blue groom, Purple couple, Brown church, Yellow/Caribbean venue, Iris party, Violet drone,
   Tan/Forest/Lavender ignored). The owner tried 3 alternative layouts and kept the current interface.
+
+## v2.8.0
+- "Slower cuts" zones: p["zones"] = [[t0, t1]] in timeline seconds, drawn / dragged / right-click-deleted on the SyncMap,
+  exact times typed in the list under the map. In director.build the music slots skip the zones; inside a zone the OLD
+  way (0.5 s grid DP + snapping to the nearest onset within 0.3 s) and short shots glued up to max(6 s, 2 x minshot),
+  never past maxshot. Meant for folk music (live band, changing tempo).
+- Alternative angle: edit["alt"] = second best camera covering the WHOLE shot, never for shots on a Static camera, never
+  the same camera; exported as the TOP video track, enabled FALSE, clips named "ALT · camera · file".
+- Cut before the beat: store.app["music"]["pre_frames"] 0/1/2, every bar / beat boundary moved earlier by n frames of
+  the sequence frame rate (director.seq_fps = the export's first camera rate).
+- Learn my editing style (style.py, button in Auto Director): suggestions minshot (p15), maxshot (p95), pace (median),
+  energy (handheld share, needs the project's files), drop_beats / energy_cuts / pre_frames (needs the recorder files).
+  "Use as my style" -> store.app["style"] -> every NEW multicam project starts with it (Store.new + MulticamPage.load).
+- Rejected by the owner (do not propose again): wide/close camera tags, rescue cut, sound peaks, proxies for analysis,
+  stabilize label, junk bin, colour mismatch; shake must NOT be penalised differently on parties (keep as is).
+
+## v2.8.1 (simplification, owner's decisions)
+- FINAL SEQUENCES ARE 25 fps: the multicam export always makes a 25 fps sequence (director.SEQ_FPS), Footage Selection's
+  default sequence rate is "25" (still selectable there), Teaser Studio was already 25.
+- Cuts on the music fall 1 frame (40 ms) before the beat, fixed (director.PRE_BEAT); no option.
+- Faster cuts on intense music: always on (no switch). Build-up Hold / Cut faster and faster: STAYS an option.
+- Removed: "Static cameras only as backup" (old projects with it on get the slider at >= 85), Teaser "Story order"
+  (always chronological; Shuffle still varies the shots).
+- Learn my editing style stays an OPTION: nothing changes unless the editor applies it; it no longer proposes the
+  automatic things (faster cuts, cut before the beat).
 
 ## Rules learned the hard way
 - Every clipitem <name> is EXACTLY the file name (e.g. RS-MAIN6210.MP4). DaVinci Resolve links timeline clips to media by

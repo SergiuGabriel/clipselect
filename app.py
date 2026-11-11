@@ -25,13 +25,14 @@ from PySide6.QtWidgets import (QTextBrowser, QAbstractItemView, QApplication, QC
 import core
 import director
 import music
+import style
 import help_text
 import teaser
 import ai
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v2.7.2"
+APP, VER = "MoneyMakingMachine", "v2.8.1"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
 
@@ -70,7 +71,7 @@ PRESETS = {"Lenient": (15, 50), "Normal": (25, 65), "Strict": (35, 75)}
 SEQ_SIZES = ["Match footage", "1920 x 1080", "3840 x 2160", "4096 x 2160", "1080 x 1920"]
 SEQ_RATES = ["Match footage", "23.976", "24", "25", "29.97", "30", "50", "59.94", "60"]
 SEQ_FIELDS = {"Lower Field First": "lower", "Upper Field First": "upper", "None (Progressive)": "none"}
-SEQ_DEFAULT = dict(size="Match footage", rate="Match footage", fields="Lower Field First")
+SEQ_DEFAULT = dict(size="Match footage", rate="25", fields="Lower Field First")      # final sequences are 25 fps
 DEFAULT_ON = {k: True for k, _, _ in SLIDERS}
 DEFAULTS = dict(mode="auto", thr=60, mincut=3, cutmoves=True, protect=True, contrast=50, exposure=50, focus=60, importance=40,
                 stability=50, preset="Normal", p1=25, p2=65)
@@ -307,7 +308,9 @@ class Store:
         p = dict(id=uuid.uuid4().hex, name=name, created=datetime.now().isoformat(timespec="seconds"),
                  videos=[], settings=norm_settings({}), history=[], out_dir="", out_name="", out_sw="Premiere Pro", seq=dict(SEQ_DEFAULT))
         if kind == "multicam":
-            p.update(type="multicam", files=[], sync=None, cams=[], infos={}, dir=dict(director.DEFAULTS))
+            mine = self.app.get("style", {}).get("settings", {})          # this computer's learned style
+            p.update(type="multicam", files=[], sync=None, cams=[], infos={},
+                     dir={**director.DEFAULTS, **{k: v for k, v in mine.items() if k in ("minshot", "maxshot", "pace", "energy")}})
         self.projects.append(p)
         self.save()
         return p
@@ -1708,13 +1711,117 @@ def scan_media(paths):
     return out
 
 
+def fmt_hms(t):
+    a = abs(t)
+    return ("-" if t < 0 else "") + f"{int(a // 3600)}:{int(a % 3600 // 60):02d}:{a % 60:04.1f}"
+
+
 class SyncMap(QWidget):
-    """Audio master row, an 'Auto edit' row coloured by camera, then one row per camera."""
+    """Audio master row, an 'Auto edit' row coloured by camera, then one row per camera.
+    "Slower cuts" zones are drawn over it: drag on the map to add one, drag its edges to move them, right-click to
+    delete it (the exact times are edited in the list under the map)."""
+    zones_changed = Signal(list)
+    LEFT = 130
 
     def __init__(self):
         super().__init__()
         self.mdur, self.rows, self.edit, self.tmin, self.tmax = 0.0, [], [], 0.0, 1.0
+        self.zones, self.drag, self.sel = [], None, None
         self.setMinimumHeight(140)
+        self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.ClickFocus)
+
+    # ---- zones
+    def set_zones(self, zones):
+        self.zones = [list(z) for z in zones]
+        self.update()
+
+    def _t(self, x):
+        W = self.width() - self.LEFT - 12
+        return self.tmin + (x - self.LEFT) / max(1.0, W) * max(1e-6, self.tmax - self.tmin)
+
+    def _x(self, t):
+        W = self.width() - self.LEFT - 12
+        return self.LEFT + (t - self.tmin) / max(1e-6, self.tmax - self.tmin) * W
+
+    def _hit(self, x):
+        for i, (z0, z1) in enumerate(self.zones):
+            if abs(self._x(z0) - x) <= 6:
+                return i, 0
+            if abs(self._x(z1) - x) <= 6:
+                return i, 1
+        for i, (z0, z1) in enumerate(self.zones):
+            if self._x(z0) < x < self._x(z1):
+                return i, None
+        return None, None
+
+    def mousePressEvent(self, e):
+        x = e.position().x()
+        if x < self.LEFT or self.tmax <= self.tmin:
+            return
+        i, edge = self._hit(x)
+        if e.button() == Qt.RightButton:
+            if i is not None:
+                from PySide6.QtWidgets import QMenu
+                m = QMenu(self)
+                act = m.addAction("Delete this Slower cuts zone")
+                if m.exec(e.globalPosition().toPoint()) == act:
+                    self.zones.pop(i)
+                    self.sel = None
+                    self.zones_changed.emit(self.zones)
+                    self.update()
+            return
+        if i is not None and edge is not None:
+            self.drag = ("edge", i, edge)
+        elif i is not None:
+            self.sel = i
+            self.update()
+        else:
+            t = self._t(x)
+            self.drag = ("new", t, t)
+
+    def mouseMoveEvent(self, e):
+        x = e.position().x()
+        if not self.drag:
+            i, edge = self._hit(x)
+            self.setCursor(Qt.SizeHorCursor if edge is not None else Qt.ArrowCursor)
+            return
+        t = min(self.tmax, max(self.tmin, self._t(x)))
+        if self.drag[0] == "new":
+            self.drag = ("new", self.drag[1], t)
+        else:
+            _, i, edge = self.drag
+            z = self.zones[i]
+            z[edge] = min(t, z[1] - 2) if edge == 0 else max(t, z[0] + 2)
+        self.update()
+
+    def mouseReleaseEvent(self, e):
+        if not self.drag:
+            return
+        if self.drag[0] == "new":
+            a_, b_ = sorted(self.drag[1:])
+            if b_ - a_ >= 5:                                # shorter = a click, not a zone
+                self.zones.append([a_, b_])
+                self.sel = len(self.zones) - 1
+        self.drag = None
+        # overlapping zones become one
+        zs = sorted(self.zones)
+        out = []
+        for z in zs:
+            if out and z[0] <= out[-1][1]:
+                out[-1][1] = max(out[-1][1], z[1])
+            else:
+                out.append(list(z))
+        self.zones = out
+        self.zones_changed.emit(self.zones)
+        self.update()
+
+    def keyPressEvent(self, e):
+        if e.key() in (Qt.Key_Delete, Qt.Key_Backspace) and self.sel is not None and self.sel < len(self.zones):
+            self.zones.pop(self.sel)
+            self.sel = None
+            self.zones_changed.emit(self.zones)
+            self.update()
 
     def set_data(self, spans, rows, edit=None, music=None):
         """spans: [(t0, t1)] of the recorder files on the common timeline. music: [(offset, music map)]."""
@@ -1729,7 +1836,7 @@ class SyncMap(QWidget):
     def paintEvent(self, _):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        left = 130
+        left = self.LEFT
         W, span = self.width() - left - 12, max(1e-6, self.tmax - self.tmin)
         X = lambda t: left + (t - self.tmin) / span * W
 
@@ -1797,6 +1904,22 @@ class SyncMap(QWidget):
                 p.drawRoundedRect(QRectF(X(t0), y + 3, max(2.0, X(t1) - X(t0)), 14), 2, 2)
             y += 26
         y += 4
+        zs = [list(z) for z in self.zones]
+        if self.drag and self.drag[0] == "new":
+            zs.append(sorted(self.drag[1:]))
+        for k, (z0, z1) in enumerate(zs):
+            sel = k == self.sel
+            p.setPen(Qt.NoPen)
+            p.setBrush(QColor(240, 180, 60, 70 if sel else 45))
+            p.drawRect(QRectF(X(z0), 0, max(2.0, X(z1) - X(z0)), y - 4))
+            p.setPen(QPen(QColor("#f0b43c"), 1.5))
+            p.drawLine(QPointF(X(z0), 0), QPointF(X(z0), y - 4))
+            p.drawLine(QPointF(X(z1), 0), QPointF(X(z1), y - 4))
+            if X(z1) - X(z0) > 90:
+                p.setPen(QColor("#f0b43c"))
+                p.drawText(QRectF(X(z0) + 4, y - 22, X(z1) - X(z0) - 8, 16), Qt.AlignLeft | Qt.AlignVCenter,
+                           p.fontMetrics().elidedText(f"Slower cuts  {fmt_hms(z0)} – {fmt_hms(z1)}", Qt.ElideRight,
+                                                      int(X(z1) - X(z0) - 8)))
         p.setPen(QColor(C["MUTED"]))
         step = next((s for s in (10, 30, 60, 120, 300, 600, 900, 1800, 3600, 7200) if span / s <= 8), 7200)
         t = (self.tmin // step) * step
@@ -1983,10 +2106,29 @@ class MulticamPage(QWidget):
         sc = QScrollArea()
         sc.setWidgetResizable(True)
         self.map = SyncMap()
+        self.map.zones_changed.connect(self._zones_from_map)
         holder = QWidget()
         hv_ = QVBoxLayout(holder)
         hv_.setContentsMargins(0, 0, 0, 0)
         hv_.addWidget(self.map)
+        zf = QFrame()
+        zf.setObjectName("card")
+        zl = QVBoxLayout(zf)
+        zl.setContentsMargins(12, 10, 12, 10)
+        zl.setSpacing(6)
+        zh = QHBoxLayout()
+        zh.addWidget(lbl("SLOWER CUTS ZONES", "section"))
+        zh.addStretch()
+        zl.addLayout(zh)
+        zl.addWidget(lbl("For folk music (and any part where cutting on the bars does not fit): drag on the map to mark a "
+                         "zone; there the auto edit cuts the way it did before the bars (on the nearest accent of the "
+                         "sound) and with longer shots. Drag an edge to move it, type the exact times below, right-click "
+                         "or Delete to remove it.", "muted", True))
+        self.zrows = QVBoxLayout()
+        self.zrows.setSpacing(4)
+        zl.addLayout(self.zrows)
+        hv_.addSpacing(6)
+        hv_.addWidget(zf)
         sc.setWidget(holder)
         t1v.addWidget(sc, 1)
         dot = lambda c: f'<span style="color:{c}">●</span>'
@@ -2050,6 +2192,12 @@ class MulticamPage(QWidget):
         ro.addWidget(rsc, 1)
         rv.addWidget(lbl("AUTO DIRECTOR", "section"))
         rv.addWidget(lbl("Picks the best camera for every moment. Changes apply instantly.", "muted", True))
+        self.b_learn = btn("Learn my editing style…", "link", self.learn_style)
+        self.b_learn.setToolTip("Give it the XML of a party YOU edited: it measures how you cut (shot lengths, drops, the "
+                                "beat) and sets the Auto Director like you. Saved on this computer only.")
+        rv.addWidget(self.b_learn, 0, Qt.AlignLeft)
+        self.style_lbl = lbl("", "muted", True)
+        rv.addWidget(self.style_lbl)
         rv.addSpacing(6)
         self.d_rows = {}
         for key, title, sub, lo, hi, suf in (
@@ -2073,21 +2221,11 @@ class MulticamPage(QWidget):
         self.sw_beat.toggled.connect(lambda v: (self.set_d("beat", v), self._music_enabled()))
         br.addWidget(self.sw_beat)
         rv.addLayout(br)
-        sb = QHBoxLayout()
-        sb.addWidget(lbl("Static cameras only as backup"))
-        sq = lbl("?", "muted")
-        sq.setToolTip("The static cameras are used only when no handheld camera has a usable shot.")
-        sb.addWidget(sq)
-        sb.addStretch()
-        self.sw_backup = Switch(False)
-        self.sw_backup.toggled.connect(lambda v: self.set_d("static_backup", v))
-        sb.addWidget(self.sw_backup)
-        rv.addLayout(sb)
         # ---- on the music (the same for every project)
         rv.addSpacing(12)
         rv.addWidget(lbl("ON THE MUSIC  ·  ALL PROJECTS", "section"))
         rv.addWidget(lbl("Used when Cut on the beat is on.", "muted", True))
-        ms = self.store.app.setdefault("music", dict(drop_beats=4, buildup="hold", energy_cuts=True))
+        ms = self.store.app.setdefault("music", dict(drop_beats=4, buildup="hold"))
         self.music_box = QWidget()
         mb = QVBoxLayout(self.music_box)
         mb.setContentsMargins(0, 4, 0, 0)
@@ -2105,12 +2243,6 @@ class MulticamPage(QWidget):
         self.c_build.setCurrentIndex(0 if ms.get("buildup", "hold") == "hold" else 1)
         self.c_build.currentIndexChanged.connect(lambda i: self._set_music("buildup", "hold" if i == 0 else "accelerate"))
         mb.addWidget(self.c_build)
-        er = QHBoxLayout()
-        er.addWidget(lbl("Faster cuts when the music is more intense", "", True), 1)
-        self.sw_energy = Switch(ms.get("energy_cuts", True))
-        self.sw_energy.toggled.connect(lambda v: self._set_music("energy_cuts", v))
-        er.addWidget(self.sw_energy, 0, Qt.AlignTop)
-        mb.addLayout(er)
         rv.addWidget(self.music_box)
         rv.addSpacing(10)
         self.stats = lbl("Press Auto Edit to build the edit.", "muted", True)
@@ -2121,6 +2253,160 @@ class MulticamPage(QWidget):
         eb.addWidget(btn("Export XML", "primary", self.export))
         ro.addLayout(eb)
         body.addWidget(right)
+
+    # ---- learn my editing style
+    def _show_style(self):
+        s = self.store.app.get("style")
+        self.style_lbl.setText(f"Your style: learned from {s['from']} ({s['date']})" if s else "")
+        self.style_lbl.setVisible(bool(s))
+
+    def learn_style(self):
+        f, _ = QFileDialog.getOpenFileName(self, "XML of a party you edited (export the sequence from Premiere)", "", "XML (*.xml)")
+        if not f:
+            return
+        self.b_learn.setEnabled(False)
+        self.status.setText("Learning your style: reading your edit (and its music, if the recorder files are on this computer)…")
+        cams = self.p["cams"] if self.p else None
+        self._lw = _Runner(lambda progress=None: style.learn(f, cams, progress))
+        self._lw.progress.connect(lambda t, x: self.status.setText(t))
+        self._lw.done.connect(lambda r: (self.b_learn.setEnabled(True), self.status.setText(""), self._style_dialog(f, r)))
+        self._lw.failed.connect(lambda m: (self.b_learn.setEnabled(True), self.status.setText(f"Could not learn from it: {m}")))
+        self._lw.start()
+
+    def _style_dialog(self, f, r):
+        s = r["suggest"]
+        d = QDialog(self)
+        d.setWindowTitle("Learn my editing style")
+        d.setStyleSheet(f"QDialog{{background:{C['BG']}}}")
+        v = QVBoxLayout(d)
+        v.setContentsMargins(20, 16, 20, 16)
+        v.addWidget(lbl("What your edit looks like", "h2"))
+        lines = [f"{r['shots']} shots · usually {r['median']:.1f} s (the shortest ones {r['p15']:.1f} s, the longest {r['p95']:.0f} s)"]
+        if r.get("music"):
+            parts = []
+            if r.get("calm"):
+                parts.append(f"calm music {r['calm']:.1f} s")
+            if r.get("intense"):
+                parts.append(f"intense music {r['intense']:.1f} s")
+            if r.get("drop"):
+                parts.append(f"drops {r['drop']:.1f} s")
+            if parts:
+                lines.append("Shots on " + " · ".join(parts))
+            off = r.get("offset_frames", 0)
+            when = "on the beat" if abs(off) < 0.5 else (f"{abs(off):.0f} frame(s) before the beat" if off < 0 else f"{off:.0f} frame(s) after the beat")
+            lines.append(f"{r['on_beat'] * 100:.0f}% of your cuts are on a beat, usually {when}")
+        else:
+            lines.append("The music could not be read (the recorder files of that timeline are not on this computer): "
+                         "only the shot lengths were measured.")
+        if r.get("handheld_share") is not None:
+            lines.append(f"Handheld cameras {r['handheld_share'] * 100:.0f}% of the time")
+        for t in lines:
+            v.addWidget(lbl("• " + t, "", True))
+        v.addSpacing(8)
+        v.addWidget(lbl("Settings that cut like you", "h2"))
+        names = dict(minshot=("Minimum shot", lambda x: f"{x:g} s"), maxshot=("Maximum shot", lambda x: f"{x} s"),
+                     pace=("Cut pace", str), energy=("Static ↔ Handheld", str),
+                     drop_beats=("On a drop, change camera every", lambda x: {1: "1 beat", 2: "2 beats", 4: "1 bar", 8: "2 bars", 16: "4 bars"}[x]),
+                     energy_cuts=("Faster cuts when the music is more intense", lambda x: "on" if x else "off"),
+                     pre_frames=("Cut", lambda x: ["exactly on the beat", "1 frame before the beat", "2 frames before the beat"][x]))
+        g = QGridLayout()
+        for i, (k, val) in enumerate(s.items()):
+            g.addWidget(lbl(names[k][0], "muted"), i, 0)
+            g.addWidget(lbl(names[k][1](val)), i, 1)
+        v.addLayout(g)
+        v.addWidget(lbl("The music options are the same for every project. Your style is saved on this computer only: "
+                        "another editor on another computer learns his own.", "muted", True))
+        br = QHBoxLayout()
+        br.addStretch()
+        br.addWidget(btn("Cancel", slot=d.reject))
+        b1 = btn("Use for this project", slot=lambda: (self._apply_style(s, f, False), d.accept()))
+        b2 = btn("Use as my style (every new project)", "primary", lambda: (self._apply_style(s, f, True), d.accept()))
+        br.addWidget(b1)
+        br.addWidget(b2)
+        v.addLayout(br)
+        d.exec()
+
+    def _apply_style(self, s, f, as_default):
+        for k in ("minshot", "maxshot", "pace", "energy"):
+            if k in s and self.p:
+                self.p["dir"][k] = s[k]
+        ms = self.store.app.setdefault("music", {})
+        for k in ("drop_beats",):
+            if k in s:
+                ms[k] = s[k]
+        if as_default:
+            self.store.app["style"] = dict(settings=s, **{"from": Path(f).name, "date": time.strftime("%d.%m.%Y")})
+        self.store.save_app()
+        self.store.save()
+        logging.info("style learned from %s: %s (default=%s)", f, s, as_default)
+        if self.p:
+            self.load(self.p)                            # sliders and switches show the new values
+        self._show_style()
+        if self.p and self.p.get("sync"):
+            self.recompute()
+
+    # ---- "Slower cuts" zones (saved in the project, global timeline seconds)
+    def _zones_from_map(self, zones):
+        if not self.p:
+            return
+        self.p["zones"] = [[round(a_, 2), round(b_, 2)] for a_, b_ in zones]
+        self.store.save()
+        self._fill_zone_rows()
+        if self.p.get("sync"):
+            self.timer.start()
+
+    def _fill_zone_rows(self):
+        while self.zrows.count():
+            it = self.zrows.takeAt(0)
+            w_ = it.widget()
+            if w_:
+                w_.deleteLater()
+            elif it.layout():
+                while it.layout().count():
+                    x_ = it.layout().takeAt(0).widget()
+                    if x_:
+                        x_.deleteLater()
+        zones = (self.p or {}).get("zones", [])
+        if not zones:
+            self.zrows.addWidget(lbl("No zones: the whole party is cut on the music (when Cut on the beat is on).", "muted", True))
+            return
+        for k, (z0, z1) in enumerate(zones):
+            row = QWidget()
+            r = QHBoxLayout(row)
+            r.setContentsMargins(0, 0, 0, 0)
+            r.addWidget(lbl(f"Zone {k + 1}"))
+            ea, eb = QLineEdit(fmt_hms(z0)), QLineEdit(fmt_hms(z1))
+            for e_ in (ea, eb):
+                e_.setFixedSize(110, 28)
+                e_.setAlignment(Qt.AlignCenter)
+                e_.setValidator(QRegularExpressionValidator(QRegularExpression(r"^-?\d{0,2}(:\d{0,2}){0,2}(\.\d?)?$")))
+            ea.editingFinished.connect(lambda k=k, ea=ea, eb=eb: self._zone_typed(k, ea, eb))
+            eb.editingFinished.connect(lambda k=k, ea=ea, eb=eb: self._zone_typed(k, ea, eb))
+            r.addWidget(ea)
+            r.addWidget(lbl("→", "muted"))
+            r.addWidget(eb)
+            r.addWidget(lbl(f"{(z1 - z0) / 60:.1f} min", "muted"))
+            r.addStretch()
+            r.addWidget(btn("Delete", "link", lambda _=False, k=k: self._zone_delete(k)))
+            self.zrows.addWidget(row)
+
+    def _zone_typed(self, k, ea, eb):
+        try:
+            a_, b_ = parse_t(ea.text()), parse_t(eb.text())
+        except ValueError:
+            return
+        zones = self.p.get("zones", [])
+        if k < len(zones) and b_ - a_ >= 2:
+            zones[k] = [a_, b_]
+            self.map.set_zones(zones)
+            self._zones_from_map(self.map.zones)
+
+    def _zone_delete(self, k):
+        zones = self.p.get("zones", [])
+        if k < len(zones):
+            zones.pop(k)
+            self.map.set_zones(zones)
+            self._zones_from_map(zones)
 
     def _set_music(self, k, v):
         """Music options are global: every multicam project uses them."""
@@ -2139,14 +2425,27 @@ class MulticamPage(QWidget):
             fl = [dict(path=m, group=Path(m).parent.name) for m in p.get("masters", [])]
             fl += [dict(path=c, group=Path(c).parent.name) for cam in p.get("cams", []) for c in cam["clips"]]
             p.update(files=fl, sync=None, cams=[], infos={})
-        p.setdefault("dir", dict(director.DEFAULTS))
+        if not p.get("dir"):                         # a new project starts with this computer's learned style
+            mine = self.store.app.get("style", {}).get("settings", {})
+            p["dir"] = {**director.DEFAULTS, **{k: v for k, v in mine.items() if k in ("minshot", "maxshot", "pace", "energy")}}
         p["dir"] = {**director.DEFAULTS, **p["dir"]}
+        if p["dir"].get("static_backup"):            # that switch was removed: the slider towards Handheld does it
+            p["dir"]["energy"] = max(p["dir"].get("energy", 60), 85)
+            p["dir"]["static_backup"] = False
         self.title.setText(p["name"])
         QTimer.singleShot(0, self._music_enabled)
+        self.map.set_zones(p.get("zones", []))
+        self._fill_zone_rows()
+        self._show_style()
+        ms_ = self.store.app.get("music", {})
+        for cb, val in ((self.c_drop, self._drop_vals.index(ms_.get("drop_beats", 4)) if ms_.get("drop_beats", 4) in self._drop_vals else 2),
+                        (self.c_build, 0 if ms_.get("buildup", "hold") == "hold" else 1)):
+            cb.blockSignals(True)
+            cb.setCurrentIndex(val)
+            cb.blockSignals(False)
         for k, r in self.d_rows.items():
             r.set(p["dir"][k])
         self.sw_beat.set(p["dir"]["beat"])
-        self.sw_backup.set(p["dir"]["static_backup"])
         blob = self.store.load_blob(p["id"])
         self.an = {}
         for path, v in blob.items():
@@ -2333,7 +2632,12 @@ class MulticamPage(QWidget):
     def recompute(self):
         s = self.p.get("sync") if self.p else None
         has_an = s and any(x in self.an for c in self.p["cams"] for x in c["clips"])
-        st = {**self.p["dir"], **self.store.app.get("music", {})}
+        st = {**self.p["dir"], **self.store.app.get("music", {}), "zones": self.p.get("zones", [])}
+        if has_an:
+            key = (self.p["id"], len(s["clips"]))
+            if getattr(self, "_fps_key", None) != key:
+                self._fps_key, self._fps = key, director.seq_fps(self.p["cams"], s["clips"], self.an)
+            st["fps"] = self._fps
         self.edits = director.build(self.p["cams"], s["clips"], self.an, s["masters"], st) if has_an else []
         self.refresh_all()
 
@@ -2352,8 +2656,8 @@ class MulticamPage(QWidget):
             cnt = {k: sum(1 for r in res.values() if r["conf"] == k) for k in CONF_NAME}
             m = ", ".join(Path(x["path"]).name for x in s["masters"] if x.get("path")) or "none (timeline from XML)"
             rates = sorted({i.get("fps") for i in self.p.get("infos", {}).values() if i.get("video") and i.get("fps")})
-            mixed = (f"Mixed frame rates ({', '.join(f'{r:g}' for r in rates)} fps): handled in the export, "
-                     f"the sequence uses the first camera's rate.  ") if len(rates) > 1 else ""
+            mixed = (f"Mixed frame rates ({', '.join(f'{r:g}' for r in rates)} fps): handled in the export "
+                     f"(the sequence is 25 fps).  ") if len(rates) > 1 else ""
             self.note.setText(mixed + (s.get("note") + "  " if s.get("note") else "") +
                               f"Audio master: {m}  ·  {len(self.p['cams'])} cameras  ·  {cnt['high'] + cnt['medium']} clips synced, "
                               f"{cnt['low']} to check, {cnt['approx']} placed by time, {cnt['fail']} failed.")
@@ -3131,16 +3435,7 @@ class TeaserPage(QWidget):
         self.b_detect.setToolTip("Sets the six moments back to what the app found in the music (song changes, drop).")
         self.b_detect.setEnabled(False)
         l3.addWidget(self.b_detect)
-        l4 = card(4, "Story order")
-        r = QHBoxLayout()
-        self.b_chrono = btn("Chronological", "seg", lambda: self.set_order(True))
-        self.b_mixed = btn("Mixed", "seg", lambda: self.set_order(False))
-        r.addWidget(self.b_chrono)
-        r.addWidget(self.b_mixed)
-        l4.addLayout(r)
-        self.order_lbl = lbl("", "muted", True)
-        l4.addWidget(self.order_lbl)
-        l5 = card(5, "AI test (experimental)")
+        l5 = card(4, "AI test (experimental)")
         l5.addWidget(lbl("Checks if a free AI model, running on this Mac, recognises your shots like your colour labels. "
                          "It does not change your teaser.", "muted", True))
         self.b_ai = btn("Test the AI on my labelled clips", slot=self.ai_test)
@@ -3163,8 +3458,7 @@ class TeaserPage(QWidget):
         right.addStretch()
         body.addLayout(right, 1)
         self.stack.addWidget(st)
-        self.chrono = True
-        self.set_order(store.app.get("teaser_chrono", True))
+        self.chrono = True                       # the story always follows the day (Shuffle still gives other shots)
         self.stack.setCurrentIndex(0)
         self.auto_bounds = None
         self._fill_projects()
@@ -3175,8 +3469,6 @@ class TeaserPage(QWidget):
         """Reload the footage XML, the music and your six moments from last time."""
         t = self._cur()
         foot, mus, b = t.get("footage"), t.get("music"), t.get("bounds")
-        if t.get("chrono") is not None:
-            self.set_order(t["chrono"])
         then = (lambda: self._load_music_file(mus, b)) if mus and Path(mus).exists() else None
         if foot and Path(foot).exists():
             self._load_footage(foot, then)
@@ -3423,20 +3715,6 @@ class TeaserPage(QWidget):
             self._set_parts(self.auto_bounds)
             self.parts_note.setText("")
 
-    def set_order(self, chrono):
-        self.chrono = chrono
-        for b, on in ((self.b_chrono, chrono), (self.b_mixed, not chrono)):
-            b.setProperty("active", on)
-            repolish(b)
-        self.order_lbl.setText(
-            "Chronological: every part follows the day in the order the clips were recorded (timecode / file time); "
-            "if some clips have no recording time, the order of your selects sequence is used. "
-            "The teaser is always mixed." if chrono else
-            "Mixed: every part keeps its kind of shots (bride, church, party…) but picks them in random order. "
-            "Press Shuffle shots for another mix.")
-        if hasattr(self, "pcombo"):
-            self._remember(chrono=chrono)
-
     # ---- build / export
     def _buttons(self):
         ok = bool(self.pieces) and self.music is not None
@@ -3452,7 +3730,7 @@ class TeaserPage(QWidget):
     def generate(self):
         if not self.pieces or self.music is None:
             return
-        self.edit = teaser.build(self.pieces, self.music, self.bounds, seed=self.seed, chronological=self.chrono)
+        self.edit = teaser.build(self.pieces, self.music, self.bounds, seed=self.seed, chronological=True)
         self.strip.set(self.edit["shots"], self.music["duration"])
         allbeats = [t0 for t0, _, _ in self.edit["shots"]]
         self.mv.set_parts([self.bounds[k] for k, _ in teaser.BOUNDS[1:]], self.bounds["drop"], allbeats)

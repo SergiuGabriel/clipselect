@@ -126,7 +126,7 @@ un ton lung pe drop) într-un sequence. Îl asculți sau te uiți la waveform î
 cad corect pe muzica ta.</p>
 <h2>On the music: ce înseamnă opțiunile (pe înțelesul tuturor)</h2>
 <p><b>Beat</b> = bătaia pe care o bați din palme pe melodie (1, 2, 3, 4). <b>Măsură</b> (bar) = 4 beat-uri la rând.
-La o melodie de club (128 BPM): 1 beat ≈ 0,5 s, 1 măsură ≈ 2 s. Opțiunile sunt în <b>Auto Director &gt; On the music · all
+La o melodie de club (128 BPM): 1 beat ≈ 0,5 s, 1 măsură ≈ 2 s. Opțiunile sunt în <b>Multicam &gt; Auto Director &gt; On the music · all
 projects</b>, contează doar cu <b>Cut on the beat</b> pornit și sunt aceleași pentru toate proiectele.</p>
 <h3>On a drop, change camera every</h3>
 <p>Drop-ul = momentul în care intră basul tare după ce muzica „urcă" și lumea sare. Opțiunea spune cât de des se schimbă
@@ -149,14 +149,39 @@ face drop-ul să „lovească"; varianta sigură, merge și cu puține camere.</
 <li><b>Cut faster and faster</b>: tăieturi tot mai dese (2 măsuri, 1 măsură, 2 beat-uri) până la drop. Tensiune ca într-un
 teaser; bine la DJ și cu multe camere.</li>
 </ul>
-<h3>Faster cuts when the music is more intense</h3>
-<p>Pentru restul melodiei (nu pentru drop). <b>Pornit</b> (implicit): pe părțile intense cadrele sunt mai scurte (până la
-1 măsură), pe cele calme mai lungi (până la 4 măsuri). <b>Oprit</b>: ritm constant, dat de Minimum shot și Cut pace.
-Oprește-l dacă montajul ți se pare prea agitat sau la evenimente mai elegante.</p>
+<h3>Tăieturi mai rapide pe muzica intensă (automat)</h3>
+<p>Pentru restul melodiei (nu pentru drop) e mereu activ: pe părțile intense cadrele sunt mai scurte (până la 1 măsură), pe cele calme mai lungi (până la 4 măsuri). Montajul „respiră” cu muzica; Minimum shot și Cut pace dau ritmul de bază.</p>
 <h3>Exemplu</h3>
 <p>DJ, 4 camere, setările implicite: strofa calmă cu cadre de 2-4 măsuri, build-up-ul ținut pe o cameră, tăietură fix pe
 drop, apoi altă cameră la fiecare măsură, după drop iar mai liniștit. Sfat: încearcă „1 bar" și „2 beats": schimbarea e
 instantă, fără să refaci analiza.</p>
+<h2>Zone „Slower cuts", unghi alternativ, învață stilul meu</h2>
+<h3>Zone „Slower cuts" (pentru muzica populară)</h3>
+<p>La muzica populară (formație, tempo care se schimbă mereu, hore și sârbe) tăieturile pe măsuri nu se potrivesc, iar
+partea asta arată mai bine puțin mai calmă. Pe <b>Sync Map</b> tragi cu mouse-ul peste porțiunea respectivă și apare o
+zonă galbenă <b>Slower cuts</b>. În ea Auto Edit taie <b>ca înainte de tăierea pe măsuri</b> (pe cel mai apropiat accent din
+sunet) și cu <b>cadre mai lungi</b> (minimum 6 s și cel puțin dublul lui Minimum shot, fără să treacă de Maximum shot).
+Restul petrecerii rămâne tăiat pe muzică.</p>
+<ul>
+<li>Tragi de marginea zonei ca s-o muți; sub hartă ai lista zonelor, unde scrii ora exactă (h:mm:ss.s).</li>
+<li>Click dreapta pe zonă sau <b>Delete</b> o șterge. Zonele rămân salvate în proiect.</li>
+</ul>
+<h3>Unghi alternativ</h3>
+<p>În XML-ul exportat, deasupra montajului, ai o pistă <b>dezactivată</b> cu a doua cea mai bună cameră pentru fiecare cadru
+(clipurile se numesc „ALT · cameră"). Dacă un cadru nu-ți place, activezi pista sau tragi cadrul alternativ jos, fără să
+cauți. Pe cadrele de pe camera statică nu se pune alternativă (acolo ești safe oricum); camera statică poate apărea ca
+alternativă pentru cadrele de pe camerele din mână.</p>
+<h3>Tăietura cu un cadru înainte de beat (automat)</h3>
+<p>Pe muzică, fiecare tăietură cade cu <b>1 cadru (40 ms) înainte de beat</b>: ochiul percepe schimbarea cu o mică întârziere, așa că tăietura pare exact pe lovitură. Sequence-ul exportat e mereu la <b>25 fps</b>.</p>
+<h3>Learn my editing style</h3>
+<p>În Auto Director, <b>Learn my editing style…</b>: alegi XML-ul unei petreceri montate de tine (exportat din Premiere).
+Aplicația măsoară cum tai: cât de lungi îți sunt cadrele în general, pe muzică calmă, pe muzică intensă și pe drop-uri, cât
+de des tai pe beat și dacă tai înainte de el, cât folosești camerele din mână. Îți arată ce a măsurat și setările care
+taie ca tine; alegi <b>Use for this project</b> sau <b>Use as my style</b> (atunci fiecare proiect nou pornește cu ele).</p>
+<ul>
+<li>Muzica se măsoară doar dacă fișierele recorder-ului din acel XML sunt pe calculator; altfel se măsoară doar cadrele.</li>
+<li>Stilul e salvat <b>doar pe calculatorul tău</b>: un coleg pe alt calculator își învață propriul stil.</li>
+</ul>
 <h2>Teaser Studio</h2>
 <h3>Culorile recomandate (pentru tine și pentru colegi)</h3>
 <p>Teaser Studio știe ce e în cadre doar după <b>culoarea etichetei din Premiere</b>. Ca să meargă la fel pentru oricine,
@@ -198,9 +223,7 @@ doua. Clipurile interpretate în Premiere la alt frame rate (de exemplu 50p ca 2
 clip nu apare de două ori la rând, biserica și sala încep cu cadrul de dronă filmat cel mai aproape de ele, iar
 petrecerea folosește doar cadrele Iris filmate după biserică (cele de dimineață sunt first look). Dacă nu ajunge
 materialul, aplicația îți spune câte secunde au rămas neacoperite.</li>
-<li><b>Story order:</b> <b>Chronological</b> ia cadrele fiecărei părți în ordinea în care au fost filmate (după
-timecode / ora din fișier; dacă unele clipuri n-au oră, după ordinea din sequence-ul tău). <b>Mixed</b> păstrează
-părțile și tipurile de cadre, dar le alege la întâmplare. Teaserul e mereu amestecat.</li>
+<li><b>Ordinea poveștii:</b> fiecare parte urmează ziua, în ordinea în care au fost filmate cadrele (după timecode / ora din fișier; dacă unele clipuri n-au oră, după ordinea din sequence-ul tău). Teaserul e mereu amestecat. <b>Shuffle shots</b> alege alte cadre, păstrând ordinea.</li>
 <li><b>Generate</b> construiește structura ta: teaser (înainte de drop pregătiri, biserică, cuplu, dronă; după drop
 petrecere alternată cu cuplu), pregătiri mireasă/mire, biserica cu cuplul la final, sala, apoi petrecerea. Fiecare tăietură
 cade pe beat. <b>Shuffle</b> alege alte cadre; <b>Export XML</b> are markere pentru fiecare parte, ca să pui testimonialele și
@@ -219,8 +242,7 @@ erorile, fără video.</li>
 control pe fiecare criteriu și împarte totul în Poor / Fair / Good, pe 3 piste.</li>
 <li><b>Mutări rapide între persoane.</b> Dacă stai cam 2 secunde pe fiecare om, pune „Minimum cut length” pe 2 s. Pe 3 s,
 cadrele mai scurte sunt eliminate.</li>
-<li><b>Camera statică apare prea des?</b> Trage „Static ↔ Handheld” spre dreapta sau pornește „Static cameras only as
-backup". Programul judecă doar calitatea tehnică, iar camera statică nu tremură niciodată, de aceea o preferă.</li>
+<li><b>Camera statică apare prea des?</b> Trage „Static ↔ Handheld” spre dreapta. Programul judecă doar calitatea tehnică, iar camera statică nu tremură niciodată, de aceea o preferă.</li>
 <li><b>Timecode.</b> Setează timecode-ul camerelor cât mai aproape de ora reală. Nu trebuie să fie exact la cadru: e folosit
 doar ca indiciu, dar face sincronizarea mult mai rapidă.</li>
 <li><b>Import în Premiere:</b> File &gt; Import și alegi fișierul XML. Apare un sequence nou în proiect.</li>
@@ -387,14 +409,38 @@ contrast makes the drop hit; the safe choice, works with few cameras too.</li>
 <li><b>Cut faster and faster</b>: cuts closer and closer (2 bars, 1 bar, 2 beats) until the drop. Tension like a teaser;
 good for DJ sets and many cameras.</li>
 </ul>
-<h3>Faster cuts when the music is more intense</h3>
-<p>For the rest of the song (not the drop). <b>On</b> (default): intense parts get shorter shots (down to 1 bar), calm parts
-longer ones (up to 4 bars). <b>Off</b>: a steady rhythm from Minimum shot and Cut pace. Turn it off if the edit feels too
-nervous or for more elegant events.</p>
+<h3>Faster cuts on intense music (automatic)</h3>
+<p>For the rest of the song (not the drop) it is always on: intense parts get shorter shots (down to 1 bar), calm parts longer ones (up to 4 bars). The edit breathes with the music; Minimum shot and Cut pace set the base rhythm.</p>
 <h3>Example</h3>
 <p>DJ, 4 cameras, default settings: calm verse with 2-4 bar shots, the build-up held on one camera, a cut exactly on the
 drop, then another camera every bar, after the drop calmer again. Tip: try "1 bar" and "2 beats": the change is instant,
 no new analysis needed.</p>
+<h2>Slower cuts zones, alternative angle, learn my style</h2>
+<h3>"Slower cuts" zones (for folk music)</h3>
+<p>With folk music (a live band, a tempo that keeps changing, hora and sârba) cutting on the bars does not fit and that part
+looks better a bit calmer. On the <b>Sync Map</b> drag across that part: a yellow <b>Slower cuts</b> zone appears. Inside it
+Auto Edit cuts <b>the way it did before the bars</b> (on the nearest accent of the sound) and with <b>longer shots</b> (at
+least 6 s and twice the Minimum shot, never past Maximum shot). The rest of the party stays cut on the music.</p>
+<ul>
+<li>Drag an edge of the zone to move it; under the map the list of zones takes the exact times (h:mm:ss.s).</li>
+<li>Right-click the zone or press <b>Delete</b> to remove it. Zones are saved with the project.</li>
+</ul>
+<h3>Alternative angle</h3>
+<p>In the exported XML, above the edit, there is a <b>switched-off</b> track with the second best camera for every shot (the
+clips are named "ALT · camera"). If a shot does not work, turn the track on or drag the alternative down, no searching.
+Shots on the static camera get no alternative (they are safe anyway); the static camera can be the alternative for shots on
+the handheld cameras.</p>
+<h3>The cut one frame before the beat (automatic)</h3>
+<p>On music every cut falls <b>1 frame (40 ms) before the beat</b>: the eye sees a change a little late, so the cut feels exactly on the hit. The exported sequence is always <b>25 fps</b>.</p>
+<h3>Learn my editing style</h3>
+<p>In Auto Director, <b>Learn my editing style…</b>: pick the XML of a party you edited (exported from Premiere). The app
+measures how you cut: your shot lengths overall, on calm music, on intense music and on drops, how often you cut on the
+beat and whether before it, how much you use the handheld cameras. It shows what it measured and the settings that cut like
+you; choose <b>Use for this project</b> or <b>Use as my style</b> (then every new project starts with them).</p>
+<ul>
+<li>The music is measured only if the recorder files of that XML are on this computer; otherwise only the shots.</li>
+<li>Your style is saved <b>on this computer only</b>: a colleague on another computer learns his own.</li>
+</ul>
 <h2>Teaser Studio</h2>
 <h3>Recommended colours (for you and your colleagues)</h3>
 <p>Teaser Studio knows what is in a shot only from its <b>Premiere label colour</b>. To make it work the same for everyone,
@@ -435,9 +481,7 @@ another frame rate in Premiere (e.g. 50p as 25p) are read correctly.</li>
 appears twice in a row, church and venue open with the drone shot recorded closest to them, and the party only uses Iris
 shots recorded after the church (the morning ones are the first look). If there is not enough footage, the app tells you
 how many seconds are left uncovered.</li>
-<li><b>Story order:</b> <b>Chronological</b> takes each part's shots in the order they were recorded (timecode / file
-time; if some clips have no recording time, the order of your sequence). <b>Mixed</b> keeps the parts and kinds of shots
-but picks them at random. The teaser is always mixed.</li>
+<li><b>Story order:</b> every part follows the day, in the order the shots were recorded (timecode / file time; if some clips have no recording time, the order of your sequence). The teaser is always mixed. <b>Shuffle shots</b> picks other shots and keeps the order.</li>
 <li><b>Generate</b> builds your structure: teaser (before the drop getting ready, church, couple, drone; after the drop party
 alternating with the couple), bride/groom getting ready, the church ending with the couple, the venue, then the party.
 Every cut lands on a beat. <b>Shuffle</b> picks other shots; <b>Export XML</b> has a marker for every part, so you can add
@@ -456,7 +500,7 @@ did and the errors, no video.</li>
 control over every criterion and splits everything into Poor / Fair / Good on 3 tracks.</li>
 <li><b>Quick moves between people.</b> If you stay about 2 seconds on each person, set "Minimum cut length" to 2 s. At 3 s,
 shorter shots are dropped.</li>
-<li><b>Static camera used too often?</b> Drag "Static ↔ Handheld" to the right or turn on "Static cameras only as backup".
+<li><b>Static camera used too often?</b> Drag "Static ↔ Handheld" to the right.
 The app only judges technical quality, and a static camera never shakes, which is why it likes it.</li>
 <li><b>Timecode.</b> Set the cameras' timecode as close to the real time of day as you can. It does not have to be frame
 accurate: it is only used as a hint, but it makes syncing much faster.</li>
