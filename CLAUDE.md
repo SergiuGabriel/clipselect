@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.8.1), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.9.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -55,6 +55,7 @@ linking to https://www.instagram.com/sergiugabrielcg/.
   drops, build-ups, speech pauses). Used by director.py.
 - `style.py` — Learn my editing style: measures an XML the editor cut himself (shots seen on top, music of its
   recorder files if on disk) and proposes Auto Director settings; saved in store.app["style"] (this computer only).
+- `i18n.py` — Romanian / English for the whole UI (Settings > Language, applies at the next start).
 - `teaser.py` — Teaser Studio engine (labels, music parts, beats, drop, edit, XML export).
 - `make_icons.py` — builds icon.icns / icon.ico / icon.png from `icon_source.png` (run in CI before PyInstaller).
 - `.github/workflows/build.yml` — builds macOS DMGs (Apple Silicon + Intel) and a Windows folder with PyInstaller on every push.
@@ -206,6 +207,35 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   (always chronological; Shuffle still varies the shots).
 - Learn my editing style stays an OPTION: nothing changes unless the editor applies it; it no longer proposes the
   automatic things (faster cuts, cut before the beat).
+
+## v2.9.0: the whole app in Romanian or English (i18n.py)
+- The code stays in English. i18n.install() (in main) hooks the Qt setters (QLabel / button setText, tooltips,
+  placeholders, window titles, tab texts, table items, QPainter.drawText, message / file / input dialogs) and sweeps
+  every widget when it is first shown; T() translates exact texts (EXACT), messages with values (TEMPLATES, "{}" =
+  value, values translated too) and HTML piece by piece. Language = store.app["ui_lang"], set before the UI is built.
+- EVERY NEW ENGLISH UI TEXT NEEDS ITS ROMANIAN IN i18n.EXACT or i18n.TEMPLATES (else it shows in English). Check with
+  a scan of all visible labels / buttons in Romanian (no English words left).
+- Texts used as VALUES are never translated: sequence size / rate / fields, output software, camera roles
+  (Static / Handheld / Audio), the Footage presets (Lenient / Normal / Strict / Custom). Drop-down lists are translated
+  ONLY when marked setProperty("i18n", True) (they work by index: c_drop, c_build).
+- Editing terms stay English in Romanian too: Sync, Auto Edit, Export XML, Import XML, Drop, Build-up, Beat check,
+  Teaser Studio, Auto Director, Cut on the beat, Slower cuts, Footage Selection, Multicam.
+- Text drawn after eliding must be translated BEFORE elidedText (i18n.T(label)).
+
+## NEXT (agreed with the owner, to do soon, in this order)
+1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party + Beat check, a Slower
+   cuts zone on folk music, alternative angle track, export into Premiere AND DaVinci, a teaser, the AI test.
+   The owner sends results / XMLs / error reports; fix from them. No new features before this.
+2. Automatic tests in GitHub Actions (beats / drops / holes / export 25 fps / zones / alt track) BEFORE the build, so a
+   broken version never reaches the owner.
+3. Before selling or giving it to friends: code repo private + a second PUBLIC repo with only the DMGs (Check for
+   updates needs public releases), Apple Developer notarization ($99/yr), FFmpeg + PySide6 licence check.
+4. Windows build: never tested; try with a colleague.
+Later, only if the owner asks: interviews (local Whisper transcription + stories via his own ChatGPT/Claude), AI in
+Teaser Studio (only if the AI test scores well).
+Premiere automation: prefer UXP / ExtendScript scripts written by Claude Code over screen-clicking computer use.
+OPEN QUESTION: Beat check stays for now, but at the start of EVERY next discussion ask the owner whether to keep it or
+remove it, until he decides.
 
 ## Rules learned the hard way
 - Every clipitem <name> is EXACTLY the file name (e.g. RS-MAIN6210.MP4). DaVinci Resolve links timeline clips to media by

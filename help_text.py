@@ -237,6 +237,7 @@ o poți verifica oricând, iar <b>Download</b> deschide pagina cu fișierele noi
 erorile, fără video.</li>
 </ul>
 <h2>Sfaturi utile</h2>
+<p><b>Limba aplicației:</b> Setări &gt; Limba (English / Română). Se aplică la următoarea pornire, pentru toată aplicația și pentru aceste pagini. Termenii de montaj (Sync, Auto Edit, Export XML, Drop, Beat check) rămân în engleză, ca în Premiere.</p>
 <ul>
 <li><b>Auto sau Custom?</b> Auto este varianta clasică: păstrează cadrele bune și le pune pe o singură pistă. Custom îți dă
 control pe fiecare criteriu și împarte totul în Poor / Fair / Good, pe 3 piste.</li>
@@ -495,6 +496,7 @@ and <b>Download</b> opens the page with the new files.</li>
 did and the errors, no video.</li>
 </ul>
 <h2>Useful tips</h2>
+<p><b>App language:</b> Settings &gt; Language (English / Română). It applies the next time the app starts, to the whole app and these pages. Editing terms (Sync, Auto Edit, Export XML, Drop, Beat check) stay in English, like in Premiere.</p>
 <ul>
 <li><b>Auto or Custom?</b> Auto is the classic version: it keeps the good shots and puts them on one track. Custom gives you
 control over every criterion and splits everything into Poor / Fair / Good on 3 tracks.</li>

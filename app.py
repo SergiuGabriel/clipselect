@@ -27,12 +27,13 @@ import director
 import music
 import style
 import help_text
+import i18n
 import teaser
 import ai
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v2.8.1"
+APP, VER = "MoneyMakingMachine", "v2.9.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
 
@@ -1847,7 +1848,7 @@ class SyncMap(QWidget):
                 p.drawEllipse(QRectF(0, y + 6, 8, 8))
             p.setPen(QColor(C["TEXT"] if color else C["MUTED"]))
             p.drawText(QRectF(14 if color else 0, y, left - 18, 20), Qt.AlignVCenter | Qt.AlignLeft,
-                       p.fontMetrics().elidedText(label, Qt.ElideRight, left - 20))
+                       p.fontMetrics().elidedText(i18n.T(label), Qt.ElideRight, left - 20))
             p.setPen(Qt.NoPen)
             p.setBrush(QColor("#2c2c2c"))
             p.drawRoundedRect(QRectF(left, y, W, 20), 3, 3)
@@ -2232,6 +2233,7 @@ class MulticamPage(QWidget):
         mb.setSpacing(6)
         mb.addWidget(lbl("On a drop, change camera every"))
         self.c_drop = QComboBox()
+        self.c_drop.setProperty("i18n", True)        # works by position: safe to translate
         self._drop_vals = [1, 2, 4, 8, 16]
         self.c_drop.addItems(["1 beat", "2 beats", "1 bar (4 beats)", "2 bars", "4 bars"])
         self.c_drop.setCurrentIndex(self._drop_vals.index(ms.get("drop_beats", 4)) if ms.get("drop_beats", 4) in self._drop_vals else 2)
@@ -2239,6 +2241,7 @@ class MulticamPage(QWidget):
         mb.addWidget(self.c_drop)
         mb.addWidget(lbl("Build-up before a drop"))
         self.c_build = QComboBox()
+        self.c_build.setProperty("i18n", True)
         self.c_build.addItems(["Hold one shot until the drop", "Cut faster and faster"])
         self.c_build.setCurrentIndex(0 if ms.get("buildup", "hold") == "hold" else 1)
         self.c_build.currentIndexChanged.connect(lambda i: self._set_music("buildup", "hold" if i == 0 else "accelerate"))
@@ -2892,6 +2895,20 @@ class SettingsPage(QWidget):
         hw.addWidget(self.sw_hw)
         right.addLayout(hw)
         right.addSpacing(18)
+        right.addWidget(lbl("Language", "h2"))
+        lr = QHBoxLayout()
+        cur = store.app.get("ui_lang", "en")
+        self.b_en = btn("English", "seg", lambda: self._set_lang("en"))
+        self.b_ro = btn("Română", "seg", lambda: self._set_lang("ro"))
+        for b_, on in ((self.b_en, cur == "en"), (self.b_ro, cur == "ro")):
+            b_.setProperty("active", on)
+            lr.addWidget(b_)
+        lr.addStretch()
+        right.addLayout(lr)
+        self.lang_note = lbl("The whole app (and the Info pages) in this language. It applies when the app starts again.",
+                             "muted", True)
+        right.addWidget(self.lang_note)
+        right.addSpacing(18)
         right.addWidget(lbl("Updates and problems", "h2"))
         ur = QHBoxLayout()
         ur.addWidget(btn("Check for updates", slot=lambda: self.check_updates(False)))
@@ -2920,6 +2937,16 @@ class SettingsPage(QWidget):
         self.timer.timeout.connect(self.refresh)
 
     update_found = Signal(str)
+    def _set_lang(self, lang):
+        self.store.app["ui_lang"] = lang
+        self.store.app["lang"] = lang                 # the Info pages follow
+        self.store.save_app()
+        for b_, on in ((self.b_en, lang == "en"), (self.b_ro, lang == "ro")):
+            b_.setProperty("active", on)
+            repolish(b_)
+        self.lang_note.setText("Restart MoneyMakingMachine to see it in English." if lang == "en" else
+                               "Repornește MoneyMakingMachine ca s-o vezi în română.")
+
     def check_updates(self, silent=True):
         self.upd.setText("Checking…")
         self._uw = _Runner(lambda: latest_release())
@@ -3179,7 +3206,7 @@ class MusicView(QWidget):
             r_ = QRectF(X(bounds[i]) + 4, 0, max(0.0, X(bounds[i + 1]) - X(bounds[i]) - 6), 22)
             p.save()
             p.setClipRect(r_)                       # a short part never writes over its neighbour
-            p.drawText(r_, Qt.AlignVCenter, p.fontMetrics().elidedText(teaser.PARTS[i], Qt.ElideRight, int(r_.width())))
+            p.drawText(r_, Qt.AlignVCenter, p.fontMetrics().elidedText(i18n.T(teaser.PARTS[i]), Qt.ElideRight, int(r_.width())))
             p.restore()
         p.setPen(Qt.NoPen)
         p.setBrush(QColor(C["HOT"]))
@@ -3734,7 +3761,7 @@ class TeaserPage(QWidget):
         self.strip.set(self.edit["shots"], self.music["duration"])
         allbeats = [t0 for t0, _, _ in self.edit["shots"]]
         self.mv.set_parts([self.bounds[k] for k, _ in teaser.BOUNDS[1:]], self.bounds["drop"], allbeats)
-        bpm = " · ".join(f"{k} {v:.0f} BPM" for k, v in self.edit["bpm"].items() if v)
+        bpm = " · ".join(f"{i18n.T(k)} {v:.0f} BPM" for k, v in self.edit["bpm"].items() if v)
         inst = self.edit.get("used_instead") or {}
         grouped = {}
         for (w, u), n in inst.items():
@@ -3780,6 +3807,8 @@ class Main(QMainWindow):
         self.resize(1400, 820)
         self.setMinimumSize(1100, 680)
         self.store = Store()
+        i18n.set_lang(self.store.app.get("ui_lang", "en"))     # every text below appears in this language
+        self.store.app.setdefault("lang", self.store.app.get("ui_lang", "en"))
         self.worker, self.job = None, None
 
         central = QWidget()
@@ -4005,6 +4034,7 @@ def setup_logging(folder):
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP)
+    i18n.install()
     ic = Path(getattr(sys, "_MEIPASS", Path(__file__).parent)) / "icon.png"
     if ic.exists():
         app.setWindowIcon(QIcon(str(ic)))
