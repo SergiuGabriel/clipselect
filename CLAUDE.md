@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.9.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.10.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -170,7 +170,7 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   energy_cuts (True). v2.7.1: the controls live in the Auto Director panel ("On the music · all projects", greyed when
   Cut on the beat is off), NOT in Settings. Auto Director panel and Settings right column are scroll areas (nothing
   squeezed on small screens). Update check + AI download use certifi (packed apps have no system certificates). Map computed in the Auto Edit job (MCWorker._analyze) and saved in sync.masters[i]["music"].
-- Sync Map "Music" row, Beat check export (click track + recorder, one sequence).
+- Sync Map "Music" row. (Beat check existed until v2.9.1, removed in v2.10.0.)
 - v2.7.2 (from his real 9.5 h party XML): NO markers in the multicam export or the beat check (owner's choice; Teaser
   Studio keeps its 7 part markers). Per-beat tempo wobbled on real music (243 "Song" markers, and the downbeat count
   restarted at every wobble): music.py now keeps a song id per beat (the tracked song), one tempo per song, downbeats
@@ -221,9 +221,28 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 - Editing terms stay English in Romanian too: Sync, Auto Edit, Export XML, Import XML, Drop, Build-up, Beat check,
   Teaser Studio, Auto Director, Cut on the beat, Slower cuts, Footage Selection, Multicam.
 - Text drawn after eliding must be translated BEFORE elidedText (i18n.T(label)).
+- v2.9.1: the owner's first AI test showed "0 of 0" (no frame read: the footage disk was most likely not connected).
+  ai.run_test now stops with a clear message when the clips are missing / unreadable; result table translated.
+  Messages put inside a bigger translated sentence must be translated FIRST (i18n.T(m)): a "." inside them breaks
+  the template match.
 
-## NEXT (agreed with the owner, to do soon, in this order)
-1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party + Beat check, a Slower
+## v2.10.0
+- Beat check REMOVED (owner's decision): no button, no director.export_beatcheck, no help text. Old click-track files
+  stay ignored by Add Folder (BEATCHECK_RE).
+- Notifications everywhere: notify(text, error=False) (app.py, Toast on the main window; green = done, red = failed,
+  a new message restarts the timer, text translated): sync / auto edit / XML import (+ missing files) / exports /
+  export failures / multicam job errors / footage analysis finished / teaser footage + music loaded / teaser errors /
+  AI test finished or failed / style applied or failed / error report saved / language changed / manual update check.
+  Every new finished action or failure must call notify().
+- AI test v2 (ai.py): SigLIP 2 So400m ONNX from onnx-community (repo + most precise vision/text files chosen from the
+  Hugging Face API, remembered in <data>/ai_model/siglip2/manifest.json, resumable downloads, old CLIP files deleted),
+  Core ML provider tried then CPU, 3 frames per selection (sharpest of each third from the quality analysis), log
+  "ungrade" (levels 1-99 % + saturation x1.35), prompts for his weddings, an "unclear" class (shown grey, not counted
+  in the score), text embeddings cached. Still ONLY a test. Never run on the real model in the sandbox (no HF access):
+  plumbing tested with a fake ONNX of the same shape (pixel_values 384, pooler_output 1152, input_ids 64).
+
+## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
+1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower
    cuts zone on folk music, alternative angle track, export into Premiere AND DaVinci, a teaser, the AI test.
    The owner sends results / XMLs / error reports; fix from them. No new features before this.
 2. Automatic tests in GitHub Actions (beats / drops / holes / export 25 fps / zones / alt track) BEFORE the build, so a
@@ -234,8 +253,7 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 Later, only if the owner asks: interviews (local Whisper transcription + stories via his own ChatGPT/Claude), AI in
 Teaser Studio (only if the AI test scores well).
 Premiere automation: prefer UXP / ExtendScript scripts written by Claude Code over screen-clicking computer use.
-OPEN QUESTION: Beat check stays for now, but at the start of EVERY next discussion ask the owner whether to keep it or
-remove it, until he decides.
+(The notifications, AI test v2 and the Beat check removal were done in v2.10.0.)
 
 ## Rules learned the hard way
 - Every clipitem <name> is EXACTLY the file name (e.g. RS-MAIN6210.MP4). DaVinci Resolve links timeline clips to media by

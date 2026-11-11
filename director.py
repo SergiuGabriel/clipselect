@@ -584,65 +584,6 @@ def music_markers(masters, starts, T0, fps):
                    for t, n in sorted(out))
 
 
-def export_beatcheck(masters, out_xml, fps=25.0):
-    """To CHECK the beat on your own music: a click track (a click on every beat, higher on beat 1 of the bar, a long
-    tone on every drop) next to the recorder, one sequence. Listen / look at the waveform in Premiere or DaVinci."""
-    import wave
-    starts = sync.master_starts(masters)
-    rate_xml, fps = core._rate(fps)
-    SRC = 16000
-    a1, a2, defs = [], [], []
-    n = 0
-    for mi, m in enumerate(masters):
-        mm = m.get("music")
-        if not mm or not m.get("path"):
-            continue
-        n += 1
-        dur = m["duration"]
-        x = np.zeros(int(dur * SRC) + SRC, np.float32)
-        down = set(mm.get("down", []))
-        for k, b in enumerate(mm.get("beats", [])):
-            f, ln, amp = (2000, 0.015, 0.9) if k in down else (1000, 0.012, 0.5)
-            t = np.arange(int(ln * SRC)) / SRC
-            i = int(b * SRC)
-            seg = amp * np.sin(2 * np.pi * f * t) * np.exp(-t * 200)
-            x[i:i + len(seg)] += seg[:max(0, len(x) - i)]
-        for d0, _ in mm.get("drops", []):
-            t = np.arange(int(0.4 * SRC)) / SRC
-            i = int(d0 * SRC)
-            seg = 0.6 * np.sin(2 * np.pi * 3000 * t) * np.exp(-t * 6)
-            x[i:i + len(seg)] += seg[:max(0, len(x) - i)]
-        wav = Path(out_xml).with_name(f"{Path(out_xml).stem} - beats {n}.wav")
-        with wave.open(str(wav), "wb") as w:
-            w.setnchannels(1)
-            w.setsampwidth(2)
-            w.setframerate(SRC)
-            w.writeframes((np.clip(x, -1, 1) * 32767).astype(np.int16).tobytes())
-        fr = int(np.ceil(dur * fps))
-        st = round(starts[mi] * fps)
-        r_, c_ = sync.audio_info(m["path"])
-        a1.append(f'<clipitem id="rec-{n}"><name>{escape(Path(m["path"]).name)}</name><duration>{fr}</duration>{rate_xml}'
-                  f'<start>{st}</start><end>{st + fr}</end><in>0</in><out>{fr}</out><file id="frec-{n}"><name>{escape(Path(m["path"]).name)}</name>'
-                  f'<pathurl>{escape(core._url(m["path"]))}</pathurl>{rate_xml}<duration>{fr}</duration><media><audio><samplecharacteristics>'
-                  f'<depth>16</depth><samplerate>{r_}</samplerate></samplecharacteristics><channelcount>{c_}</channelcount></audio></media></file>'
-                  f'<sourcetrack><mediatype>audio</mediatype><trackindex>1</trackindex></sourcetrack></clipitem>')
-        a2.append(f'<clipitem id="clk-{n}"><name>{escape(wav.name)}</name><duration>{fr}</duration>{rate_xml}'
-                  f'<start>{st}</start><end>{st + fr}</end><in>0</in><out>{fr}</out><file id="fclk-{n}"><name>{escape(wav.name)}</name>'
-                  f'<pathurl>{escape(core._url(str(wav)))}</pathurl>{rate_xml}<duration>{fr}</duration><media><audio><samplecharacteristics>'
-                  f'<depth>16</depth><samplerate>{SRC}</samplerate></samplecharacteristics><channelcount>1</channelcount></audio></media></file>'
-                  f'<sourcetrack><mediatype>audio</mediatype><trackindex>1</trackindex></sourcetrack></clipitem>')
-    if not n:
-        raise ValueError("No music map yet: press Auto Edit first (it reads the music).")
-    total = max(round((starts[i] + m["duration"]) * fps) for i, m in enumerate(masters))
-    trk = lambda its: f'<track>{"".join(its)}<enabled>TRUE</enabled><locked>FALSE</locked></track>'
-    xml = (f'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4"><sequence id="sequence-1">'
-           f'<name>{escape(Path(out_xml).stem)}</name><duration>{total}</duration>{rate_xml}'
-           f'<media><video><format>{core._sc(rate_xml, 1920, 1080, "none")}</format><track></track></video>'
-           f'<audio><numOutputChannels>2</numOutputChannels>{trk(a1)}{trk(a2)}</audio></media></sequence></xmeml>')
-    Path(out_xml).write_text(xml, encoding="utf-8")
-    return n
-
-
 def seq_fps(cams=None, results=None, analyses=None):
     """The sequence frame rate of the export: always 25 fps."""
     return SEQ_FPS

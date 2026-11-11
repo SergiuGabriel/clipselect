@@ -121,9 +121,6 @@ tobe) nu se inventează beat-uri: acolo se taie ca înainte.</li>
 <p>Opțiunile sunt în panoul <b>Auto Director</b> (dreapta, în proiectul Multicam), la <b>On the music · all projects</b>: sunt aceleași pentru toate proiectele, alegi o dată și rămân. Sunt active doar când Cut on the beat e pornit.</p>
 <p><b>Rândul Music</b> de pe Sync Map (după Auto Edit) arată fiecare melodie cu tempo-ul ei, intensitatea (mai luminos = mai
 intens), vorbirea (gri) și drop-urile (linie roz).</p>
-<p><b>Beat check</b> (sus în proiect): exportă recorder-ul plus un clic pe fiecare beat (mai înalt pe primul beat din măsură,
-un ton lung pe drop) într-un sequence. Îl asculți sau te uiți la waveform în Premiere / DaVinci ca să vezi dacă beat-urile
-cad corect pe muzica ta.</p>
 <h2>On the music: ce înseamnă opțiunile (pe înțelesul tuturor)</h2>
 <p><b>Beat</b> = bătaia pe care o bați din palme pe melodie (1, 2, 3, 4). <b>Măsură</b> (bar) = 4 beat-uri la rând.
 La o melodie de club (128 BPM): 1 beat ≈ 0,5 s, 1 măsură ≈ 2 s. Opțiunile sunt în <b>Multicam &gt; Auto Director &gt; On the music · all
@@ -237,7 +234,7 @@ o poți verifica oricând, iar <b>Download</b> deschide pagina cu fișierele noi
 erorile, fără video.</li>
 </ul>
 <h2>Sfaturi utile</h2>
-<p><b>Limba aplicației:</b> Setări &gt; Limba (English / Română). Se aplică la următoarea pornire, pentru toată aplicația și pentru aceste pagini. Termenii de montaj (Sync, Auto Edit, Export XML, Drop, Beat check) rămân în engleză, ca în Premiere.</p>
+<p><b>Limba aplicației:</b> Setări &gt; Limba (English / Română). Se aplică la următoarea pornire, pentru toată aplicația și pentru aceste pagini. Termenii de montaj (Sync, Auto Edit, Export XML, Drop) rămân în engleză, ca în Premiere.</p>
 <ul>
 <li><b>Auto sau Custom?</b> Auto este varianta clasică: păstrează cadrele bune și le pune pe o singură pistă. Custom îți dă
 control pe fiecare criteriu și împarte totul în Poor / Fair / Good, pe 3 piste.</li>
@@ -383,9 +380,6 @@ without drums) no beat is invented: cuts work as before there.</li>
 <p>The options are in the <b>Auto Director</b> panel (right side of a Multicam project), under <b>On the music · all projects</b>: the same for every project, choose once and they stay. They work when Cut on the beat is on.</p>
 <p>The <b>Music row</b> on the Sync Map (after Auto Edit) shows every song with its tempo, its intensity (brighter = more
 intense), speech (grey) and the drops (pink line).</p>
-<p><b>Beat check</b> (top of the project): exports the recorder plus a click on every beat (higher on beat 1 of the bar, a long
-tone on a drop) as one sequence. Listen or look at the waveform in Premiere / DaVinci to see if the beats fall right on your
-music.</p>
 <h2>On the music: what the options mean (in plain words)</h2>
 <p><b>Beat</b> = the pulse you clap to (1, 2, 3, 4). <b>Bar</b> = 4 beats in a row. In a club song (128 BPM): 1 beat ≈ 0.5 s,
 1 bar ≈ 2 s. The options are in <b>Auto Director &gt; On the music · all projects</b>, they only matter with <b>Cut on the
@@ -496,7 +490,7 @@ and <b>Download</b> opens the page with the new files.</li>
 did and the errors, no video.</li>
 </ul>
 <h2>Useful tips</h2>
-<p><b>App language:</b> Settings &gt; Language (English / Română). It applies the next time the app starts, to the whole app and these pages. Editing terms (Sync, Auto Edit, Export XML, Drop, Beat check) stay in English, like in Premiere.</p>
+<p><b>App language:</b> Settings &gt; Language (English / Română). It applies the next time the app starts, to the whole app and these pages. Editing terms (Sync, Auto Edit, Export XML, Drop) stay in English, like in Premiere.</p>
 <ul>
 <li><b>Auto or Custom?</b> Auto is the classic version: it keeps the good shots and puts them on one track. Custom gives you
 control over every criterion and splits everything into Poor / Fair / Good on 3 tracks.</li>

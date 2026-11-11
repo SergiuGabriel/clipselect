@@ -33,7 +33,7 @@ import ai
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v2.9.0"
+APP, VER = "MoneyMakingMachine", "v2.10.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
 
@@ -591,24 +591,42 @@ class SliderRow(QWidget):
         self._dim(on)
 
 
+_NOTIFY = None      # set by the main window: notify(text) / notify(text, error=True) from anywhere
+
+
+def notify(text, error=False, ms=None):
+    """Pop-up notification at the top of the window: green when something finished, red when it failed."""
+    if _NOTIFY:
+        _NOTIFY(text, error, ms)
+
+
 class Toast(QLabel):
-    """Green notification that slides down from the top of the window and goes away by itself."""
+    """Notification that slides down from the top of the window and goes away by itself (green ok, red error)."""
 
     def __init__(self, parent):
         super().__init__(parent)
-        self.setStyleSheet("background:#1f8f4e;color:white;font-weight:700;font-size:13px;border-radius:8px;padding:10px 18px")
+        self.setWordWrap(False)
         self.hide()
         self.anim = None
+        self.timer = QTimer(self)
+        self.timer.setSingleShot(True)
+        self.timer.timeout.connect(lambda: self._slide(self.pos(), QPoint(self.x(), -self.height() - 4), hide=True))
 
-    def show_msg(self, text, ms=3000):
-        self.setText("✓  " + text)
+    def show_msg(self, text, ms=3000, error=False):
+        self.setStyleSheet(f"background:{'#c0392b' if error else '#1f8f4e'};color:white;font-weight:700;font-size:13px;"
+                           "border-radius:8px;padding:10px 18px")
+        text = i18n.T(text)
+        if len(text) > 110:
+            text = text[:107] + "…"
+        self.setText(("✕  " if error else "✓  ") + text)
         self.adjustSize()
         x = (self.parent().width() - self.width()) // 2
-        self.move(x, -self.height())
+        start = self.pos() if self.isVisible() and self.y() >= 0 else QPoint(x, -self.height())
+        self.move(start)
         self.show()
         self.raise_()
-        self._slide(QPoint(x, -self.height()), QPoint(x, 14))
-        QTimer.singleShot(ms, lambda: self._slide(self.pos(), QPoint(self.x(), -self.height() - 4), hide=True))
+        self._slide(start, QPoint(x, 14))
+        self.timer.start(ms or (6000 if error else 3000))      # a new message restarts the timer
 
     def _slide(self, a, b, hide=False):
         self.anim = QPropertyAnimation(self, b"pos")
@@ -1613,6 +1631,8 @@ class ResultsPage(QWidget):
         except Exception as e:
             self.msg.setStyleSheet(f"color:{C['POOR']}")
             self.msg.setText(f"Error: {e}")
+            logging.exception("footage export failed")
+            notify(f"Export failed: {e}", error=True)
             return
         self.p["out_dir"], self.p["out_name"] = self.dir.text(), name
         self.p["seq"] = dict(size=self.c_size.currentText(), rate=self.c_rate.currentText(), fields=self.c_fields.currentText())
@@ -2047,10 +2067,6 @@ class MulticamPage(QWidget):
         self.b_xml.setToolTip("Use a timeline that is already synced in Syncaila, Premiere Pro or DaVinci Resolve (FCP7 XML).")
         self.b_auto = btn("Auto Edit", slot=self.run_auto)
         self.b_run = btn("Sync", "primary", self.toggle_run)
-        self.b_beat = btn("Beat check", "link", self.export_beatcheck)
-        self.b_beat.setToolTip("Exports the recorder with a click on every beat (higher on beat 1 of the bar, a long tone on every "
-                               "drop) as one sequence: listen / look at the waveform to check the beat on your music.")
-        hh.addWidget(self.b_beat)
         hh.addWidget(self.b_xml)
         hh.addWidget(self.b_exp)
         hh.addWidget(self.b_auto)
@@ -2273,7 +2289,8 @@ class MulticamPage(QWidget):
         self._lw = _Runner(lambda progress=None: style.learn(f, cams, progress))
         self._lw.progress.connect(lambda t, x: self.status.setText(t))
         self._lw.done.connect(lambda r: (self.b_learn.setEnabled(True), self.status.setText(""), self._style_dialog(f, r)))
-        self._lw.failed.connect(lambda m: (self.b_learn.setEnabled(True), self.status.setText(f"Could not learn from it: {m}")))
+        self._lw.failed.connect(lambda m: (self.b_learn.setEnabled(True), self.status.setText(f"Could not learn from it: {m}"),
+                                           notify(f"Could not learn from it: {m}", error=True)))
         self._lw.start()
 
     def _style_dialog(self, f, r):
@@ -2342,6 +2359,7 @@ class MulticamPage(QWidget):
         self.store.save_app()
         self.store.save()
         logging.info("style learned from %s: %s (default=%s)", f, s, as_default)
+        notify("Your editing style is applied" + (" (every new project)" if as_default else ""))
         if self.p:
             self.load(self.p)                            # sliders and switches show the new values
         self._show_style()
@@ -2574,6 +2592,8 @@ class MulticamPage(QWidget):
         self._finish()
         if self.p is self._job_p:
             self.status.setText("Stopped: " + msg)
+        if msg != "Cancelled":
+            notify(f"{self._job_p['name']}: " + i18n.T(msg), error=True)
 
     def on_done(self, r):
         p = self._job_p                    # the project the job was started for (you may have opened another one)
@@ -2591,6 +2611,9 @@ class MulticamPage(QWidget):
                         if miss else "")
                 self.status.setText(f"XML imported: {len(r['results'])} clips on {len(r['cams'])} cameras. "
                                     "Press Auto Edit to build the edit, or Export XML." + warn)
+            notify(f"XML imported: {len(r['results'])} clips on {len(r['cams'])} cameras")
+            if r.get("missing"):
+                notify(f"{len(r['missing'])} file(s) from the XML were not found", error=True)
         elif "results" in r:   # sync finished
             p["infos"] = r["infos"]
             p["sync"] = dict(masters=r["masters"], clips=r["results"], note=r["note"], when=datetime.now().isoformat(timespec="seconds"))
@@ -2605,6 +2628,7 @@ class MulticamPage(QWidget):
                                 f"or press Auto Edit to let the program build the edit (this analyses the video and takes longer).")
             if here:
                 self.status.setText(msg)
+            notify(f"Sync finished: {ok} of {len(r['results'])} clips synced")
         else:                 # analysis finished
             for i, mm in (r.get("music") or {}).items():
                 if i < len(p["sync"]["masters"]):
@@ -2620,6 +2644,7 @@ class MulticamPage(QWidget):
                     c["role"] = director.detect_role([an_all.get(x) for x in c["clips"]])
             if here:
                 self.status.setText("Auto edit ready. Tweak it on the right, then Export XML.")
+            notify(f"Auto edit ready: {p['name']}")
         self.job_status, self.job_progress = "Done", 1.0
         self._finish()
         self.store.save()
@@ -2790,30 +2815,6 @@ class MulticamPage(QWidget):
         self.store.save()
         self.recompute()
 
-    def export_beatcheck(self):
-        s = self.p.get("sync") if self.p else None
-        if not s or not any(m.get("music") for m in s["masters"]):
-            self.status.setText("Beat check needs the music map: press Auto Edit first (it reads the beats and bars).")
-            return
-        first = next((m["path"] for m in s["masters"] if m.get("path")), None)
-        folder = Path(first).parent / "Beat check"           # its own folder: never mixed with the footage
-        try:
-            folder.mkdir(exist_ok=True)
-        except Exception:
-            folder = Path(first).parent
-        out, _ = QFileDialog.getSaveFileName(self, "Save beat check", str(folder / f"{self.p['name']} - beat check.xml"),
-                                             "XML (*.xml)")
-        if not out:
-            return
-        try:
-            n = director.export_beatcheck(s["masters"], out)
-            self.status.setText(f"Beat check saved ({n} recorder file(s) + click track). Import the XML: A1 = recorder, A2 = clicks "
-                                "(high = beat 1 of the bar, long tone = drop).")
-            logging.info("beat check exported: %s", out)
-        except Exception as e:
-            logging.exception("beat check failed")
-            self.status.setText(f"Beat check failed: {e}")
-
     def export(self):
         s = self.p.get("sync")
         if not s:
@@ -2828,8 +2829,11 @@ class MulticamPage(QWidget):
             self.status.setText(f"Saved one sequence ({r['video_tracks']} video, {r['audio_tracks']} audio tracks"
                                 f"{', each camera track holds only its cuts' if r['edit'] else ', full clips (no auto edit yet)'}) to {out}. "
                                 f"Premiere: File > Import · DaVinci Resolve: File > Import > Timeline.")
+            notify(f"XML saved: {Path(out).name}")
         except Exception as e:
+            logging.exception("multicam export failed")
             self.status.setText(f"Export failed: {e}")
+            notify(f"Export failed: {e}", error=True)
 
 
 # ---------------------------------------------------------------- settings / performance
@@ -2946,8 +2950,11 @@ class SettingsPage(QWidget):
             repolish(b_)
         self.lang_note.setText("Restart MoneyMakingMachine to see it in English." if lang == "en" else
                                "Repornește MoneyMakingMachine ca s-o vezi în română.")
+        notify("Restart MoneyMakingMachine to see it in English." if lang == "en" else
+               "Repornește MoneyMakingMachine ca s-o vezi în română.")
 
     def check_updates(self, silent=True):
+        self._silent = silent
         self.upd.setText("Checking…")
         self._uw = _Runner(lambda: latest_release())
         self._uw.done.connect(lambda r: self._update_result(r, silent))
@@ -2956,6 +2963,8 @@ class SettingsPage(QWidget):
 
     def _update_failed(self, m):
         logging.warning("update check failed: %s", m)
+        if not getattr(self, "_silent", True):
+            notify("Could not check for updates", error=True)
         if "404" in m:
             why = "no version has been published on GitHub yet (the first one appears after the next build)"
         elif "403" in m or "429" in m:
@@ -2976,6 +2985,8 @@ class SettingsPage(QWidget):
             self.update_found.emit(tag)
         else:
             self.upd.setText(f"You have the latest version ({VER}).")
+            if not silent:
+                notify(f"You have the latest version ({VER}).")
             self.b_dl.hide()
 
     def open_release(self):
@@ -2996,6 +3007,7 @@ class SettingsPage(QWidget):
                 f"CPU cores: {os.cpu_count()}\nSettings: {json.dumps(self.store.app)}\n\n")
         Path(out).write_text(info + text, encoding="utf-8")
         self.upd.setText(f"Report saved: {out}")
+        notify(f"Report saved: {Path(out).name}")
 
     def set_jobs(self, x):
         self.store.app["jobs"] = x
@@ -3262,9 +3274,11 @@ class AITestDialog(QDialog):
         v = QVBoxLayout(self)
         v.setContentsMargins(20, 16, 20, 16)
         v.addWidget(lbl("AI test (local, free)", "h1"))
-        v.addWidget(lbl("One frame from the middle of up to 25 selections per colour is shown to an image model (CLIP, runs on "
-                        "this Mac, nothing is uploaded). It guesses the kind of shot; green = same as your label, red = "
-                        "different. The first time the model is downloaded once (~150 MB).", "muted", True))
+        v.addWidget(lbl("Up to 25 selections per colour, 3 frames from each (the sharpest of every third, the flat log look "
+                        "corrected), are shown to SigLIP 2, a free image model by Google that runs on this Mac (nothing is "
+                        "uploaded). It guesses the kind of shot; green = same as your label, red = different, grey = the "
+                        "frames show nothing clear (floor, blur, motion). The first time the model is downloaded once "
+                        "(a few GB) and the test takes some minutes.", "muted", True))
         self.pp = ProgressPanel()
         v.addWidget(self.pp)
         self.table = QLabel("")
@@ -3300,6 +3314,9 @@ class AITestDialog(QDialog):
         logging.error("AI test failed: %s", m)
         hint = (" The first run needs internet to download the model." if "urlopen" in m or "resolve" in m.lower()
                 or "HTTP" in m else "")
+        m = i18n.T(m)
+        if m != i18n.T("Cancelled"):
+            notify(m, error=True)
         self.table.setText(f'<span style="color:{C["POOR"]}">The AI test stopped: {m}.{hint} '
                            f'Settings &gt; Save error report and send it to Claude.</span>')
 
@@ -3308,13 +3325,22 @@ class AITestDialog(QDialog):
         self.res = res
         acc = res["acc"]
         tr, tt = sum(a for a, _ in acc.values()), sum(b for _, b in acc.values())
-        rows = "".join(f'<tr><td><span style="color:{teaser.CAT_COLOR[c]}">●</span> {teaser.CAT_NAME[c]}</td>'
-                       f'<td align="right">{r} of {t}</td><td align="right"><b>{(100 * r // t) if t else 0}%</b></td></tr>'
+        of_ = i18n.T("of")
+        unc = res.get("unclear", {})
+        rows = "".join(f'<tr><td><span style="color:{teaser.CAT_COLOR[c]}">●</span> {i18n.T(teaser.CAT_NAME[c])}</td>'
+                       f'<td align="right">{r} {of_} {t}</td><td align="right"><b>{(100 * r // t) if t else 0}%</b></td>'
+                       f'<td align="right" style="color:{C["MUTED"]}">{unc.get(c, 0) or ""}</td></tr>'
                        for c, (r, t) in acc.items())
-        self.table.setText(f'<table cellspacing="10"><tr><td><b>Your colour</b></td><td><b>AI agrees</b></td><td></td></tr>'
-                           f'{rows}<tr><td><b>All</b></td><td align="right">{tr} of {tt}</td>'
-                           f'<td align="right"><b>{(100 * tr // tt) if tt else 0}%</b></td></tr></table>')
+        self.table.setText(f'<table cellspacing="10"><tr><td><b>{i18n.T("Your colour")}</b></td><td><b>{i18n.T("AI agrees")}</b></td>'
+                           f'<td></td><td><b>{i18n.T("Unclear")}</b></td></tr>{rows}<tr><td><b>{i18n.T("All")}</b></td>'
+                           f'<td align="right">{tr} {of_} {tt}</td><td align="right"><b>{(100 * tr // tt) if tt else 0}%</b></td>'
+                           f'<td align="right" style="color:{C["MUTED"]}">{sum(unc.values()) or ""}</td></tr></table>')
+        if res.get("missing"):
+            self.table.setText(self.table.text() + f'<br><span style="color:{C["FAIR"]}">' +
+                               i18n.T("{} clips were not found on this computer and were left out of the test.").format(res["missing"])
+                               + '</span>')
         logging.info("AI test: %s", {k: f"{a}/{b}" for k, (a, b) in acc.items()})
+        notify(f"AI test finished: {(100 * tr // tt) if tt else 0}% agrees with your labels")
         self._grid()
 
     def _grid(self):
@@ -3328,7 +3354,9 @@ class AITestDialog(QDialog):
         for n, (p, img, his, g, conf) in enumerate(rows):
             box = QFrame()
             ok = his == g
-            box.setStyleSheet(f"QFrame{{border:2px solid {C['GOOD'] if ok else C['POOR']};border-radius:6px;background:#202020}}")
+            unclear = g == "unclear"
+            edge = C["MUTED"] if unclear else (C["GOOD"] if ok else C["POOR"])
+            box.setStyleSheet(f"QFrame{{border:2px solid {edge};border-radius:6px;background:#202020}}")
             bv = QVBoxLayout(box)
             bv.setContentsMargins(4, 4, 4, 4)
             pic = QLabel()
@@ -3336,8 +3364,9 @@ class AITestDialog(QDialog):
             pic.setPixmap(QPixmap.fromImage(qi).scaled(160, 160, Qt.KeepAspectRatio, Qt.SmoothTransformation))
             pic.setStyleSheet("border:none")
             bv.addWidget(pic)
-            cap = QLabel(f'<span style="color:{teaser.CAT_COLOR[his]}">You: {teaser.CAT_NAME[his]}</span><br>'
-                         f'<span style="color:{C["GOOD"] if ok else C["POOR"]}">AI: {teaser.CAT_NAME[g]}</span>'
+            gname = i18n.T("Unclear") if unclear else i18n.T(teaser.CAT_NAME[g])
+            cap = QLabel(f'<span style="color:{teaser.CAT_COLOR[his]}">{i18n.T("You")}: {i18n.T(teaser.CAT_NAME[his])}</span><br>'
+                         f'<span style="color:{edge}">AI: {gname}</span>'
                          f'<span style="color:{C["MUTED"]}"> · {int(conf * 100)}%</span>')
             cap.setStyleSheet("border:none;font-size:11px")
             bv.addWidget(cap)
@@ -3514,7 +3543,7 @@ class TeaserPage(QWidget):
         self.runner.progress.connect(self.pp.set)
         self.pp.allow_cancel(self._cancel_job)
         self.runner.done.connect(lambda r: (self.pp.hide(), self.pp.allow_cancel(None), done(r)))
-        self.runner.failed.connect(lambda m: (self.pp.hide(), self.summary.setText("Error: " + m)))
+        self.runner.failed.connect(lambda m: (self.pp.hide(), self.summary.setText("Error: " + m), notify(f"Error: {m}", error=True)))
         self.runner.start()
 
     # ---- projects (one per wedding)
@@ -3666,6 +3695,7 @@ class TeaserPage(QWidget):
                               (f'<br><span style="color:{C["MUTED"]}">Ignored: {ign}</span>' if ign else ""))
         self._remember(footage=self._foot_path)
         self._buttons()
+        notify(f"Footage loaded: {len(self.pieces)} selections")
 
     def pick_music(self, as_xml):
         if as_xml:
@@ -3704,6 +3734,7 @@ class TeaserPage(QWidget):
                              + warn)
         self._remember(music=self._mus_path)
         self._buttons()
+        notify(f"Music loaded: {Path(self._mus_path).name}")
 
     # ---- parts
     def _set_parts(self, b):
@@ -3796,6 +3827,7 @@ class TeaserPage(QWidget):
             except Exception as e:
                 logging.exception("teaser export failed")
                 self.summary.setText(f"Export failed: {e}")
+                notify(f"Export failed: {e}", error=True)
 
 
 # ---------------------------------------------------------------- main window
@@ -3874,6 +3906,8 @@ class Main(QMainWindow):
         self.info = InfoPage(self.store)
         self.teaser = TeaserPage(self.store)
         self.toast = Toast(self)
+        global _NOTIFY
+        _NOTIFY = lambda text, error=False, ms=None: self.toast.show_msg(text, ms, error)
         self.res.export_done = lambda name: (self.toast.show_msg(f"XML saved: {name}"), logging.info("footage export %s", name))
         self.teaser.notify.connect(self.toast.show_msg)
         for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser):
@@ -3986,6 +4020,8 @@ class Main(QMainWindow):
     def on_failed(self, i, msg):
         if msg == "Cancelled":
             self.job["cancelled"] = True
+        else:
+            logging.error("footage analysis failed: %s", msg)
         self.anl.finished(i, False, msg)
 
     def on_finished(self):
@@ -4000,6 +4036,9 @@ class Main(QMainWindow):
                      clips=[job["an"][i].to_json() for i in sorted(job["an"])])
         job["p"]["history"].append(entry)
         self.store.save()
+        failed = len(job.get("paths", [])) - len(job["an"]) if job.get("paths") else 0
+        if not job["cancelled"]:
+            notify(f"Analysis finished: {len(job['an'])} clips" + (f", {failed} failed" if failed > 0 else ""), error=failed > 0)
         if self.proj.p is job["p"]:
             self.proj.refresh_history()
             self.proj.refresh_preview()
