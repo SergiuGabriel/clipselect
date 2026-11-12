@@ -204,8 +204,7 @@ schimbările de melodie).</li>
   </ul>
   Dacă dai muzica ca XML, granițele dintre melodii sunt luate exact de acolo. Timpii trebuie să meargă înainte, în
   ordinea de mai sus.</li>
-<li><b>Proiecte:</b> sus ai lista de proiecte Teaser (câte unul pe nuntă): <b>+ New teaser</b>, Rename, Delete. Fiecare
-proiect ține minte footage-ul, muzica, cele șase momente și ordinea.</li>
+<li><b>Proiecte:</b> Teaser Studio și Long Film au, ca pagina Proiecte, câte un card pentru fiecare nuntă: <b>+ Proiect nou</b>, click pe card ca să-l deschizi, ✕ ca să-l ștergi, <b>← Proiecte</b> ca să revii. Fiecare proiect ține minte filmările, muzica, momentele și pozele.</li>
 <li><b>Analiza selecțiilor</b> se poate opri oricând cu <b>Cancel</b>; ce s-a analizat rămâne salvat și continuă data
 viitoare de unde a rămas. Poți genera și înainte să se termine (selecțiile neanalizate se folosesc fără alegerea celei mai
 bune bucăți). O vezi și în Analysis Queue.</li>
@@ -482,8 +481,7 @@ each song starts).</li>
   </ul>
   If you give the music as an XML, the song changes are taken from it exactly. The times must go forward, in the order
   above.</li>
-<li><b>Projects:</b> at the top you have the list of teaser projects (one per wedding): <b>+ New teaser</b>, Rename,
-Delete. Every project remembers its footage, music, six moments and order.</li>
+<li><b>Projects:</b> like the Projects page, Teaser Studio and Long Film have one card per wedding: <b>+ New Project</b>, click a card to open it, ✕ to delete it, <b>← Projects</b> to go back. Every project remembers its footage, music, moments and photos.</li>
 <li><b>Looking at the selections</b> can be stopped any time with <b>Cancel</b>; what is done is saved and continues next
 time where it was. You can generate before it finishes (unanalysed selections are used without picking their best part).
 It also shows in Analysis Queue.</li>

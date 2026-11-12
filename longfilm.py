@@ -45,12 +45,40 @@ def trains(pieces):
 
 
 def split_day(train):
-    """(before the church, the church, after the church) inside one train, by his order."""
-    first = next((i for i, p in enumerate(train) if p["cat"] == "church"), None)
-    if first is None:
+    """(before the church, the church, after the church) inside one train, by his order. The church is the BIGGEST
+    block of Brown shots (a few other shots inside it are allowed), not the first Brown shot: a church shot that
+    appears earlier (in a teaser, a flash-forward) must not swallow the getting ready."""
+    idx = [i for i, p in enumerate(train) if p["cat"] == "church"]
+    if not idx:
         return train, [], []
-    last = max(i for i, p in enumerate(train) if p["cat"] == "church")
-    return train[:first], [p for p in train[first:last + 1] if p["cat"] == "church"], train[last + 1:]
+    blocks, cur = [], [idx[0]]
+    for i in idx[1:]:
+        if i - cur[-1] <= 4:                   # up to 3 other shots inside the church block
+            cur.append(i)
+        else:
+            blocks.append(cur)
+            cur = [i]
+    blocks.append(cur)
+    best = max(blocks, key=lambda b: sum(train[i]["b"] - train[i]["a"] for i in b))
+    first, last = best[0], best[-1]
+    church = [train[i] for i in best]
+    before = [p for i, p in enumerate(train[:first])]
+    after = [p for p in train[last + 1:]]
+    # Brown shots outside the main block (teaser / flash-forward) are not lost: they join the church, in his order
+    stray = [p for i, p in enumerate(train) if p["cat"] == "church" and i not in best]
+    if stray:
+        church = sorted(church + stray, key=lambda p: p["order"])
+        before = [p for p in before if p["cat"] != "church"]
+        after = [p for p in after if p["cat"] != "church"]
+    return before, church, after
+
+
+def looks_like_an_edit(pieces):
+    """A finished film (cuts of 1-2 s) instead of a selects sequence."""
+    if len(pieces) < 40:
+        return False
+    L = sorted(p["b"] - p["a"] for p in pieces)
+    return L[len(L) // 2] < 2.5
 
 
 def _by_time(ps):

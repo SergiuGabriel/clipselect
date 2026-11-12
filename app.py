@@ -35,7 +35,7 @@ import ai
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v2.12.0"
+APP, VER = "MoneyMakingMachine", "v3.0.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
 
@@ -3412,6 +3412,7 @@ class AITestDialog(QDialog):
 
 class TeaserPage(QWidget):
     notify = Signal(str)
+    back = Signal()
 
     def __init__(self, store):
         super().__init__()
@@ -3428,7 +3429,10 @@ class TeaserPage(QWidget):
         sv.setContentsMargins(24, 18, 24, 18)
         sv.setSpacing(10)
         top = QHBoxLayout()
-        top.addWidget(lbl("Teaser Studio", "h1"))
+        top.addWidget(btn("←  Projects", "link", lambda: self.back.emit()))
+        self.pname = lbl("", "h2")
+        top.addWidget(self.pname)
+        top.addWidget(lbl("·  Teaser Studio", "muted"))
         badge = QLabel("NEW")
         badge.setStyleSheet(f"background:{C['POOR']};color:white;font-size:10px;font-weight:800;border-radius:9px;padding:2px 8px")
         top.addWidget(badge)
@@ -3452,7 +3456,14 @@ class TeaserPage(QWidget):
         pr.addWidget(btn("Rename", "link", self.rename_project))
         pr.addWidget(btn("Delete", "link", self.delete_project))
         pr.addStretch()
-        sv.addLayout(pr)
+        self.pr_box = QWidget()                     # the old project row: projects are cards now (hidden)
+        self.pr_box.setLayout(pr)
+        self.pr_box.hide()
+        sv.addWidget(self.pr_box)
+        rn = QHBoxLayout()
+        rn.addWidget(btn("Rename", "link", self.rename_project))
+        rn.addStretch()
+        sv.addLayout(rn)
         body = QHBoxLayout()
         body.setSpacing(18)
         sv.addLayout(body, 1)
@@ -3558,9 +3569,14 @@ class TeaserPage(QWidget):
         self.chrono = True                       # the story always follows the day (Shuffle still gives other shots)
         self.stack.setCurrentIndex(0)
         self.auto_bounds = None
-        self._fill_projects()
         self._buttons()
-        QTimer.singleShot(0, self.restore)
+
+    def open_project(self):
+        """Opened from its card."""
+        self._fill_projects()
+        self._clear()
+        self.pname.setText(self._cur()["name"])
+        self.restore()
 
     def restore(self):
         """Reload the footage XML, the music and your six moments from last time."""
@@ -3599,6 +3615,9 @@ class TeaserPage(QWidget):
 
     def _cur(self):
         ps = self._projects()
+        if not ps:
+            ps.append(dict(id=uuid.uuid4().hex, name="My first teaser"))
+            self.store.app["teaser_current"] = ps[0]["id"]
         return next((p for p in ps if p["id"] == self.store.app.get("teaser_current")), ps[0])
 
     def _fill_projects(self):
@@ -3643,6 +3662,7 @@ class TeaserPage(QWidget):
             p["name"] = name.strip()
             self.store.save_app()
             self._fill_projects()
+            self.pname.setText(p["name"])
 
     def delete_project(self):
         from PySide6.QtWidgets import QMessageBox
@@ -3678,7 +3698,7 @@ class TeaserPage(QWidget):
         self._buttons()
 
     def _remember(self, **kw):
-        self._cur().update(kw)
+        self._cur().update(kw, when=datetime.now().isoformat(timespec="seconds"))
         self.store.save_app()
 
     def ai_test(self):
@@ -3948,6 +3968,7 @@ class TeaserPage(QWidget):
 
 class LongFilmPage(QWidget):
     """The long film pre-cut from his labelled selections (see longfilm.py). Own projects, like Teaser Studio."""
+    back = Signal()
 
     def __init__(self, store, teaser_page):
         super().__init__()
@@ -3957,7 +3978,10 @@ class LongFilmPage(QWidget):
         v.setContentsMargins(24, 18, 24, 18)
         v.setSpacing(10)
         top = QHBoxLayout()
-        top.addWidget(lbl("Long Film", "h1"))
+        top.addWidget(btn("←  Projects", "link", lambda: self.back.emit()))
+        self.pname = lbl("", "h2")
+        top.addWidget(self.pname)
+        top.addWidget(lbl("·  Long Film", "muted"))
         badge = QLabel("NEW")
         badge.setStyleSheet(f"background:{C['POOR']};color:white;font-size:10px;font-weight:800;border-radius:9px;padding:2px 8px")
         top.addWidget(badge)
@@ -3980,7 +4004,14 @@ class LongFilmPage(QWidget):
         pr.addWidget(btn("Rename", "link", self.rename_project))
         pr.addWidget(btn("Delete", "link", self.delete_project))
         pr.addStretch()
-        v.addLayout(pr)
+        self.pr_box = QWidget()
+        self.pr_box.setLayout(pr)
+        self.pr_box.hide()
+        v.addWidget(self.pr_box)
+        rn = QHBoxLayout()
+        rn.addWidget(btn("Rename", "link", self.rename_project))
+        rn.addStretch()
+        v.addLayout(rn)
         body = QHBoxLayout()
         body.setSpacing(18)
         v.addLayout(body, 1)
@@ -4053,23 +4084,25 @@ class LongFilmPage(QWidget):
         right.addStretch()
         body.addLayout(right, 1)
         self.layout_ = None
+
+    def open_project(self):
         self._fill_projects()
-        QTimer.singleShot(0, self.restore)
+        self.pname.setText(self._cur()["name"])
+        self.restore()
 
     # ---- projects (one per wedding)
     def _projects(self):
-        app = self.store.app
-        if not app.get("long_projects"):
-            app["long_projects"] = [dict(id=uuid.uuid4().hex, name="My first long film")]
-            app["long_current"] = app["long_projects"][0]["id"]
-        return app["long_projects"]
+        return self.store.app.setdefault("long_projects", [])
 
     def _cur(self):
         ps = self._projects()
+        if not ps:
+            ps.append(dict(id=uuid.uuid4().hex, name="My first long film"))
+            self.store.app["long_current"] = ps[0]["id"]
         return next((p for p in ps if p["id"] == self.store.app.get("long_current")), ps[0])
 
     def _remember(self, **kw):
-        self._cur().update(kw)
+        self._cur().update(kw, when=datetime.now().isoformat(timespec="seconds"))
         self.store.save_app()
 
     def _fill_projects(self):
@@ -4110,6 +4143,7 @@ class LongFilmPage(QWidget):
             p["name"] = name.strip()
             self.store.save_app()
             self._fill_projects()
+            self.pname.setText(p["name"])
 
     def delete_project(self):
         from PySide6.QtWidgets import QMessageBox
@@ -4164,7 +4198,15 @@ class LongFilmPage(QWidget):
         self.pp.allow_cancel(lambda: setattr(self, "_stop", True))
         self.runner = _Runner(fn)
         self.runner.progress.connect(self.pp.set)
-        self.runner.done.connect(lambda r: (self.pp.hide(), self.pp.allow_cancel(None), done(r)))
+        t0 = time.time()
+
+        def _done(r):
+            self.pp.set(text, 1.0)
+            self.pp.allow_cancel(None)
+            done(r)
+            # a very quick job still shows its bar for a moment (you see that something happened)
+            QTimer.singleShot(int(max(0, 0.9 - (time.time() - t0)) * 1000), self.pp.hide)
+        self.runner.done.connect(_done)
         self.runner.finished.connect(self._buttons)          # only when the job has really ended
         self.runner.failed.connect(lambda m: (self.pp.hide(), self.pp.allow_cancel(None), self._buttons(),
                                               self.parts_lbl.setText(f'<span style="color:{C["POOR"]}">{i18n.T("Error: {}").format(i18n.T(m))}</span>'),
@@ -4189,6 +4231,9 @@ class LongFilmPage(QWidget):
             b, c, _ = longfilm.split_day(tr)
             rows.append(i18n.T("Camera {}: {} selections").format(k + 1, len(tr)) +
                         ("" if c else f' <span style="color:{C["FAIR"]}">{i18n.T("(no Brown church shot: everything counts as morning)")}</span>'))
+        if longfilm.looks_like_an_edit(self.pieces):
+            rows.append(f'<span style="color:{C["FAIR"]}">' + i18n.T("This looks like a finished film (cuts of 1-2 s), not your selects sequence: "
+                        "the long film would reuse those short cuts. Import the sequence with your selections.") + "</span>")
         missing = sum(1 for p in self.pieces if not Path(p["path"]).exists())
         if missing:
             rows.append(f'<span style="color:{C["POOR"]}">' + i18n.T("{} clips not found on this computer: connect the disk with the footage.").format(missing) + "</span>")
@@ -4210,7 +4255,7 @@ class LongFilmPage(QWidget):
             rows.append(f"<tr><td>{i18n.T(name)}</td><td align='right'>{len(ps)}</td><td align='right'>{int(d // 60)}:{int(d % 60):02d}</td></tr>")
         total = sum(L for _, L, _ in layout) if layout else None
         head = f"<tr><td><b>{i18n.T('Part')}</b></td><td><b>{i18n.T('Selections')}</b></td><td><b>{i18n.T('Duration')}</b></td></tr>"
-        tail = (f"<br>{i18n.T('Ready: about {} min without the teaser and the party. Press Export XML.').format(int(total // 60))}"
+        tail = (f"<br>{i18n.T('Built. The long film is about {} min long (without the teaser and the party). Press Export XML.').format(max(1, round(total / 60)))}"
                 if total is not None else f"<br>{i18n.T('Press Build.')}")
         self.parts_lbl.setText(f"<table cellspacing='8'>{head}{''.join(rows)}</table>{tail}")
 
@@ -4280,6 +4325,131 @@ class LongFilmPage(QWidget):
             notify(f"Export failed: {e}", error=True)
 
 
+# ---------------------------------------------------------------- project pages for Teaser Studio / Long Film
+
+class StudioCard(QFrame):
+    opened = Signal(str)
+    deleted = Signal(str)
+
+    def __init__(self, p, badge, colour, lines):
+        super().__init__()
+        self.pid, self.pname = p["id"], p["name"]
+        self.setObjectName("card")
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedHeight(104)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(12, 10, 8, 10)
+        v.setSpacing(3)
+        top = QHBoxLayout()
+        b = QLabel(badge)
+        b.setStyleSheet(f"background:{colour};color:white;font-size:9px;font-weight:700;border-radius:3px;padding:1px 6px")
+        top.addWidget(b)
+        top.addStretch()
+        d = btn("✕", "del", self.ask_delete)
+        d.setFixedSize(22, 22)
+        top.addWidget(d)
+        v.addLayout(top)
+        name = QLabel()
+        name.setStyleSheet("font-size:13px;font-weight:700;color:#ececec")
+        name.setText(name.fontMetrics().elidedText(p["name"], Qt.ElideRight, 230))
+        v.addWidget(name)
+        for t in lines:
+            v.addWidget(lbl(t, "muted"))
+        v.addStretch()
+
+    def ask_delete(self):
+        from PySide6.QtWidgets import QMessageBox
+        if QMessageBox.question(self, "Delete project",
+                                f"Delete \"{self.pname}\"?\nYour video files are not touched, only the project is removed.") == QMessageBox.Yes:
+            self.deleted.emit(self.pid)
+
+    def mousePressEvent(self, _):
+        self.opened.emit(self.pid)
+
+
+class StudioHub(QWidget):
+    """Teaser Studio / Long Film: a page of project cards (like Projects), the studio opens on a card."""
+
+    def __init__(self, store, studio, title, key, badge, colour, lines):
+        super().__init__()
+        self.store, self.studio, self.key, self.badge, self.colour, self.lines = store, studio, key, badge, colour, lines
+        self.stack = QStackedWidget()
+        v = QVBoxLayout(self)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.addWidget(self.stack)
+        g = QWidget()
+        gv = QVBoxLayout(g)
+        gv.setContentsMargins(28, 22, 28, 22)
+        head = QHBoxLayout()
+        head.addWidget(lbl(title, "h1"))
+        head.addStretch()
+        head.addWidget(btn("+  New Project", "primary", self.new_project))
+        gv.addLayout(head)
+        self.empty = lbl("No projects yet. Press New Project: one per wedding.", "muted", True)
+        gv.addWidget(self.empty)
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        gv.addWidget(self.scroll, 1)
+        self.stack.addWidget(g)
+        self.stack.addWidget(studio)
+        studio.back.connect(self.show_grid)
+        self.refresh()
+
+    def projects(self):
+        return self.store.app.setdefault(f"{self.key}_projects", [])
+
+    def refresh(self):
+        ps = self.projects()
+        self.empty.setVisible(not ps)
+        w = QWidget()
+        gl = QGridLayout(w)
+        gl.setAlignment(Qt.AlignTop)
+        gl.setSpacing(14)
+        for i, p in enumerate(reversed(ps)):
+            c = StudioCard(p, self.badge, self.colour, self.lines(p))
+            c.opened.connect(self.open)
+            c.deleted.connect(self.delete)
+            gl.addWidget(c, i // 4, i % 4)
+        for col in range(4):
+            gl.setColumnStretch(col, 1)
+        self.scroll.setWidget(w)
+
+    def show_grid(self):
+        self.refresh()
+        self.stack.setCurrentIndex(0)
+
+    def open(self, pid):
+        if self.studio._busy():
+            self.stack.setCurrentIndex(1)
+            notify("Wait for the current job to finish (or Cancel it).", error=True)
+            return
+        self.store.app[f"{self.key}_current"] = pid
+        self.store.save_app()
+        self.studio.open_project()
+        self.stack.setCurrentIndex(1)
+
+    def new_project(self):
+        from PySide6.QtWidgets import QInputDialog
+        name, ok = QInputDialog.getText(self, "New Project", "Name (e.g. the couple):")
+        if not ok or not name.strip():
+            return
+        p = dict(id=uuid.uuid4().hex, name=name.strip(), when=datetime.now().isoformat(timespec="seconds"))
+        self.projects().append(p)
+        self.store.save_app()
+        self.open(p["id"])
+
+    def delete(self, pid):
+        if self.studio._busy() and self.store.app.get(f"{self.key}_current") == pid:
+            notify("Wait for the current job to finish (or Cancel it).", error=True)
+            return
+        ps = self.projects()
+        ps[:] = [p for p in ps if p["id"] != pid]
+        if self.store.app.get(f"{self.key}_current") == pid:
+            self.store.app[f"{self.key}_current"] = None
+        self.store.save_app()
+        self.refresh()
+
+
 # ---------------------------------------------------------------- main window
 
 class Main(QMainWindow):
@@ -4327,9 +4497,9 @@ class Main(QMainWindow):
         sv.addLayout(top)
         sv.addSpacing(14)
         self.nav = {"dash": btn("Dashboard", "nav", lambda: self.go("dash")),
-                    "queue": btn("Analysis Queue", "nav", lambda: self.go("queue")),
                     "teaser": btn("Teaser Studio", "nav", lambda: self.go("teaser")),
                     "long": btn("Long Film", "nav", lambda: self.go("long")),
+                    "queue": btn("Analysis Queue", "nav", lambda: self.go("queue")),
                     "settings": btn("Settings", "nav", lambda: self.go("settings")),
                     "info": btn("Info / How to use", "nav", lambda: self.go("info"))}
         for b in self.nav.values():
@@ -4358,12 +4528,19 @@ class Main(QMainWindow):
         self.info = InfoPage(self.store)
         self.teaser = TeaserPage(self.store)
         self.long = LongFilmPage(self.store, self.teaser)
+        name_of = lambda f: Path(f).name if f else i18n.T("No footage yet")
+        self.teaser_hub = StudioHub(self.store, self.teaser, "Teaser Studio", "teaser", "TEASER", "#e5534b",
+                                    lambda p: [name_of(p.get("footage")), f"{i18n.T('Updated')} {nice_date(p.get('when', ''))}"])
+        self.long_hub = StudioHub(self.store, self.long, "Long Film", "long", "LONG FILM", "#2e9e6a",
+                                  lambda p: [name_of(p.get("footage")),
+                                             (i18n.T("with vornic") + " · " if p.get("vornic") else "") +
+                                             f"{i18n.T('Updated')} {nice_date(p.get('when', ''))}"])
         self.toast = Toast(self)
         global _NOTIFY
         _NOTIFY = lambda text, error=False, ms=None: self.toast.show_msg(text, ms, error)
         self.res.export_done = lambda name: (self.toast.show_msg(f"XML saved: {name}"), logging.info("footage export %s", name))
         self.teaser.notify.connect(self.toast.show_msg)
-        for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser, self.long):
+        for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser_hub, self.long_hub):
             self.stack.addWidget(w)
         self.dash.new_project.connect(self.new_project)
         self.dash.open_project.connect(self.open_project)
@@ -4376,7 +4553,7 @@ class Main(QMainWindow):
         self.anl.pause.connect(lambda on: self.worker and self.worker.pause(on))
         self.anl.cancel.connect(lambda: self.worker and self.worker.cancel())
         self.res.back.connect(lambda: self.show_page(self.proj))
-        self.queue.open_job.connect(lambda k: self.show_page({"footage": self.anl, "teaser": self.teaser}.get(k, self.mc)))
+        self.queue.open_job.connect(self._open_job)
         self.qtimer = QTimer(interval=700)
         self.qtimer.timeout.connect(self.refresh_queue)
         self.qtimer.start()
@@ -4398,6 +4575,13 @@ class Main(QMainWindow):
         self.proj.b_an.setText("View analysis" if running_here else "Analyze Footage")
         self.queue.set_jobs(jobs)
         self.nav["queue"].setText(f"Analysis Queue ({len(jobs)})" if jobs else "Analysis Queue")
+
+    def _open_job(self, k):
+        if k == "teaser":
+            self.teaser_hub.stack.setCurrentIndex(1)
+            self.show_page(self.teaser_hub)
+        else:
+            self.show_page({"footage": self.anl}.get(k, self.mc))
 
     def closeEvent(self, e):
         self.store.flush()
@@ -4421,7 +4605,7 @@ class Main(QMainWindow):
         self.stack.setCurrentWidget(w)
         for k, b in self.nav.items():
             b.setProperty("active", (k == "dash" and w in (self.dash, self.proj, self.res, self.mc)) or (k == "queue" and w in (self.queue, self.anl))
-                          or (k == "settings" and w is self.settings) or (k == "info" and w is self.info) or (k == "teaser" and w is self.teaser) or (k == "long" and w is self.long))
+                          or (k == "settings" and w is self.settings) or (k == "info" and w is self.info) or (k == "teaser" and w is self.teaser_hub) or (k == "long" and w is self.long_hub))
             repolish(b)
 
     def go(self, where):
@@ -4433,9 +4617,11 @@ class Main(QMainWindow):
         elif where == "info":
             self.show_page(self.info)
         elif where == "teaser":
-            self.show_page(self.teaser)
+            self.teaser_hub.show_grid()
+            self.show_page(self.teaser_hub)
         elif where == "long":
-            self.show_page(self.long)
+            self.long_hub.show_grid()
+            self.show_page(self.long_hub)
         else:
             self.show_page(self.queue)
 

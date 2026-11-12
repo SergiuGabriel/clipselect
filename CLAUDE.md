@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.12.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.0.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -271,6 +271,17 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 - Final check before v2.12.0: pyflakes clean (no undefined names) + every test script (music, tempo styles, director
   holes / zones / alt, multicam, import XML, teaser, projects / AI / queue / analysis screen, learn my style, faces + AI on
   every selection, long film + closing with a job running, Romanian scan of every screen: 0 English texts).
+
+## v3.0.0 (major: the owner asked for 3.0 instead of more 0.1 steps)
+- Teaser Studio and Long Film open on a PROJECT CARDS page like Projects (StudioHub + StudioCard: + New Project, click to
+  open, ✕ to delete, "← Projects" back in the studio; no project drop-down any more). Sidebar order: Projects, Teaser
+  Studio, Long Film, Analysis Queue, Settings, Info.
+- Long Film: the church is the BIGGEST block of Brown shots (up to 3 others inside), not the first Brown shot (his first
+  test imported a finished shortmovie whose teaser had church shots at second 2 -> getting ready was empty); stray Brown
+  shots join the church in his order. A finished film (median cut < 2.5 s, 40+ pieces) gets a warning: import the
+  selects sequence. "Built. The long film is about N min long" (it is the FILM length, not a waiting time).
+- Long Film does NOT need bride / groom face recognition (it chooses nothing: all his selections, his order); only the
+  vornic is found by face there.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower
