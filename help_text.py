@@ -157,7 +157,7 @@ instantă, fără să refaci analiza.</p>
 <p>La muzica populară (formație, tempo care se schimbă mereu, hore și sârbe) tăieturile pe măsuri nu se potrivesc, iar
 partea asta arată mai bine puțin mai calmă. Pe <b>Sync Map</b> tragi cu mouse-ul peste porțiunea respectivă și apare o
 zonă galbenă <b>Slower cuts</b>. În ea Auto Edit taie <b>ca înainte de tăierea pe măsuri</b> (pe cel mai apropiat accent din
-sunet) și cu <b>cadre mai lungi</b> (minimum 6 s și cel puțin dublul lui Minimum shot, fără să treacă de Maximum shot).
+sunet) și cu <b>setările tale de horă</b>: Minimum shot 6 s, Maximum shot 120 s, Cut pace 50, Static ↔ Handheld 45 (oricum ar fi setat restul petrecerii).
 Restul petrecerii rămâne tăiat pe muzică.</p>
 <ul>
 <li>Tragi de marginea zonei ca s-o muți; sub hartă ai lista zonelor, unde scrii ora exactă (h:mm:ss.s).</li>
@@ -233,10 +233,7 @@ jurămintele în Premiere (markere: Teaser, DROP, Getting ready, Church, Couple 
 <p>Filmul lung pre-montat din selecțiile tale etichetate. Fiecare selecție e pusă <b>întreagă, în ordinea ta</b>; muzica,
 interviurile și finisajele le adaugi tu în Premiere. Petrecerea rămâne montajul din Multicam.</p>
 <ol>
-<li><b>Filmări:</b> XML-ul sequence-ului de selecții, cu aceleași culori ca în Teaser Studio. În sequence pui ziua camerei 1,
-lași o <b>pauză de câteva minute</b>, apoi ziua camerei 2. Aplicația recunoaște singură cele două camere după pauză. În
-fiecare cameră, <b>primul cadru maro</b> (biserica) desparte dimineața de rest: Iris înainte de biserică = first look,
-după = petrecere.</li>
+<li><b>Filmări:</b> XML-ul sequence-ului de selecții, cu aceleași culori ca în Teaser Studio, așezat cum vrei (una sau mai multe piste, goluri, orice ordine). Aplicația recunoaște <b>camerele după fișiere</b> (de exemplu fx6, fx3, a74, dronă; chiar și două aparate care numesc fișierele la fel se deosebesc după rezoluție și frame rate) și citește ziua fiecărei camere din <b>numerele fișierelor</b> (ordinea în care a filmat), deci nu contează ceasul camerelor. Pe fiecare cameră, blocul de biserică desparte dimineața (Iris = first look) de rest (Iris = petrecere); o cameră fără biserică e socotită de petrecere. Camera principală (cu cele mai multe pregătiri) dă pregătirile.</li>
 <li><b>Teaser:</b> alegi proiectul din Teaser Studio al aceleiași nunți; teaserul lui (cu muzica) deschide filmul.</li>
 <li><b>Vornic (opțional, oprit implicit):</b> pornește-l doar la nunțile cu vornic și alege o poză bună cu el (fața bine
 vizibilă). Aplicația îi găsește cadrele Iris de dimineață după față, pe ambele camere (recunoaștere facială locală, gratuită).
@@ -435,8 +432,7 @@ no new analysis needed.</p>
 <h3>"Slower cuts" zones (for folk music)</h3>
 <p>With folk music (a live band, a tempo that keeps changing, hora and sârba) cutting on the bars does not fit and that part
 looks better a bit calmer. On the <b>Sync Map</b> drag across that part: a yellow <b>Slower cuts</b> zone appears. Inside it
-Auto Edit cuts <b>the way it did before the bars</b> (on the nearest accent of the sound) and with <b>longer shots</b> (at
-least 6 s and twice the Minimum shot, never past Maximum shot). The rest of the party stays cut on the music.</p>
+Auto Edit cuts <b>the way it did before the bars</b> (on the nearest accent of the sound) and with <b>your hora settings</b>: Minimum shot 6 s, Maximum shot 120 s, Cut pace 50, Static ↔ Handheld 45 (whatever the rest of the party uses). The rest of the party stays cut on the music.</p>
 <ul>
 <li>Drag an edge of the zone to move it; under the map the list of zones takes the exact times (h:mm:ss.s).</li>
 <li>Right-click the zone or press <b>Delete</b> to remove it. Zones are saved with the project.</li>
@@ -510,9 +506,7 @@ testimonials and vows in Premiere (markers: Teaser, DROP, Getting ready, Church,
 <p>The long film pre-cut from your labelled selections. Every selection goes in <b>whole, in your order</b>; you add the music,
 the interviews and the final touches in Premiere. The party stays the Multicam edit.</p>
 <ol>
-<li><b>Footage:</b> the XML of your selects sequence, same colours as Teaser Studio. Put camera 1's day, leave a <b>pause of a
-few minutes</b>, then camera 2's day. The app finds the two cameras by the pause. In every camera the <b>first Brown shot</b>
-(the church) separates the morning from the rest: Iris before the church = first look, after = party.</li>
+<li><b>Footage:</b> the XML of your selects sequence, same colours as Teaser Studio, laid out as you like (one or more tracks, gaps, any order). The app recognises <b>the cameras by their files</b> (e.g. fx6, fx3, a74, drone; even two bodies that name their files the same differ by size and frame rate) and reads every camera's day from its <b>file numbers</b> (the order it filmed), so the cameras' clocks do not matter. On every camera the church block separates the morning (Iris = first look) from the rest (Iris = party); a camera without a church counts as party. The main camera (most getting-ready shots) gives the getting ready.</li>
 <li><b>Teaser:</b> pick the Teaser Studio project of the same wedding; its teaser (with the music) opens the film.</li>
 <li><b>Vornic (optional, off by default):</b> turn it on only for weddings with a vornic and pick a good photo of him (face
 well visible). The app finds his Iris shots of the morning by his face, on both cameras (local, free face recognition). The

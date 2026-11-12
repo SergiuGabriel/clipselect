@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.0.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.1.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -282,6 +282,18 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   selects sequence. "Built. The long film is about N min long" (it is the FILM length, not a waiting time).
 - Long Film does NOT need bride / groom face recognition (it chooses nothing: all his selections, his order); only the
   vornic is found by face there.
+
+## v3.1.0
+- Long Film cameras are recognised by their FILES, not by gaps in the timeline (his real selects: V1 + V2, blocks by
+  moment, gaps of 1-10 min -> the old 20 s gap rule made 14-16 fake cameras). longfilm.camera_key = file name pattern
+  (digits removed) + picture size + frame rate (C9375.MP4 fx3 1080p50 vs C2002.MP4 a74 4K24); every camera's day =
+  its FILE NUMBERS (the order it filmed; clocks never used); main camera = most bride / groom shots (getting ready);
+  church = ALL Brown shots in HIS timeline order; drone always with the venue; a camera with no church block counts as
+  party (its Iris is not first look). Camera names shown from the clips' folder (fx6, fx3, mavic, a74).
+  His 4 July test: fx6 475 / fx3 121 / mavic 35 / a74 8 -> getting ready 168, first look 94, church 149, couple+venue 174.
+- "Slower cuts" zones use the owner's HORA settings (director.HORA: min 6 s, max 120 s, pace 50, static<->handheld 45)
+  whatever the party settings: the zone cells are chosen again with those values.
+- Unknown label "Teal" (7 shots near the church on fx6) is ignored: ask him what Teal means if it matters.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

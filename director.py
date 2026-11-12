@@ -19,7 +19,9 @@ DEFAULTS = dict(minshot=3, maxshot=30, pace=50, energy=60, beat=True, static_bac
                 drop_beats=4, buildup="hold", energy_cuts=True, pre_frames=0)
 SEQ_FPS = 25.0      # the owner's final sequences are always 25 fps
 PRE_BEAT = 1 / SEQ_FPS   # cuts on the music fall 1 frame (40 ms) before the beat: the eye sees a cut a little late
-SLOW_MIN = 6.0      # shortest shot inside a "Slower cuts" zone (and at least 2 x Minimum shot)       # the last three: global (Settings > Auto edit music)
+SLOW_MIN = 6.0
+# inside a "Slower cuts" zone (folk music, hora) the owner's own settings, whatever the rest of the party uses
+HORA = dict(minshot=6.0, maxshot=120.0, pace=50, energy=45)      # shortest shot inside a "Slower cuts" zone (and at least 2 x Minimum shot)       # the last three: global (Settings > Auto edit music)
 CAM_COLORS = ["#a78bfa", "#2dd4bf", "#fb923c", "#22c55e", "#818cf8", "#f472b6", "#38bdf8", "#c4b5fd"]  # = sync.CAM_LABELS
 
 
@@ -295,6 +297,21 @@ def build(cams, results, analyses, masters, st):
         g0 = sync.master_starts(masters)[mi]
         zones = [(max(T0, z0 - g0), min(T1, z1 - g0)) for z0, z1 in st.get("zones", []) if z1 - g0 > T0 and z0 - g0 < T1]
         in_zone = lambda t: any(z0 - 1e-6 <= t <= z1 + 1e-6 for z0, z1 in zones)
+        # the zones are chosen again with the hora settings (min 6 s, max 120 s, pace 50, static <-> handheld 45)
+        if zones:
+            bias_h = (HORA["energy"] - 50) / 50 * 25
+            delta = np.array([(bias_h - bias) * (1 if cams[ci]["role"] == "Handheld" else -1) for ci in range(C)])[:, None]
+            qz = np.where(avail, q + delta, -np.inf)
+            mnz = max(1, int(round(HORA["minshot"] / GRID)))
+            mxz = max(mnz + 1, int(round(HORA["maxshot"] / GRID)))
+            penz = 2 + (100 - HORA["pace"]) / 100 * 18
+            for z0, z1 in zones:
+                c0, c1 = max(0, int((z0 - T0) / GRID)), min(nT, int(np.ceil((z1 - T0) / GRID)))
+                if c1 - c0 < 2:
+                    continue
+                sub = _limit_long_shots(_dp(np.where(avail[:, c0:c1], 100 - qz[:, c0:c1], 1e4), mnz, penz),
+                                        np.where(avail[:, c0:c1], qz[:, c0:c1], -1e9), avail[:, c0:c1], mnz, mxz)
+                path[c0:c1] = sub
         pre = PRE_BEAT
         mm = m.get("music") if st["beat"] else None
         music_spans = []
@@ -415,7 +432,7 @@ def build(cams, results, analyses, masters, st):
         # cuts on the beat (old way, only without a music map)
         # "Slower cuts" zones (folk music...): longer shots, glued to the longer neighbour
         if zones:
-            slow = max(SLOW_MIN, 2 * st["minshot"])
+            slow = HORA["minshot"]
             changed = True
             while changed and len(segs) > 1:
                 changed = False
@@ -426,7 +443,7 @@ def build(cams, results, analyses, masters, st):
                           and in_zone(segs[j][0] + 1e-3 if j > k else segs[j][1] - 1e-3)]
                     if not nb:
                         continue
-                    nb = [j for j in nb if (segs[j][1] - segs[j][0]) + (sg[1] - sg[0]) <= st["maxshot"]]   # never past Maximum shot
+                    nb = [j for j in nb if (segs[j][1] - segs[j][0]) + (sg[1] - sg[0]) <= HORA["maxshot"]]   # never past 120 s
                     if not nb:
                         continue
                     j = max(nb, key=lambda j: segs[j][1] - segs[j][0])

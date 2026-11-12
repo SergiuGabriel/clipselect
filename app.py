@@ -35,7 +35,7 @@ import ai
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.0.0"
+APP, VER = "MoneyMakingMachine", "v3.1.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
 
@@ -4040,9 +4040,10 @@ class LongFilmPage(QWidget):
             left.addWidget(f)
             return l
         l1 = card(1, "Footage (your colour labels)")
-        l1.addWidget(lbl("The XML of your selects sequence: camera 1's day, a pause of a few minutes, then camera 2's day, "
-                         "each in your order. Same colours as Teaser Studio; the first Brown shot of every camera separates "
-                         "the morning from the rest.", "muted", True))
+        l1.addWidget(lbl("The XML of your selects sequence, laid out as you like (one or more tracks, gaps, any order). Same "
+                         "colours as Teaser Studio. The cameras are recognised by their files and every camera's day is read "
+                         "from its file numbers (the order it filmed); the church block on each camera separates the morning "
+                         "from the rest. The church goes in exactly as you laid it out.", "muted", True))
         l1.addWidget(btn("Import labelled XML", slot=self.pick_footage))
         self.foot_lbl = QLabel("")
         self.foot_lbl.setWordWrap(True)
@@ -4229,8 +4230,9 @@ class LongFilmPage(QWidget):
         rows = [f"<b>{Path(self._cur()['footage']).name}</b>"]
         for k, tr in enumerate(trs):
             b, c, _ = longfilm.split_day(tr)
-            rows.append(i18n.T("Camera {}: {} selections").format(k + 1, len(tr)) +
-                        ("" if c else f' <span style="color:{C["FAIR"]}">{i18n.T("(no Brown church shot: everything counts as morning)")}</span>'))
+            rows.append(f"<b>{longfilm.camera_name(tr)}</b>: " + i18n.T("{} selections").format(len(tr)) +
+                        (f' · {i18n.T("main camera (getting ready)")}' if k == 0 else "") +
+                        ("" if c else f' <span style="color:{C["MUTED"]}">{i18n.T("(no church on this camera: its Iris counts as the party)")}</span>'))
         if longfilm.looks_like_an_edit(self.pieces):
             rows.append(f'<span style="color:{C["FAIR"]}">' + i18n.T("This looks like a finished film (cuts of 1-2 s), not your selects sequence: "
                         "the long film would reuse those short cuts. Import the sequence with your selections.") + "</span>")

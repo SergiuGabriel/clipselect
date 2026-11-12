@@ -16,6 +16,7 @@ Parts, in order, every selection whole and as he cut it:
   Couple, venue - couple after the church (both cameras), then the venue (drone first)
   Party         - only a marker: the party is the Multicam edit
 """
+import re
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -28,16 +29,34 @@ GAP = 20.0                # seconds of empty timeline between two trains (camera
 SEQ_FPS = 25.0
 
 
+def camera_key(p):
+    """Which camera filmed it: the file name pattern (digits removed) + picture size + frame rate. Two bodies that name
+    their files the same (C9375.MP4 from an FX3, C2002.MP4 from an A7 IV) still differ by size / rate."""
+    name = Path(p["path"]).name
+    return f'{re.sub(r"[0-9]+", "#", name)}|{p.get("w")}x{p.get("h")}|{round(p.get("fps") or 0)}'
+
+
+def file_number(p):
+    """The camera's own counter (C9375 -> 9375): the order in which it filmed, whatever the timeline or clock says."""
+    m = re.search(r"([0-9]+)(?!.*[0-9])", Path(p["path"]).stem)
+    return int(m.group(1)) if m else 0
+
+
+def camera_name(ps):
+    """A readable name: the folder of the clips (e.g. 'fx3'), else the file pattern."""
+    folders = {Path(p["path"]).parent.name for p in ps}
+    pat = re.sub(r"[0-9]+", "#", Path(ps[0]["path"]).name)
+    return (folders.pop() + "  ·  " + pat) if len(folders) == 1 else pat
+
+
 def trains(pieces):
-    """Split his selections into trains (cameras) at the pauses of the timeline. Every piece gets 'train'."""
-    ps = sorted(pieces, key=lambda p: p["order"])
-    out, end = [], None
-    for p in ps:
-        ln = p["b"] - p["a"]
-        if end is None or p["order"] - end > GAP:
-            out.append([])
-        out[-1].append(p)
-        end = max(end or 0, p["order"] + ln)
+    """One list per CAMERA (by its files), each in the order the camera filmed (file number, then in-point). The main
+    camera (most getting-ready shots) is the first. Every piece gets 'train' = its camera's index."""
+    groups = {}
+    for p in pieces:
+        groups.setdefault(camera_key(p), []).append(p)
+    out = [sorted(g, key=lambda p: (file_number(p), p["a"])) for g in groups.values()]
+    out.sort(key=lambda g: (-sum(1 for p in g if p["cat"] in ("bride", "groom")), -len(g)))
     for k, tr in enumerate(out):
         for p in tr:
             p["train"] = k
@@ -50,7 +69,7 @@ def split_day(train):
     appears earlier (in a teaser, a flash-forward) must not swallow the getting ready."""
     idx = [i for i, p in enumerate(train) if p["cat"] == "church"]
     if not idx:
-        return train, [], []
+        return [], [], train          # no church on this camera: nothing is "morning" (its Iris is the party)
     blocks, cur = [], [idx[0]]
     for i in idx[1:]:
         if i - cur[-1] <= 4:                   # up to 3 other shots inside the church block
@@ -82,19 +101,18 @@ def looks_like_an_edit(pieces):
 
 
 def _by_time(ps):
-    """Both cameras together: camera 1 then camera 2, each in his order (the cameras' clocks can differ)."""
-    return sorted(ps, key=lambda p: (p["train"], p["order"]))
+    """Every camera: the main one first, each in the order it filmed (file numbers; the clocks can differ)."""
+    return sorted(ps, key=lambda p: (p["train"], file_number(p), p["a"]))
 
 
 def plan(pieces, vornic_ids=None):
     """The parts: [(name, [pieces])]. vornic_ids: id() of the pieces that are the vornic (face found or Mango)."""
     vornic_ids = vornic_ids or set()
     trs = trains(pieces)
-    before, church, after = [], [], []
+    before, after = [], []
     for tr in trs:
         b, c, a = split_day(tr)
         before += b
-        church += c
         after += a
     cam1 = [p for p in before if p["train"] == 0]
     parts = []
@@ -103,10 +121,12 @@ def plan(pieces, vornic_ids=None):
     v = [p for p in pieces if id(p) in vornic_ids or p["cat"] == "vornic"]
     if v:
         parts.append(("Vornic", _by_time(v)))
-    parts.append(("Church", sorted(church, key=lambda p: p["order"])))
+    # the church exactly as HE laid it out on the timeline (every camera)
+    parts.append(("Church", sorted([p for p in pieces if p["cat"] == "church"], key=lambda p: p["order"])))
     couple = _by_time([p for p in after if p["cat"] == "couple"])
-    venue = _by_time([p for p in after if p["cat"] == "drone"]) + _by_time([p for p in after if p["cat"] == "venue"])
-    parts.append(("Couple and venue", couple + venue))
+    drone = sorted([p for p in pieces if p["cat"] == "drone"], key=lambda p: (p["train"], file_number(p), p["a"]))
+    venue = _by_time([p for p in after if p["cat"] == "venue"])
+    parts.append(("Couple and venue", couple + drone + venue))
     return trs, parts
 
 
