@@ -35,7 +35,7 @@ import ai
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.1.0"
+APP, VER = "MoneyMakingMachine", "v3.2.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
 
@@ -4285,6 +4285,10 @@ class LongFilmPage(QWidget):
             for name, ps in parts:
                 if name == "Vornic" and ps:
                     L, its = longfilm.vornic_layout(ps, sizes, progress)
+                    layout.append((name, L, its))
+                    continue
+                if name == "First look" and ps:          # every camera's first look, synced by the sound
+                    L, its = longfilm.firstlook_layout(ps, progress)
                     layout.append((name, L, its))
                     continue
                 tt, its = 0.0, []

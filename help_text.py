@@ -241,6 +241,7 @@ Camera unde fața lui e mai mare e cea medium (V1), cealaltă (wide) e așezată
 tăiată automat, care alternează camerele în pauzele lui de vorbire. Poți marca cadrele de vornic și cu Mango.</li>
 <li><b>Construiește</b>, apoi <b>Export XML</b>.</li>
 </ol>
+<p>Pregătirile alternează mire / mireasă, în blocuri de ~20 s, fiecare în ordinea filmării. First look-ul de pe ambele camere e <b>sincronizat automat pe sunet</b>: camera cu cel mai mult first look pe V1, cealaltă pe V2, exact deasupra aceluiași moment, ca să tai tu între ele. Fiecare clip își păstrează <b>culoarea ta</b> (eticheta din Premiere).</p>
 <p>Părțile, în ordine: Teaser · Pregătiri (doar camera 1) · First look (ambele camere) · Vornic · Biserica (exact în ordinea ta,
 ambele camere) · Cuplu și sală (cuplul după biserică, apoi drona și sala) · un marker „Petrecere". Fiecare parte are un
 marker; fiecare cadru are sunetul camerei pe A1/A2, teaserul are muzica pe A3/A4.</p>
@@ -514,6 +515,7 @@ camera where his face is bigger is the medium one (V1), the other one (wide) is 
 version that alternates the cameras in the pauses of his speech. You can also mark the vornic shots Mango.</li>
 <li><b>Build</b>, then <b>Export XML</b>.</li>
 </ol>
+<p>The getting ready alternates groom / bride in blocks of ~20 s, each in the order it was filmed. The first look of both cameras is <b>synced automatically by the sound</b>: the camera with the most first look on V1, the other on V2, right above the same moment, for you to cut between them. Every clip keeps <b>your colour</b> (its Premiere label).</p>
 <p>The parts, in order: Teaser · Getting ready (camera 1 only) · First look (both cameras) · Vornic · Church (exactly your
 order, both cameras) · Couple and venue (the couple after the church, then the drone and the venue) · a "Party" marker. Every
 part has a marker; every shot carries its camera sound on A1/A2, the teaser its music on A3/A4.</p>

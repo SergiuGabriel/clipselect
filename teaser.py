@@ -109,7 +109,7 @@ def load_footage(xml_path):
                 continue
             tt = _times(ci, sfps, cfps)
             st = tt[0] if tt else 0.0
-            pieces.append(dict(cat=CATS[lab], path=info["path"], a=a, b=b, order=st + t * 1e-3, fps=info["fps"],
+            pieces.append(dict(cat=CATS[lab], label=lab, path=info["path"], a=a, b=b, order=st + t * 1e-3, fps=info["fps"],
                                fdur=info["dur"] / max(1e-6, info["fps"]), w=info["w"], h=info["h"]))
     pieces.sort(key=lambda p: p["order"])
     # recording time of every file (timecode, creation time or file date), for the chronological story order
@@ -636,7 +636,7 @@ def export_xml(edit, music, out_path, name, fps=25.0):
         sdur = max(fout, int(p["fdur"] * sf))
         v.append(f'<clipitem id="{nid()}"><name>{escape(Path(p["path"]).name)}</name><duration>{sdur}</duration>{rate_xml}'
                  f'<start>{st}</start><end>{en}</end><in>{fin}</in><out>{fout}</out>'
-                 f'<labels><label2>{LABEL_OF[p["cat"]]}</label2></labels>{vfile(p)}</clipitem>')
+                 f'<labels><label2>{p.get("label") or LABEL_OF[p["cat"]]}</label2></labels>{vfile(p)}</clipitem>')
     a_items = []
     if music["kind"] == "file":
         arate, ach = sync.audio_info(music["path"])

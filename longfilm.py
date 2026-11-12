@@ -105,6 +105,36 @@ def _by_time(ps):
     return sorted(ps, key=lambda p: (p["train"], file_number(p), p["a"]))
 
 
+def interleave(a, b, block=20.0):
+    """Groom and bride getting ready taking turns, each side in the order it was filmed, the side filmed first starts.
+    Both sides are cut into the SAME number of blocks (about `block` seconds on the side with less footage), so the two
+    end together: never a long run of one side at the end."""
+    a = sorted(a, key=lambda p: (file_number(p), p["a"]))
+    b = sorted(b, key=lambda p: (file_number(p), p["a"]))
+    if not a or not b:
+        return a + b
+    if (file_number(b[0]), b[0]["a"]) < (file_number(a[0]), a[0]["a"]):
+        a, b = b, a
+    dur = lambda ps: sum(p["b"] - p["a"] for p in ps)
+    n = max(1, min(len(a), len(b), round(min(dur(a), dur(b)) / block)))
+
+    def blocks(ps):
+        out, cur, tot, k = [], [], dur(ps), 1
+        acc = 0.0
+        for p in ps:
+            cur.append(p)
+            acc += p["b"] - p["a"]
+            if acc >= tot * k / n - 1e-6 and k < n:
+                out.append(cur)
+                cur, k = [], k + 1
+        out.append(cur)
+        return out + [[]] * (n - len(out))
+    res = []
+    for x, y in zip(blocks(a), blocks(b)):
+        res += x + y
+    return res
+
+
 def plan(pieces, vornic_ids=None):
     """The parts: [(name, [pieces])]. vornic_ids: id() of the pieces that are the vornic (face found or Mango)."""
     vornic_ids = vornic_ids or set()
@@ -116,7 +146,8 @@ def plan(pieces, vornic_ids=None):
         after += a
     cam1 = [p for p in before if p["train"] == 0]
     parts = []
-    parts.append(("Getting ready", [p for p in cam1 if p["cat"] in ("bride", "groom")]))
+    parts.append(("Getting ready", interleave([p for p in cam1 if p["cat"] == "groom"],
+                                              [p for p in cam1 if p["cat"] == "bride"])))
     parts.append(("First look", _by_time([p for p in before if p["cat"] in ("party", "couple") and id(p) not in vornic_ids])))
     v = [p for p in pieces if id(p) in vornic_ids or p["cat"] == "vornic"]
     if v:
@@ -162,38 +193,44 @@ def _pauses(x, sr=sync.SR):
     return out
 
 
-def vornic_layout(vps, sizes, progress=None):
-    """Medium camera on V1 (one after the other), the wide one synced to it by the sound on V2, a cut version on V3.
-    Returns (length, [(track, t0 on the part, piece, src in, src out)])."""
-    trs = sorted({p["train"] for p in vps})
-    med_t = max(trs, key=lambda k: np.median([sizes.get(id(p), (0, 0))[1] for p in vps if p["train"] == k] or [0]))
-    med = [p for p in vps if p["train"] == med_t]
-    wide = [p for p in vps if p["train"] != med_t]
-    items, t = [], 0.0
-    starts = []
+def stack_layout(ps, master_train, cut=False, progress=None, label="Placing the second camera by the sound"):
+    """The master camera on V1 (one after the other), the other cameras' shots placed by their SOUND on top of the master
+    on V2 (same moment), and, with cut=True, a version alternating them in the pauses of the speech on V3.
+    Shots that cannot be placed by the sound go after the master ones on V1. Returns (length, items)."""
+    med = [p for p in ps if p["train"] == master_train]
+    wide = [p for p in ps if p["train"] != master_train]
+    items, t, starts = [], 0.0, []
     for p in med:
         items.append((1, t, p, p["a"], p["b"]))
         starts.append(t)
         t += p["b"] - p["a"]
     length = t
-    if not med:                                           # only one camera: just one after the other
+    if not med or not wide:
         for p in wide:
-            items.append((1, t, p, p["a"], p["b"]))
-            t += p["b"] - p["a"]
-        return t, items
-    # the wide camera, placed by its sound on the medium one
+            items.append((1, length, p, p["a"], p["b"]))
+            length += p["b"] - p["a"]
+        return length, items
+    pcm = {}
+
+    def audio(p):
+        if p["path"] not in pcm:
+            pcm[p["path"]] = sync.audio_pcm(p["path"])
+        x = pcm[p["path"]]
+        return x[int(p["a"] * sync.SR):int(p["b"] * sync.SR)]
     idx, auds = [], []
     for p in med:
-        x = sync.audio_pcm(p["path"])[int(p["a"] * sync.SR):int(p["b"] * sync.SR)]
+        try:
+            x = audio(p)
+        except Exception:
+            x = np.zeros(sync.SR, np.float32)
         auds.append(x)
         idx.append(sync.MasterIndex(x))
     placed = []
     for k, p in enumerate(wide):
         if progress:
-            progress(f"Placing the wide camera by the sound: {k + 1} of {len(wide)}", (k + 1) / max(1, len(wide)))
+            progress(f"{label}: {k + 1} of {len(wide)}", (k + 1) / max(1, len(wide)))
         try:
-            x = sync.audio_pcm(p["path"])[int(p["a"] * sync.SR):int(p["b"] * sync.SR)]
-            r = sync.sync_clip(idx, x)
+            r = sync.sync_clip(idx, audio(p))
         except Exception:
             r = dict(conf="fail")
         if r.get("conf") in ("high", "medium"):
@@ -202,11 +239,10 @@ def vornic_layout(vps, sizes, progress=None):
             if s1 - s0 > 0.5:
                 items.append((2, s0, p, p["a"] + (s0 - g), p["a"] + (s1 - g)))
                 placed.append((s0, s1, p, g))
-        else:                                              # not found by the sound: after the medium ones, on V1
-            items.append((1, length, p, p["a"], p["b"]))
-            length += p["b"] - p["a"]
-    # the cut version: medium / wide alternating in the pauses of his speech, at least 6 s per shot
-    if placed:
+                continue
+        items.append((1, length, p, p["a"], p["b"]))       # not found by the sound: after the master ones, on V1
+        length += p["b"] - p["a"]
+    if cut and placed:
         pz = []
         for st, x in zip(starts, auds):
             pz += [st + q for q in _pauses(x)]
@@ -228,6 +264,27 @@ def vornic_layout(vps, sizes, progress=None):
                 items.append((3, a, med[k], med[k]["a"] + (a - starts[k]), med[k]["a"] + (b2 - starts[k])))
             use_wide = not use_wide
     return length, items
+
+
+def vornic_layout(vps, sizes, progress=None):
+    """The vornic: the camera with the bigger face is the medium one (V1), the wide one by the sound (V2), a cut (V3)."""
+    trs = sorted({p["train"] for p in vps})
+    med_t = max(trs, key=lambda k: np.median([sizes.get(id(p), (0, 0))[1] for p in vps if p["train"] == k] or [0]))
+    return stack_layout(vps, med_t, cut=True, progress=progress, label="Placing the wide camera by the sound")
+
+
+def firstlook_layout(ps, progress=None):
+    """The first look from every camera, synced: the camera with the most first-look footage on V1, the others placed by
+    their sound on top of it (V2). He cuts between them himself."""
+    trs = sorted({p["train"] for p in ps})
+    if len(trs) < 2:
+        t, items = 0.0, []
+        for p in ps:
+            items.append((1, t, p, p["a"], p["b"]))
+            t += p["b"] - p["a"]
+        return t, items
+    master = max(trs, key=lambda k: sum(p["b"] - p["a"] for p in ps if p["train"] == k))
+    return stack_layout(ps, master, cut=False, progress=progress, label="Syncing the first look of the second camera")
 
 
 def _ai(path):
@@ -287,13 +344,16 @@ def export_xml(parts_layout, out_path, name, teaser_part=None):
         links = "".join(f'<link><linkclipref>{x}</linkclipref><mediatype>{m}</mediatype><trackindex>{ti}</trackindex>'
                         f'<clipindex>1</clipindex></link>'
                         for x, m, ti in [(vid, "video", 1)] + [(aid, "audio", k + 1) for k, aid in enumerate(aids)]) if aids else ""
+        lab = p.get("label") or {"bride": "Rose", "groom": "Blue", "couple": "Purple", "church": "Brown", "venue": "Yellow",
+                                 "party": "Iris", "drone": "Violet", "vornic": "Mango"}.get(p["cat"], "")
+        labs = f"<labels><label2>{escape(lab)}</label2></labels>" if lab else ""        # his colours stay
         vt[track].append(f'<clipitem id="{vid}"><name>{escape(Path(p["path"]).name)}</name><duration>{sdur}</duration>{rate_xml}'
-                         f'<start>{st}</start><end>{en}</end><in>{fin}</in><out>{fout}</out>{fx}{links}</clipitem>')
+                         f'<start>{st}</start><end>{en}</end><in>{fin}</in><out>{fout}</out>{fx}{links}{labs}</clipitem>')
         for k, aid in enumerate(aids):
             at[k + 1].append(f'<clipitem id="{aid}"><name>{escape(Path(p["path"]).name)}</name><duration>{sdur}</duration>'
                              f'{rate_xml}<start>{st}</start><end>{en}</end><in>{fin}</in><out>{fout}</out><file id="{fid}"/>'
                              f'<sourcetrack><mediatype>audio</mediatype><trackindex>{min(k + 1, ch)}</trackindex></sourcetrack>'
-                             f'{links}</clipitem>')
+                             f'{links}{labs}</clipitem>')
 
     markers, g = [], 0.0
     if teaser_part:

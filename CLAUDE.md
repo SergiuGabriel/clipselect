@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.1.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.2.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -294,6 +294,19 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 - "Slower cuts" zones use the owner's HORA settings (director.HORA: min 6 s, max 120 s, pace 50, static<->handheld 45)
   whatever the party settings: the zone cells are chosen again with those values.
 - Unknown label "Teal" (7 shots near the church on fx6) is ignored: ask him what Teal means if it matters.
+
+- build.yml ignores pushes that only add MoneyMakingMachine*.zip (the upload commit used to start a 15 min build of the
+  OLD code that could republish the old release as Latest; it had to be cancelled by hand).
+
+## v3.2.0
+- Exports keep HIS label colours: teaser.load_footage stores p["label"]; Long Film and Teaser Studio write it on every
+  clip (Caribbean stays Caribbean). Without labels Premiere gave the drone MP4s another default colour (the "red"
+  clips he saw in the Long Film timeline).
+- Long Film getting ready = groom / bride interleaved (longfilm.interleave, blocks of ~20 s, each side in filming
+  order, the side filmed first starts).
+- Long Film first look = every camera's first look SYNCED by the sound (longfilm.firstlook_layout -> stack_layout):
+  the camera with the most first-look footage on V1, the others on V2 above the same moment (no cut version; he cuts).
+  vornic_layout uses the same stack_layout (with the cut version on V3). Audio of a file is read once (cache).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

@@ -1,5 +1,9 @@
 name: build
-on: [push, workflow_dispatch]
+on:
+  push:
+    # uploading the zip alone must not build (that commit still holds the old code): Claude Code's push builds
+    paths-ignore: ["MoneyMakingMachine*.zip", "**/MoneyMakingMachine*.zip"]
+  workflow_dispatch:
 permissions:
   contents: write
 env:
