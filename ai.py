@@ -299,7 +299,7 @@ def run_test(pieces, base, per_cat=25, progress=None, cancel=None, seed=1):
             continue
         ps = [p for p in pieces if p["cat"] == c]
         rng.shuffle(ps)
-        sample += ps[:per_cat]
+        sample += ps if not per_cat else ps[:per_cat]          # per_cat None / 0 = every selection
     rows, missing, unread = [], [], []
     for k, p in enumerate(sample):
         if cancel and cancel():
@@ -340,4 +340,14 @@ def run_test(pieces, base, per_cat=25, progress=None, cancel=None, seed=1):
             continue
         r, t = acc.get(his, (0, 0))
         acc[his] = (r + (his == ai_), t + 1)
-    return dict(rows=rows, acc=acc, unclear=unclear, missing=len(missing), unread=len(unread), model=plan["repo"])
+    res = dict(rows=rows, acc=acc, unclear=unclear, missing=len(missing), unread=len(unread), model=plan["repo"])
+    try:                                                     # the summary stays on disk (a night-long test is not lost)
+        import time as _t
+        Path(base, "ai_model", "last_test.json").write_text(json.dumps(dict(
+            when=_t.strftime("%Y-%m-%d %H:%M"), selections=len(rows), model=plan["repo"],
+            acc={k: list(v) for k, v in acc.items()}, unclear=unclear,
+            rows=[dict(file=Path(p["path"]).name, a=round(p["a"], 2), b=round(p["b"], 2), yours=h, ai=g, conf=round(c, 3))
+                  for p, _, h, g, c in rows])), "utf-8")
+    except Exception:
+        pass
+    return res

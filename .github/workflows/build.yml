@@ -4,7 +4,7 @@ permissions:
   contents: write
 env:
   PYI: >-
-    pyinstaller --noconfirm --windowed --name MoneyMakingMachine --collect-all imageio_ffmpeg --collect-all onnxruntime --collect-all tokenizers --collect-data certifi
+    pyinstaller --noconfirm --windowed --name MoneyMakingMachine --collect-all imageio_ffmpeg --collect-all onnxruntime --collect-all tokenizers --collect-data certifi --collect-all cv2
     --exclude-module PySide6.QtWebEngineCore --exclude-module PySide6.QtQml --exclude-module PySide6.QtQuick
     --exclude-module PySide6.Qt3DCore --exclude-module PySide6.QtMultimedia
 jobs:

@@ -209,9 +209,13 @@ proiect ține minte footage-ul, muzica, cele șase momente și ordinea.</li>
 <li><b>Analiza selecțiilor</b> se poate opri oricând cu <b>Cancel</b>; ce s-a analizat rămâne salvat și continuă data
 viitoare de unde a rămas. Poți genera și înainte să se termine (selecțiile neanalizate se folosesc fără alegerea celei mai
 bune bucăți). O vezi și în Analysis Queue.</li>
-<li><b>AI test (experimental):</b> verifică dacă un model AI gratuit, care rulează pe Mac (nimic nu se urcă pe internet),
-recunoaște cadrele tale la fel ca etichetele tale. Prima dată descarcă modelul (~150 MB). Îți arată fiecare cadru cu
-culoarea ta și ce a crezut AI-ul (verde = la fel, roșu = diferit) și procentul pe fiecare categorie. Nu schimbă teaserul.</li>
+<li><b>Mirii (opțional):</b> câte o poză bună cu mireasa și cu mirele, din ziua nunții, apoi <b>Găsește-i în selecții</b>.
+Recunoaștere facială locală, gratuită. La generare, cadrele de mireasă, mire, cuplu, biserică și petrecere preferă selecțiile în
+care apar ei. Căutarea se face o singură dată pe proiect (rămâne salvată).</li>
+<li><b>Test AI (experimental):</b> verifică dacă SigLIP 2, un model AI gratuit care rulează pe Mac, recunoaște cadrele tale ca
+etichetele tale. <b>Test rapid</b> (25 de selecții pe culoare, câteva minute) sau <b>Toate selecțiile</b> (lent: lasă-l peste
+noapte; Mac-ul nu adoarme cât rulează). Prima dată descarcă modelul (câțiva GB). Rezultatul rămâne salvat. Nu schimbă
+teaserul.</li>
 <li><b>Selecțiile tale:</b> poți da selecții mai lungi (de exemplu 10 s de petrecere). La import, aplicația se uită la fiecare
 selecție o singură dată (claritate, stabilitate, expunere, mișcare) și folosește partea cea mai bună din ea: cu mișcare pe
 drop și la petrecere, mai calmă la pregătiri și la biserică. Folosește întâi câte o bucată din fiecare selecție, apoi a
@@ -226,6 +230,24 @@ petrecere alternată cu cuplu), pregătiri mireasă/mire, biserica cu cuplul la 
 cade pe beat. <b>Shuffle</b> alege alte cadre; <b>Export XML</b> are markere pentru fiecare parte, ca să pui testimonialele și
 jurămintele în Premiere (markere: Teaser, DROP, Getting ready, Church, Couple + vows, Party: venue, Party).</li>
 </ol>
+<h2>Long Film (filmul lung)</h2>
+<p>Filmul lung pre-montat din selecțiile tale etichetate. Fiecare selecție e pusă <b>întreagă, în ordinea ta</b>; muzica,
+interviurile și finisajele le adaugi tu în Premiere. Petrecerea rămâne montajul din Multicam.</p>
+<ol>
+<li><b>Filmări:</b> XML-ul sequence-ului de selecții, cu aceleași culori ca în Teaser Studio. În sequence pui ziua camerei 1,
+lași o <b>pauză de câteva minute</b>, apoi ziua camerei 2. Aplicația recunoaște singură cele două camere după pauză. În
+fiecare cameră, <b>primul cadru maro</b> (biserica) desparte dimineața de rest: Iris înainte de biserică = first look,
+după = petrecere.</li>
+<li><b>Teaser:</b> alegi proiectul din Teaser Studio al aceleiași nunți; teaserul lui (cu muzica) deschide filmul.</li>
+<li><b>Vornic (opțional, oprit implicit):</b> pornește-l doar la nunțile cu vornic și alege o poză bună cu el (fața bine
+vizibilă). Aplicația îi găsește cadrele Iris de dimineață după față, pe ambele camere (recunoaștere facială locală, gratuită).
+Camera unde fața lui e mai mare e cea medium (V1), cealaltă (wide) e așezată după sunet pe V2, iar pe V3 ai o variantă
+tăiată automat, care alternează camerele în pauzele lui de vorbire. Poți marca cadrele de vornic și cu Mango.</li>
+<li><b>Construiește</b>, apoi <b>Export XML</b>.</li>
+</ol>
+<p>Părțile, în ordine: Teaser · Pregătiri (doar camera 1) · First look (ambele camere) · Vornic · Biserica (exact în ordinea ta,
+ambele camere) · Cuplu și sală (cuplul după biserică, apoi drona și sala) · un marker „Petrecere". Fiecare parte are un
+marker; fiecare cadru are sunetul camerei pe A1/A2, teaserul are muzica pe A3/A4.</p>
 <h2>Update-uri și probleme</h2>
 <ul>
 <li>Aplicația verifică singură la pornire dacă există o versiune nouă și te anunță. În <b>Settings &gt; Check for updates</b>
@@ -465,9 +487,13 @@ Delete. Every project remembers its footage, music, six moments and order.</li>
 <li><b>Looking at the selections</b> can be stopped any time with <b>Cancel</b>; what is done is saved and continues next
 time where it was. You can generate before it finishes (unanalysed selections are used without picking their best part).
 It also shows in Analysis Queue.</li>
-<li><b>AI test (experimental):</b> checks if a free AI model running on this Mac (nothing is uploaded) recognises your shots
-like your colour labels. The first time it downloads the model (~150 MB). It shows every frame with your colour and the AI's
-guess (green = same, red = different) and the score per category. It does not change the teaser.</li>
+<li><b>Bride and groom (optional):</b> a good photo of each from the wedding day, then <b>Find them in the selections</b>.
+Local, free face recognition. When generating, the bride, groom, couple, church and party shots prefer the selections where
+they are seen. The search runs once per project (it is saved).</li>
+<li><b>AI test (experimental):</b> checks if SigLIP 2, a free AI model running on this Mac, recognises your shots like your
+labels. <b>Quick test</b> (25 selections per colour, a few minutes) or <b>Every selection</b> (slow: leave it overnight; the
+Mac does not go to sleep while it runs). The first time it downloads the model (a few GB). The result is saved. It does not
+change the teaser.</li>
 <li><b>Your selections:</b> you can give longer selections (for example 10 s of party). On import the app looks at every
 selection once (sharpness, steadiness, exposure, movement) and uses its best part: with movement on the drop and in the
 party, calmer in getting ready and church. It uses one bit of every selection before a second one. Clips interpreted at
@@ -482,6 +508,23 @@ alternating with the couple), bride/groom getting ready, the church ending with 
 Every cut lands on a beat. <b>Shuffle</b> picks other shots; <b>Export XML</b> has a marker for every part, so you can add
 testimonials and vows in Premiere (markers: Teaser, DROP, Getting ready, Church, Couple + vows, Party: venue, Party).</li>
 </ol>
+<h2>Long Film</h2>
+<p>The long film pre-cut from your labelled selections. Every selection goes in <b>whole, in your order</b>; you add the music,
+the interviews and the final touches in Premiere. The party stays the Multicam edit.</p>
+<ol>
+<li><b>Footage:</b> the XML of your selects sequence, same colours as Teaser Studio. Put camera 1's day, leave a <b>pause of a
+few minutes</b>, then camera 2's day. The app finds the two cameras by the pause. In every camera the <b>first Brown shot</b>
+(the church) separates the morning from the rest: Iris before the church = first look, after = party.</li>
+<li><b>Teaser:</b> pick the Teaser Studio project of the same wedding; its teaser (with the music) opens the film.</li>
+<li><b>Vornic (optional, off by default):</b> turn it on only for weddings with a vornic and pick a good photo of him (face
+well visible). The app finds his Iris shots of the morning by his face, on both cameras (local, free face recognition). The
+camera where his face is bigger is the medium one (V1), the other one (wide) is placed by the sound on V2, and V3 holds a cut
+version that alternates the cameras in the pauses of his speech. You can also mark the vornic shots Mango.</li>
+<li><b>Build</b>, then <b>Export XML</b>.</li>
+</ol>
+<p>The parts, in order: Teaser · Getting ready (camera 1 only) · First look (both cameras) · Vornic · Church (exactly your
+order, both cameras) · Couple and venue (the couple after the church, then the drone and the venue) · a "Party" marker. Every
+part has a marker; every shot carries its camera sound on A1/A2, the teaser its music on A3/A4.</p>
 <h2>Updates and problems</h2>
 <ul>
 <li>At start the app checks by itself for a new version and tells you. <b>Settings &gt; Check for updates</b> checks any time,

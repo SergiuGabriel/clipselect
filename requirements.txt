@@ -5,3 +5,4 @@ psutil
 onnxruntime
 tokenizers
 certifi
+opencv-python-headless

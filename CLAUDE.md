@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.10.1), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v2.12.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -56,6 +56,10 @@ linking to https://www.instagram.com/sergiugabrielcg/.
 - `style.py` — Learn my editing style: measures an XML the editor cut himself (shots seen on top, music of its
   recorder files if on disk) and proposes Auto Director settings; saved in store.app["style"] (this computer only).
 - `i18n.py` — Romanian / English for the whole UI (Settings > Language, applies at the next start).
+- `longfilm.py` — Long Film: trains (cameras) by the pause in his selects, parts from whole selections, optional
+  vornic (face or Mango) with medium / wide / cut tracks, 25 fps XML.
+- `faces.py` — local face recognition (OpenCV Zoo YuNet MIT + SFace Apache 2.0, downloaded once into
+  <data>/ai_model/faces; cosine >= 0.363 = same person). Used for the vornic; later the bride and groom.
 - `teaser.py` — Teaser Studio engine (labels, music parts, beats, drop, edit, XML export).
 - `make_icons.py` — builds icon.icns / icon.ico / icon.png from `icon_source.png` (run in CI before PyInstaller).
 - `.github/workflows/build.yml` — builds macOS DMGs (Apple Silicon + Intel) and a Windows folder with PyInstaller on every push.
@@ -240,6 +244,33 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   "ungrade" (levels 1-99 % + saturation x1.35), prompts for his weddings, an "unclear" class (shown grey, not counted
   in the score), text embeddings cached. Still ONLY a test. Never run on the real model in the sandbox (no HF access):
   plumbing tested with a fake ONNX of the same shape (pixel_values 384, pooler_output 1152, input_ids 64).
+
+## v2.11.0: Long Film (+ vornic with face recognition)
+- New sidebar page "Long Film" (own projects: store.app["long_projects"] / "long_current"), between Teaser Studio and
+  Settings. His selects XML holds one TRAIN per camera operator, separated by a pause of a few minutes in the timeline
+  (longfilm.GAP = 20 s). Inside a train his order is the day and the FIRST Brown shot splits morning / rest (Iris before
+  = first look, after = party). Never rely on camera clocks between cameras (they can differ): camera 1 then camera 2.
+- Parts, every selection WHOLE (owner's choice, no music needed; he adds music / interviews): Teaser (the teaser part of
+  a chosen Teaser Studio project, with its music) · Getting ready (bride / groom, camera 1 only) · First look (Iris +
+  couple before the church, both cameras) · Vornic (optional, off by default) · Church (Brown exactly in his order) ·
+  Couple and venue (couple after church, then drone, then venue) · a "Party" marker (party = the Multicam edit).
+- Vornic: Iris shots of the morning where his face matches the photo (faces.find_person, 3 frames, SAME 0.363) or Mango
+  shots. Medium camera = the train with the bigger face (V1, one after the other), wide = synced by sound to it (V2,
+  sync.MasterIndex per medium piece), cut version alternating them in his speech pauses, >= 6 s (V3, on top).
+- The face models could NOT be downloaded in Claude's sandbox (GitHub LFS media domain blocked): the pipeline was tested
+  with a simulated detector / matcher. opencv-python-headless is in requirements, PyInstaller --collect-all cv2.
+  Later checked with the REAL models (fetched from media.githubusercontent.com/media/opencv/opencv_zoo/main/models/...,
+  which the sandbox reaches): faces.Faces loads YuNet + SFace with cv2 5.0.0, 0 faces on a blank frame, faces + 128-d
+  features on a photo, person() self-similarity 1.0. The "setPreferableTarget" warnings of cv2 5.0 are harmless.
+- v2.12.0: AI test "Quick" (25 per colour) or "Every selection" (overnight: caffeinate keeps the Mac awake; the result
+  is saved in <data>/ai_model/last_test.json). Teaser Studio card "Bride and groom (optional)": one photo each, "Find
+  them in the selections" (faces.find_people, every piece read once for both, saved in <data>/faces_cache.json keyed by
+  piece + photos), teaser.Pool prefers the selections where they are seen (teaser.WANT per kind; random modes keep only
+  them when any, chronological adds a penalty to the others). Not for the first dance (owner).
+- Markers in the exported XMLs (Teaser Studio, Long Film) follow the app language (i18n.T at export).
+- Final check before v2.12.0: pyflakes clean (no undefined names) + every test script (music, tempo styles, director
+  holes / zones / alt, multicam, import XML, teaser, projects / AI / queue / analysis screen, learn my style, faces + AI on
+  every selection, long film + closing with a job running, Romanian scan of every screen: 0 English texts).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

@@ -23,14 +23,14 @@ import sync
 import xmlimport
 
 CATS = {"Rose": "bride", "Blue": "groom", "Purple": "couple", "Brown": "church", "Yellow": "venue", "Caribbean": "venue",
-        "Iris": "party", "Violet": "drone"}
+        "Iris": "party", "Violet": "drone", "Mango": "vornic"}      # Mango: the vornic, if marked by hand (Long Film)
 IGNORE = {"Tan", "Forest", "Lavender"}
 CAT_COLOR = {"bride": "#f472b6", "groom": "#3b82f6", "couple": "#a855f7", "church": "#a16207", "venue": "#eab308",
-             "party": "#7dd3fc", "drone": "#8b5cf6"}
+             "party": "#7dd3fc", "drone": "#8b5cf6", "vornic": "#f59e0b"}
 CAT_NAME = {"bride": "Bride", "groom": "Groom", "couple": "Couple", "church": "Church", "venue": "Venue", "party": "Party",
-            "drone": "Drone"}
+            "drone": "Drone", "vornic": "Vornic"}
 LABEL_OF = {"bride": "Rose", "groom": "Blue", "couple": "Purple", "church": "Brown", "venue": "Yellow", "party": "Iris",
-            "drone": "Violet"}
+            "drone": "Violet", "vornic": "Mango"}
 PARTS = ["Teaser", "Getting ready", "Church", "Couple", "Venue", "Party"]
 # target length of a shot (seconds), from his films: ~40-47 cuts/min in the teaser and getting ready, a bit calmer later
 TARGET = {"teaser_pre": 1.2, "teaser_post": 0.9, "pregatiri": 1.3, "biserica": 1.4, "cuplu": 1.5, "sala": 1.0,
@@ -381,6 +381,20 @@ def valid(b, duration):
 
 # ---------------------------------------------------------------- the edit
 
+# who should be seen in a shot of each kind (when the bride / groom were found by their face)
+WANT = {"bride": ("bride",), "groom": ("groom",), "couple": ("bride", "groom"), "church": ("bride", "groom"),
+        "party": ("bride", "groom")}
+FACE_SAME = 0.363
+
+
+def seen(q, cat):
+    """True / False when the faces were looked for in this piece, None when they were not."""
+    who, names = q.get("who"), WANT.get(cat)
+    if not who or not names:
+        return None
+    return any(who.get(n, -1.0) >= FACE_SAME for n in names)
+
+
 def _cut(free, s, e):
     """Remove [s, e] from a list of free (a, b) intervals."""
     out = []
@@ -455,6 +469,9 @@ class Pool:
                 fresh = [x for x in cands if not x[0].get("uses")]       # every selection once before a second bit
                 if fresh and mode != "teaser":
                     cands = fresh
+                with_them = [x for x in cands if seen(x[0], c)]           # the bride / groom are in it (by face)
+                if with_them and (mode == "teaser" or not self.chrono):
+                    cands = with_them
                 if near is not None and self.by_time:
                     q, a, b = min(cands, key=lambda x: abs((x[0].get("clock") or 0) - near))
                     s0 = a + (b - a - length) / 2
@@ -467,7 +484,8 @@ class Pool:
                     def dist(x):
                         q, a, b = x
                         lo, hi = q["cum"] + a - q["a"], q["cum"] + b - q["a"] - length
-                        return 0.0 if lo <= T <= hi else min(abs(T - lo), abs(T - hi))
+                        d_ = 0.0 if lo <= T <= hi else min(abs(T - lo), abs(T - hi))
+                        return d_ + (0.08 * tot if seen(q, c) is False and with_them else 0.0)   # prefer them
                     q, a, b = min(cands, key=dist)
                     s0 = min(max(a, T - q["cum"] + q["a"]), b - length)
                 if near is None:
@@ -649,7 +667,8 @@ def export_xml(edit, music, out_path, name, fps=25.0):
     bb = edit["bounds"]
     marks = [("Teaser", 0.0), ("DROP", bb["drop"]), ("Getting ready", bb["teaser_end"]), ("Church", bb["pregatiri_end"]),
              ("Couple + vows", bb["biserica_end"]), ("Party: venue", bb["party_start"]), ("Party", bb["venue_end"])]
-    markers = "".join(f'<marker><name>{escape(n)}</name><comment></comment><in>{round(t * sf)}</in><out>-1</out></marker>' for n, t in marks)
+    import i18n                                    # the markers in the language of the app
+    markers = "".join(f'<marker><name>{escape(i18n.T(n))}</name><comment></comment><in>{round(t * sf)}</in><out>-1</out></marker>' for n, t in marks)
     total = round(music["duration"] * sf)
     trk = lambda its: f'<track>{"".join(its)}<enabled>TRUE</enabled><locked>FALSE</locked></track>'
     first = edit["shots"][0][2] if edit["shots"] else dict(w=1920, h=1080)

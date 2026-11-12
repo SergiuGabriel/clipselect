@@ -5,6 +5,7 @@ import logging.handlers
 import os
 import platform
 import re
+import subprocess
 import sys
 import threading
 import time
@@ -29,11 +30,12 @@ import style
 import help_text
 import i18n
 import teaser
+import longfilm
 import ai
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v2.10.1"
+APP, VER = "MoneyMakingMachine", "v2.12.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
 
@@ -3298,14 +3300,38 @@ class AITestDialog(QDialog):
         self.g.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         sc.setWidget(w)
         v.addWidget(sc, 1)
-        self.res, self._stop = None, False
+        self.res, self._stop, self.job, self._awake = None, False, None, None
+        self.pieces, self.base = pieces, base
+        ch = QHBoxLayout()
+        self.b_quick = btn("Quick test (25 selections per colour)", slot=lambda: self._start(25))
+        self.b_all = btn(f"Every selection ({len(pieces)}): slow, leave it overnight", "primary", lambda: self._start(None))
+        ch.addWidget(self.b_quick)
+        ch.addWidget(self.b_all)
+        ch.addStretch()
+        v.insertLayout(2, ch)
+        self.choice = [self.b_quick, self.b_all]
+
+    def _start(self, per_cat):
+        for b in self.choice:
+            b.setEnabled(False)
         self.pp.start("Starting…")
         self.pp.allow_cancel(self._cancel)
-        self.job = _Runner(lambda progress=None: ai.run_test(pieces, base, 25, progress, lambda: self._stop))
+        if per_cat is None and sys.platform == "darwin":
+            try:                                             # keep the Mac awake until the test ends
+                self._awake = subprocess.Popen(["caffeinate", "-i", "-w", str(os.getpid())])
+            except Exception:
+                self._awake = None
+        self.job = _Runner(lambda progress=None: ai.run_test(self.pieces, self.base, per_cat, progress, lambda: self._stop))
         self.job.progress.connect(self.pp.set)
         self.job.done.connect(self._done)
         self.job.failed.connect(self._failed)
+        self.job.finished.connect(self._sleep_again)
         self.job.start()
+
+    def _sleep_again(self):
+        if self._awake is not None:
+            self._awake.terminate()
+            self._awake = None
 
     def _cancel(self):
         self._stop = True
@@ -3378,6 +3404,9 @@ class AITestDialog(QDialog):
 
     def closeEvent(self, e):
         self._stop = True
+        if self.job is not None and self.job.isRunning():
+            self.job.wait(10000)
+        self._sleep_again()
         super().closeEvent(e)
 
 
@@ -3492,7 +3521,18 @@ class TeaserPage(QWidget):
         self.b_detect.setToolTip("Sets the six moments back to what the app found in the music (song changes, drop).")
         self.b_detect.setEnabled(False)
         l3.addWidget(self.b_detect)
-        l5 = card(4, "AI test (experimental)")
+        l4b = card(4, "Bride and groom (optional)")
+        l4b.addWidget(lbl("A good photo of each (from the wedding day, face well visible): the teaser and the couple shots "
+                          "prefer the selections where they are seen. Local face recognition, nothing is uploaded.", "muted", True))
+        fr = QHBoxLayout()
+        fr.addWidget(btn("Bride's photo", slot=lambda: self._pick_face("bride")))
+        fr.addWidget(btn("Groom's photo", slot=lambda: self._pick_face("groom")))
+        l4b.addLayout(fr)
+        self.face_lbl = lbl("", "muted", True)
+        l4b.addWidget(self.face_lbl)
+        self.b_faces = btn("Find them in the selections", "primary", self.find_faces)
+        l4b.addWidget(self.b_faces)
+        l5 = card(5, "AI test (experimental)")
         l5.addWidget(lbl("Checks if a free AI model, running on this Mac, recognises your shots like your colour labels. "
                          "It does not change your teaser.", "muted", True))
         self.b_ai = btn("Test the AI on my labelled clips", slot=self.ai_test)
@@ -3525,6 +3565,7 @@ class TeaserPage(QWidget):
     def restore(self):
         """Reload the footage XML, the music and your six moments from last time."""
         t = self._cur()
+        self._face_ui()
         foot, mus, b = t.get("footage"), t.get("music"), t.get("bounds")
         then = (lambda: self._load_music_file(mus, b)) if mus and Path(mus).exists() else None
         if foot and Path(foot).exists():
@@ -3621,6 +3662,8 @@ class TeaserPage(QWidget):
 
     def _clear(self):
         self.pieces, self.music, self.edit, self.auto_bounds = [], None, None, None
+        if hasattr(self, "face_lbl"):
+            self.face_lbl.setText("")
         self.foot_lbl.setText("")
         self.mus_lbl.setText("")
         self.mv.env = None
@@ -3649,6 +3692,74 @@ class TeaserPage(QWidget):
             self.summary.setText(f"The AI parts are missing from this build ({e}).")
             return
         AITestDialog(self, self.pieces, self.store.dir).exec()
+
+    # ---- bride and groom by their face
+    def _pick_face(self, who):
+        f, _ = QFileDialog.getOpenFileName(self, "Photo of the bride" if who == "bride" else "Photo of the groom", "",
+                                           "Images (*.jpg *.jpeg *.png *.JPG *.PNG)")
+        if f:
+            self._remember(**{f"{who}_photo": f})
+            self._face_ui()
+
+    def _face_key(self):
+        t = self._cur()
+        return "|".join(str(t.get(k) or "") for k in ("bride_photo", "groom_photo"))
+
+    def _face_ui(self):
+        t = self._cur()
+        names = [f"{i18n.T('Bride')}: {Path(t['bride_photo']).name}" if t.get("bride_photo") else "",
+                 f"{i18n.T('Groom')}: {Path(t['groom_photo']).name}" if t.get("groom_photo") else ""]
+        txt = " · ".join(x for x in names if x) or i18n.T("No photos yet.")
+        done = [p for p in self.pieces if p.get("who")]
+        if done:
+            nb = sum(1 for p in done if p["who"].get("bride", -1) >= teaser.FACE_SAME)
+            ng = sum(1 for p in done if p["who"].get("groom", -1) >= teaser.FACE_SAME)
+            txt += "<br>" + i18n.T("Found: the bride in {} selections, the groom in {}.").format(nb, ng)
+        self.face_lbl.setText(txt)
+        self.b_faces.setEnabled(bool(self.pieces) and bool(t.get("bride_photo") or t.get("groom_photo")) and not self._busy())
+
+    def _apply_face_cache(self):
+        """Faces looked for before (same photos, same selections): back at once, no new search."""
+        try:
+            data = json.loads((self.store.dir / "faces_cache.json").read_text("utf-8"))
+        except Exception:
+            return
+        key = self._face_key()
+        for p in self.pieces:
+            w_ = data.get(f'{p.get("_k") or p["path"]}|{p["a"]:.2f}|{key}')
+            if w_:
+                p["who"] = w_
+
+    def find_faces(self):
+        t = self._cur()
+        photos = {k: t.get(f"{k}_photo") for k in ("bride", "groom") if t.get(f"{k}_photo")}
+        pieces = [p for p in self.pieces if p["cat"] in ("bride", "groom", "couple", "church", "party")]
+        base, key = self.store.dir, self._face_key()
+
+        def job(progress=None):
+            import faces
+            fm = faces.Faces(faces.ensure_models(base, progress))
+            refs = {k: fm.person(v) for k, v in photos.items()}
+            res = faces.find_people(pieces, refs, fm, progress=progress, cancel=lambda: self._stop,
+                                    label="Looking for the bride and groom")
+            return res
+
+        def done(res):
+            cf = self.store.dir / "faces_cache.json"
+            try:
+                data = json.loads(cf.read_text("utf-8"))
+            except Exception:
+                data = {}
+            for p in pieces:
+                r_ = res.get(id(p))
+                if r_:
+                    p["who"] = {k: round(v[0], 3) for k, v in r_.items()}
+                    data[f'{p.get("_k") or p["path"]}|{p["a"]:.2f}|{key}'] = p["who"]
+            cf.write_text(json.dumps(data), "utf-8")
+            self._face_ui()
+            notify("The bride and groom were looked for in every selection")
+        self._stop = False
+        self._run("Looking for the bride and groom…", job, (), done)
 
     def _cancel_job(self):
         """Stop looking at the selections: what is analysed so far is kept (and the rest continues next time)."""
@@ -3695,6 +3806,8 @@ class TeaserPage(QWidget):
         self.foot_lbl.setText(f'<b>{Path(self._foot_path).name}</b><br>' + "<br>".join(rows) +
                               (f'<br><span style="color:{C["MUTED"]}">Ignored: {ign}</span>' if ign else ""))
         self._remember(footage=self._foot_path)
+        self._apply_face_cache()
+        self._face_ui()
         self._buttons()
         notify(f"Footage loaded: {len(self.pieces)} selections")
 
@@ -3831,6 +3944,342 @@ class TeaserPage(QWidget):
                 notify(f"Export failed: {e}", error=True)
 
 
+# ---------------------------------------------------------------- Long Film
+
+class LongFilmPage(QWidget):
+    """The long film pre-cut from his labelled selections (see longfilm.py). Own projects, like Teaser Studio."""
+
+    def __init__(self, store, teaser_page):
+        super().__init__()
+        self.store, self.tp = store, teaser_page
+        self.pieces, self.runner, self._stop = [], None, False
+        v = QVBoxLayout(self)
+        v.setContentsMargins(24, 18, 24, 18)
+        v.setSpacing(10)
+        top = QHBoxLayout()
+        top.addWidget(lbl("Long Film", "h1"))
+        badge = QLabel("NEW")
+        badge.setStyleSheet(f"background:{C['POOR']};color:white;font-size:10px;font-weight:800;border-radius:9px;padding:2px 8px")
+        top.addWidget(badge)
+        top.addStretch()
+        self.b_build = btn("Build", "primary", self.build)
+        self.b_exp = btn("Export XML", slot=self.export)
+        top.addWidget(self.b_exp)
+        top.addWidget(self.b_build)
+        v.addLayout(top)
+        v.addWidget(lbl("The long film pre-cut from your labelled selections, every selection whole and in your order: teaser, "
+                        "getting ready, first look, (vornic), church, couple and venue. The party is the Multicam edit. You add "
+                        "the music, the interviews and the final touches in Premiere.", "muted", True))
+        pr = QHBoxLayout()
+        pr.addWidget(lbl("Project", "section"))
+        self.pcombo = QComboBox()
+        self.pcombo.setMinimumWidth(260)
+        self.pcombo.currentIndexChanged.connect(self.switch_project)
+        pr.addWidget(self.pcombo)
+        pr.addWidget(btn("+  New long film", slot=self.new_project))
+        pr.addWidget(btn("Rename", "link", self.rename_project))
+        pr.addWidget(btn("Delete", "link", self.delete_project))
+        pr.addStretch()
+        v.addLayout(pr)
+        body = QHBoxLayout()
+        body.setSpacing(18)
+        v.addLayout(body, 1)
+        sc = QScrollArea()
+        sc.setWidgetResizable(True)
+        sc.setFixedWidth(430)
+        lw = QWidget()
+        left = QVBoxLayout(lw)
+        left.setContentsMargins(0, 0, 8, 0)
+        left.setSpacing(10)
+
+        def card(n, title):
+            f = QFrame()
+            f.setObjectName("card")
+            l = QVBoxLayout(f)
+            l.setContentsMargins(14, 12, 14, 12)
+            h = QHBoxLayout()
+            num = QLabel(str(n))
+            num.setFixedSize(22, 22)
+            num.setAlignment(Qt.AlignCenter)
+            num.setStyleSheet(f"background:{C['BLUE']};color:white;border-radius:11px;font-weight:700")
+            h.addWidget(num)
+            h.addWidget(lbl(title, "h2"))
+            h.addStretch()
+            l.addLayout(h)
+            left.addWidget(f)
+            return l
+        l1 = card(1, "Footage (your colour labels)")
+        l1.addWidget(lbl("The XML of your selects sequence: camera 1's day, a pause of a few minutes, then camera 2's day, "
+                         "each in your order. Same colours as Teaser Studio; the first Brown shot of every camera separates "
+                         "the morning from the rest.", "muted", True))
+        l1.addWidget(btn("Import labelled XML", slot=self.pick_footage))
+        self.foot_lbl = QLabel("")
+        self.foot_lbl.setWordWrap(True)
+        l1.addWidget(self.foot_lbl)
+        l2 = card(2, "Teaser")
+        l2.addWidget(lbl("The teaser of a Teaser Studio project (the same wedding), with its music, at the start of the film.",
+                         "muted", True))
+        self.tcombo = QComboBox()
+        self.tcombo.currentIndexChanged.connect(lambda i: self._remember(teaser=self.tcombo.itemData(i)))
+        l2.addWidget(self.tcombo)
+        l3 = card(3, "Vornic (optional)")
+        vr = QHBoxLayout()
+        vr.addWidget(lbl("This wedding has a vornic", "", True), 1)
+        self.sw_v = Switch(False)
+        self.sw_v.toggled.connect(lambda x: (self._remember(vornic=x), self._vornic_ui()))
+        vr.addWidget(self.sw_v, 0, Qt.AlignTop)
+        l3.addLayout(vr)
+        self.vbox = QWidget()
+        self.vbox.setStyleSheet("background:transparent")
+        vb = QVBoxLayout(self.vbox)
+        vb.setContentsMargins(0, 0, 0, 0)
+        vb.addWidget(lbl("A good photo of the vornic (face well visible): his Iris shots of the morning are found by his face, "
+                         "on both cameras. Or mark the vornic shots Mango in Premiere.", "muted", True))
+        vb.addWidget(btn("Choose the vornic's photo", slot=self.pick_photo))
+        self.photo_lbl = lbl("", "muted", True)
+        vb.addWidget(self.photo_lbl)
+        l3.addWidget(self.vbox)
+        left.addStretch()
+        sc.setWidget(lw)
+        body.addWidget(sc)
+        right = QVBoxLayout()
+        right.addWidget(lbl("YOUR LONG FILM", "section"))
+        self.parts_lbl = QLabel("")
+        self.parts_lbl.setWordWrap(True)
+        self.parts_lbl.setTextFormat(Qt.RichText)
+        right.addWidget(self.parts_lbl)
+        self.pp = ProgressPanel()
+        right.addWidget(self.pp)
+        right.addStretch()
+        body.addLayout(right, 1)
+        self.layout_ = None
+        self._fill_projects()
+        QTimer.singleShot(0, self.restore)
+
+    # ---- projects (one per wedding)
+    def _projects(self):
+        app = self.store.app
+        if not app.get("long_projects"):
+            app["long_projects"] = [dict(id=uuid.uuid4().hex, name="My first long film")]
+            app["long_current"] = app["long_projects"][0]["id"]
+        return app["long_projects"]
+
+    def _cur(self):
+        ps = self._projects()
+        return next((p for p in ps if p["id"] == self.store.app.get("long_current")), ps[0])
+
+    def _remember(self, **kw):
+        self._cur().update(kw)
+        self.store.save_app()
+
+    def _fill_projects(self):
+        self.pcombo.blockSignals(True)
+        self.pcombo.clear()
+        for p in self._projects():
+            self.pcombo.addItem(p["name"], p["id"])
+        self.pcombo.setCurrentIndex([p["id"] for p in self._projects()].index(self._cur()["id"]))
+        self.pcombo.blockSignals(False)
+
+    def _busy(self):
+        return bool(self.runner and self.runner.isRunning())
+
+    def switch_project(self, i):
+        if self._busy():
+            self._fill_projects()
+            return
+        self.store.app["long_current"] = self.pcombo.itemData(i)
+        self.store.save_app()
+        self.restore()
+
+    def new_project(self):
+        from PySide6.QtWidgets import QInputDialog
+        name, ok = QInputDialog.getText(self, "New long film", "Name (e.g. the couple):")
+        if ok and name.strip() and not self._busy():
+            p = dict(id=uuid.uuid4().hex, name=name.strip())
+            self._projects().append(p)
+            self.store.app["long_current"] = p["id"]
+            self.store.save_app()
+            self._fill_projects()
+            self.restore()
+
+    def rename_project(self):
+        from PySide6.QtWidgets import QInputDialog
+        p = self._cur()
+        name, ok = QInputDialog.getText(self, "Rename long film", "Name:", text=p["name"])
+        if ok and name.strip():
+            p["name"] = name.strip()
+            self.store.save_app()
+            self._fill_projects()
+
+    def delete_project(self):
+        from PySide6.QtWidgets import QMessageBox
+        ps = self._projects()
+        if self._busy() or len(ps) < 2:
+            return
+        p = self._cur()
+        if QMessageBox.question(self, "Delete long film", f"Delete \"{p['name']}\"? Your files are not touched.") != QMessageBox.Yes:
+            return
+        ps.remove(p)
+        self.store.app["long_current"] = ps[0]["id"]
+        self.store.save_app()
+        self._fill_projects()
+        self.restore()
+
+    def restore(self):
+        if self._busy():
+            return
+        t = self._cur()
+        self.pieces, self.layout_ = [], None
+        self.foot_lbl.setText("")
+        self.parts_lbl.setText(i18n.T("Import your labelled XML to start."))
+        self.tcombo.blockSignals(True)
+        self.tcombo.clear()
+        self.tcombo.addItem(i18n.T("No teaser"), None)
+        for tp_ in self.store.app.get("teaser_projects", []):
+            self.tcombo.addItem(tp_["name"], tp_["id"])
+        ix = self.tcombo.findData(t.get("teaser"))
+        self.tcombo.setCurrentIndex(max(0, ix))
+        self.tcombo.blockSignals(False)
+        self.sw_v.set(bool(t.get("vornic")))
+        self.photo_lbl.setText(Path(t["photo"]).name if t.get("photo") else i18n.T("No photo yet."))
+        self._vornic_ui()
+        self._buttons()
+        if t.get("footage") and Path(t["footage"]).exists():
+            self._load(t["footage"])
+
+    def _vornic_ui(self):
+        self.vbox.setVisible(self.sw_v.on)
+
+    def _buttons(self):
+        self.b_build.setEnabled(bool(self.pieces) and not self._busy())
+        self.b_exp.setEnabled(self.layout_ is not None and not self._busy())
+
+    # ---- jobs
+    def _run(self, text, fn, done):
+        if self._busy():                                     # never two jobs: the running one would be destroyed
+            notify("Wait for the current job to finish (or Cancel it).", error=True)
+            return
+        self._stop = False
+        self.pp.start(text)
+        self.pp.allow_cancel(lambda: setattr(self, "_stop", True))
+        self.runner = _Runner(fn)
+        self.runner.progress.connect(self.pp.set)
+        self.runner.done.connect(lambda r: (self.pp.hide(), self.pp.allow_cancel(None), done(r)))
+        self.runner.finished.connect(self._buttons)          # only when the job has really ended
+        self.runner.failed.connect(lambda m: (self.pp.hide(), self.pp.allow_cancel(None), self._buttons(),
+                                              self.parts_lbl.setText(f'<span style="color:{C["POOR"]}">{i18n.T("Error: {}").format(i18n.T(m))}</span>'),
+                                              notify(f"Error: {m}", error=True) if m != "Cancelled" else None))
+        self.runner.start()
+        self._buttons()
+
+    def pick_footage(self):
+        f, _ = QFileDialog.getOpenFileName(self, "Labelled footage XML (from Premiere)", "", "XML (*.xml)")
+        if f:
+            self._remember(footage=f)
+            self._load(f)
+
+    def _load(self, f):
+        self._run("Reading your labelled clips…", lambda progress=None: teaser.load_footage(f), self._loaded)
+
+    def _loaded(self, r):
+        self.pieces, skipped = r
+        trs, parts = longfilm.plan(self.pieces)
+        rows = [f"<b>{Path(self._cur()['footage']).name}</b>"]
+        for k, tr in enumerate(trs):
+            b, c, _ = longfilm.split_day(tr)
+            rows.append(i18n.T("Camera {}: {} selections").format(k + 1, len(tr)) +
+                        ("" if c else f' <span style="color:{C["FAIR"]}">{i18n.T("(no Brown church shot: everything counts as morning)")}</span>'))
+        missing = sum(1 for p in self.pieces if not Path(p["path"]).exists())
+        if missing:
+            rows.append(f'<span style="color:{C["POOR"]}">' + i18n.T("{} clips not found on this computer: connect the disk with the footage.").format(missing) + "</span>")
+        self.foot_lbl.setText("<br>".join(rows))
+        self._show(parts, None)
+        notify(f"Footage loaded: {len(self.pieces)} selections")
+
+    def pick_photo(self):
+        f, _ = QFileDialog.getOpenFileName(self, "Photo of the vornic", "", "Images (*.jpg *.jpeg *.png *.JPG *.PNG)")
+        if f:
+            self._remember(photo=f)
+            self.photo_lbl.setText(Path(f).name)
+
+    def _show(self, parts, layout):
+        rows = []
+        lens = {n: L for n, L, _ in (layout or [])}
+        for name, ps in parts:
+            d = lens.get(name, sum(p["b"] - p["a"] for p in ps))      # the vornic's wide camera lies UNDER the medium one
+            rows.append(f"<tr><td>{i18n.T(name)}</td><td align='right'>{len(ps)}</td><td align='right'>{int(d // 60)}:{int(d % 60):02d}</td></tr>")
+        total = sum(L for _, L, _ in layout) if layout else None
+        head = f"<tr><td><b>{i18n.T('Part')}</b></td><td><b>{i18n.T('Selections')}</b></td><td><b>{i18n.T('Duration')}</b></td></tr>"
+        tail = (f"<br>{i18n.T('Ready: about {} min without the teaser and the party. Press Export XML.').format(int(total // 60))}"
+                if total is not None else f"<br>{i18n.T('Press Build.')}")
+        self.parts_lbl.setText(f"<table cellspacing='8'>{head}{''.join(rows)}</table>{tail}")
+
+    def build(self):
+        t = self._cur()
+        pieces = self.pieces
+        use_v = bool(t.get("vornic"))
+        photo = t.get("photo")
+        tid = t.get("teaser")
+        tpro = next((x for x in self.store.app.get("teaser_projects", []) if x["id"] == tid), None)
+        base = self.store.dir
+
+        def job(progress=None):
+            vids, sizes = set(), {}
+            if use_v and photo:
+                import faces
+                fm = faces.Faces(faces.ensure_models(base, progress))
+                ref = fm.person(photo)
+                cands = longfilm.vornic_candidates(pieces)
+                res = faces.find_person(cands, ref, fm, progress=progress, cancel=lambda: self._stop)
+                sizes = res
+                vids = {i for i, (s, w) in res.items() if s >= faces.SAME}
+            trs, parts = longfilm.plan(pieces, vids)
+            layout = []
+            for name, ps in parts:
+                if name == "Vornic" and ps:
+                    L, its = longfilm.vornic_layout(ps, sizes, progress)
+                    layout.append((name, L, its))
+                    continue
+                tt, its = 0.0, []
+                for p in ps:
+                    its.append((1, tt, p, p["a"], p["b"]))
+                    tt += p["b"] - p["a"]
+                layout.append((name, tt, its))
+            tz = None
+            if tpro and tpro.get("footage") and tpro.get("music") and tpro.get("bounds"):
+                if progress:
+                    progress("Building the teaser from Teaser Studio…", 0.5)
+                tps, _ = teaser.load_footage(tpro["footage"])
+                tz = longfilm.teaser_part(tps, teaser.load_music(tpro["music"]), tpro["bounds"])
+            return parts, layout, tz, len(vids)
+
+        self._run("Building the long film…", job, self._built)
+
+    def _built(self, r):
+        parts, self.layout_, self.tz, nv = r
+        self._show(parts, self.layout_)
+        msg = "Long film ready"
+        if self._cur().get("vornic"):
+            msg += f" · {nv} vornic shots found" if self._cur().get("photo") else " · vornic: Mango shots only (no photo)"
+        notify(msg)
+
+    def export(self):
+        if not self.layout_:
+            return
+        start = str(Path(self._cur().get("footage") or ".").parent / f"{self._cur()['name']} - long film.xml")
+        out, _ = QFileDialog.getSaveFileName(self, "Save XML", start, "XML (*.xml)")
+        if not out:
+            return
+        try:
+            n, marks = longfilm.export_xml(self.layout_, out, Path(out).stem, self.tz)
+            self.parts_lbl.setText(self.parts_lbl.text() + "<br>" + i18n.T("Saved {} clips to {}. Premiere: File > Import · DaVinci: File > Import > Timeline.").format(n, out))
+            notify(f"XML saved: {Path(out).name}")
+            logging.info("long film exported: %s (%d clips)", out, n)
+        except Exception as e:
+            logging.exception("long film export failed")
+            notify(f"Export failed: {e}", error=True)
+
+
 # ---------------------------------------------------------------- main window
 
 class Main(QMainWindow):
@@ -3880,19 +4329,21 @@ class Main(QMainWindow):
         self.nav = {"dash": btn("Dashboard", "nav", lambda: self.go("dash")),
                     "queue": btn("Analysis Queue", "nav", lambda: self.go("queue")),
                     "teaser": btn("Teaser Studio", "nav", lambda: self.go("teaser")),
+                    "long": btn("Long Film", "nav", lambda: self.go("long")),
                     "settings": btn("Settings", "nav", lambda: self.go("settings")),
                     "info": btn("Info / How to use", "nav", lambda: self.go("info"))}
         for b in self.nav.values():
             sv.addWidget(b)
-        nb = QHBoxLayout(self.nav["teaser"])
-        nb.setContentsMargins(0, 0, 8, 0)
-        nb.addStretch()
-        new = QLabel("NEW")
-        new.setStyleSheet(f"background:{C['POOR']};color:white;font-size:8px;font-weight:800;border-radius:5px;padding:0px 4px")
-        new.setAttribute(Qt.WA_TransparentForMouseEvents)
-        new.setFixedSize(30, 14)
-        new.setAlignment(Qt.AlignCenter)
-        nb.addWidget(new, 0, Qt.AlignVCenter)
+        for key in ("teaser", "long"):
+            nb = QHBoxLayout(self.nav[key])
+            nb.setContentsMargins(0, 0, 8, 0)
+            nb.addStretch()
+            new = QLabel("NEW")
+            new.setStyleSheet(f"background:{C['POOR']};color:white;font-size:8px;font-weight:800;border-radius:5px;padding:0px 4px")
+            new.setAttribute(Qt.WA_TransparentForMouseEvents)
+            new.setFixedSize(30, 14)
+            new.setAlignment(Qt.AlignCenter)
+            nb.addWidget(new, 0, Qt.AlignVCenter)
         sv.addStretch()
         sv.addWidget(lbl("Local workspace", "muted"))
         h.addWidget(side)
@@ -3906,12 +4357,13 @@ class Main(QMainWindow):
         self.settings = SettingsPage(self.store)
         self.info = InfoPage(self.store)
         self.teaser = TeaserPage(self.store)
+        self.long = LongFilmPage(self.store, self.teaser)
         self.toast = Toast(self)
         global _NOTIFY
         _NOTIFY = lambda text, error=False, ms=None: self.toast.show_msg(text, ms, error)
         self.res.export_done = lambda name: (self.toast.show_msg(f"XML saved: {name}"), logging.info("footage export %s", name))
         self.teaser.notify.connect(self.toast.show_msg)
-        for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser):
+        for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser, self.long):
             self.stack.addWidget(w)
         self.dash.new_project.connect(self.new_project)
         self.dash.open_project.connect(self.open_project)
@@ -3949,6 +4401,19 @@ class Main(QMainWindow):
 
     def closeEvent(self, e):
         self.store.flush()
+        # stop the background jobs cleanly (what is analysed so far is kept), so quitting never ends in a crash report
+        for pg in (self.teaser, self.long):
+            r = getattr(pg, "runner", None)
+            if r and r.isRunning():
+                pg._stop = True
+                r.wait(5000)
+        for w_ in (getattr(self, "worker", None), getattr(self.mc, "worker", None)):
+            if w_ is not None and w_.isRunning():
+                try:
+                    w_.cancel()
+                except Exception:
+                    pass
+                w_.wait(5000)
         super().closeEvent(e)
 
     # navigation
@@ -3956,7 +4421,7 @@ class Main(QMainWindow):
         self.stack.setCurrentWidget(w)
         for k, b in self.nav.items():
             b.setProperty("active", (k == "dash" and w in (self.dash, self.proj, self.res, self.mc)) or (k == "queue" and w in (self.queue, self.anl))
-                          or (k == "settings" and w is self.settings) or (k == "info" and w is self.info) or (k == "teaser" and w is self.teaser))
+                          or (k == "settings" and w is self.settings) or (k == "info" and w is self.info) or (k == "teaser" and w is self.teaser) or (k == "long" and w is self.long))
             repolish(b)
 
     def go(self, where):
@@ -3969,6 +4434,8 @@ class Main(QMainWindow):
             self.show_page(self.info)
         elif where == "teaser":
             self.show_page(self.teaser)
+        elif where == "long":
+            self.show_page(self.long)
         else:
             self.show_page(self.queue)
 
