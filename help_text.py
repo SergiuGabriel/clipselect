@@ -241,7 +241,7 @@ Camera unde fața lui e mai mare e cea medium (V1), cealaltă (wide) e așezată
 tăiată automat, care alternează camerele în pauzele lui de vorbire. Poți marca cadrele de vornic și cu Mango.</li>
 <li><b>Construiește</b>, apoi <b>Export XML</b>.</li>
 </ol>
-<p>Pregătirile alternează mire / mireasă, în blocuri de ~20 s, fiecare în ordinea filmării. First look-ul de pe ambele camere e <b>sincronizat automat pe sunet</b>: camera cu cel mai mult first look pe V1, cealaltă pe V2, exact deasupra aceluiași moment, ca să tai tu între ele. Fiecare clip își păstrează <b>culoarea ta</b> (eticheta din Premiere).</p>
+<p>Pregătirile sunt povestite <b>în paralel</b>, ca și cum s-ar întâmpla în același timp: fiecare parte (mire, mireasă) rămâne în ordinea filmării, iar partea rămasă în urmă primește următoarele 1-4 cadre, ca amândouă să ajungă la final împreună. First look-ul e <b>găsit și sincronizat după sunet</b> pe toate camerele: camera principală pe V1, iar cadrele Iris ale celorlalte camere care au același sunet ca first look-ul (chiar și pe o cameră fără biserică) sunt puse pe V2, exact deasupra aceluiași moment; cele care nu se potrivesc sunt de petrecere și nu intră. O selecție pusă de două ori în sequence (de exemplu o copie pe V2) intră o singură dată. Fiecare clip își păstrează <b>culoarea ta</b> și are sunetul legat de imagine.</p>
 <p>Părțile, în ordine: Teaser · Pregătiri (doar camera 1) · First look (ambele camere) · Vornic · Biserica (exact în ordinea ta,
 ambele camere) · Cuplu și sală (cuplul după biserică, apoi drona și sala) · un marker „Petrecere". Fiecare parte are un
 marker; fiecare cadru are sunetul camerei pe A1/A2, teaserul are muzica pe A3/A4.</p>
@@ -515,7 +515,7 @@ camera where his face is bigger is the medium one (V1), the other one (wide) is 
 version that alternates the cameras in the pauses of his speech. You can also mark the vornic shots Mango.</li>
 <li><b>Build</b>, then <b>Export XML</b>.</li>
 </ol>
-<p>The getting ready alternates groom / bride in blocks of ~20 s, each in the order it was filmed. The first look of both cameras is <b>synced automatically by the sound</b>: the camera with the most first look on V1, the other on V2, right above the same moment, for you to cut between them. Every clip keeps <b>your colour</b> (its Premiere label).</p>
+<p>The getting ready is told <b>in parallel</b>, as if it happened at the same time: each side (groom, bride) keeps the order it was filmed in, and the side that is behind gets the next 1-4 shots, so both reach the end together. The first look is <b>found and synced by the sound</b> on every camera: the main camera on V1, and the other cameras' Iris shots that share the first look's sound (even on a camera with no church) on V2, right above the same moment; the ones that do not match are the party and stay out. A selection laid twice in the sequence (e.g. a copy on V2) goes in once. Every clip keeps <b>your colour</b> and has its sound linked to the picture.</p>
 <p>The parts, in order: Teaser · Getting ready (camera 1 only) · First look (both cameras) · Vornic · Church (exactly your
 order, both cameras) · Couple and venue (the couple after the church, then the drone and the venue) · a "Party" marker. Every
 part has a marker; every shot carries its camera sound on A1/A2, the teaser its music on A3/A4.</p>

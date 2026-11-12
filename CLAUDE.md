@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.2.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.3.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -307,6 +307,17 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 - Long Film first look = every camera's first look SYNCED by the sound (longfilm.firstlook_layout -> stack_layout):
   the camera with the most first-look footage on V1, the others on V2 above the same moment (no cut version; he cuts).
   vornic_layout uses the same stack_layout (with the cut version on V3). Audio of a file is read once (cache).
+
+## v3.3.0 (his Mada & Radu test: "it does not work at all")
+- Sound NOT linked in Premiere: Long Film wrote every <link> with clipindex 1. export_xml rewritten like core's export:
+  entries first, then ids + clip index = POSITION IN ITS TRACK sorted by start, audio links with <groupindex>1</groupindex>.
+  Test: every link checked against the real position (0 wrong).
+- Church twice: his selects had each church clip on V1 AND a copy on V2 -> longfilm.dedupe (same file + in / out).
+- Getting ready must be PARALLEL (as if simultaneous): longfilm.interleave = each side in filming order, the side whose
+  story is behind (share of its footage used) gets the next 1-4 shots (the block version left 80 bride shots at the end).
+- First look not synced: his 2nd camera had NO church, so its Iris counted as party. Now firstlook_candidates (other
+  cameras' Iris after their church / on cameras without one) are matched BY SOUND to the main camera's first look
+  (_clip_audio decodes only the selection); matches go on V2+ (one shot per track at a moment), the rest is party.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

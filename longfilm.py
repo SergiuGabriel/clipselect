@@ -105,39 +105,53 @@ def _by_time(ps):
     return sorted(ps, key=lambda p: (p["train"], file_number(p), p["a"]))
 
 
-def interleave(a, b, block=20.0):
-    """Groom and bride getting ready taking turns, each side in the order it was filmed, the side filmed first starts.
-    Both sides are cut into the SAME number of blocks (about `block` seconds on the side with less footage), so the two
-    end together: never a long run of one side at the end."""
+def interleave(a, b, max_run=4):
+    """Groom and bride getting ready told IN PARALLEL, as if it happened at the same time: each side keeps the order it
+    was filmed in, and the side whose story is behind (share of its shots already used) gets the next 1-4 shots.
+    Both reach the end together; no long run of one side."""
     a = sorted(a, key=lambda p: (file_number(p), p["a"]))
     b = sorted(b, key=lambda p: (file_number(p), p["a"]))
     if not a or not b:
         return a + b
     if (file_number(b[0]), b[0]["a"]) < (file_number(a[0]), a[0]["a"]):
         a, b = b, a
-    dur = lambda ps: sum(p["b"] - p["a"] for p in ps)
-    n = max(1, min(len(a), len(b), round(min(dur(a), dur(b)) / block)))
+    tot = {0: sum(p["b"] - p["a"] for p in a) or 1.0, 1: sum(p["b"] - p["a"] for p in b) or 1.0}
+    side, used, pos, out = (a, b), {0: 0.0, 1: 0.0}, {0: 0, 1: 0}, []
+    frac = lambda k: pos[k] / len(side[k])       # progress by SHOTS: that is what the eye follows on screen
+    while pos[0] < len(a) or pos[1] < len(b):
+        if pos[1] >= len(b):
+            k = 0
+        elif pos[0] >= len(a):
+            k = 1
+        else:
+            k = 0 if frac(0) <= frac(1) else 1
+        o, took = 1 - k, 0
+        while pos[k] < len(side[k]) and took < max_run and (took == 0 or pos[o] >= len(side[o]) or frac(k) <= frac(o)):
+            p = side[k][pos[k]]
+            out.append(p)
+            used[k] += p["b"] - p["a"]
+            pos[k] += 1
+            took += 1
+    return out
 
-    def blocks(ps):
-        out, cur, tot, k = [], [], dur(ps), 1
-        acc = 0.0
-        for p in ps:
-            cur.append(p)
-            acc += p["b"] - p["a"]
-            if acc >= tot * k / n - 1e-6 and k < n:
-                out.append(cur)
-                cur, k = [], k + 1
-        out.append(cur)
-        return out + [[]] * (n - len(out))
-    res = []
-    for x, y in zip(blocks(a), blocks(b)):
-        res += x + y
-    return res
+
+def dedupe(pieces):
+    """The same selection twice (same file, same in / out: a copy on another track) is used once."""
+    seen, out = set(), []
+    for p in sorted(pieces, key=lambda p: p["order"]):
+        k = (p["path"], round(p["a"], 1), round(p["b"], 1))
+        if k not in seen:
+            seen.add(k)
+            out.append(p)
+    return out
 
 
 def plan(pieces, vornic_ids=None):
-    """The parts: [(name, [pieces])]. vornic_ids: id() of the pieces that are the vornic (face found or Mango)."""
+    """The parts: [(name, [pieces])]. vornic_ids: id() of the pieces that are the vornic (face found or Mango).
+    The 'First look' part holds the main camera's first look first; firstlook_candidates() gives the other cameras'
+    Iris shots that are matched to it by the sound when the film is built."""
     vornic_ids = vornic_ids or set()
+    pieces = dedupe(pieces)
     trs = trains(pieces)
     before, after = [], []
     for tr in trs:
@@ -152,13 +166,26 @@ def plan(pieces, vornic_ids=None):
     v = [p for p in pieces if id(p) in vornic_ids or p["cat"] == "vornic"]
     if v:
         parts.append(("Vornic", _by_time(v)))
-    # the church exactly as HE laid it out on the timeline (every camera)
+    # the church exactly as HE laid it out on the timeline (every camera), each selection once
     parts.append(("Church", sorted([p for p in pieces if p["cat"] == "church"], key=lambda p: p["order"])))
     couple = _by_time([p for p in after if p["cat"] == "couple"])
     drone = sorted([p for p in pieces if p["cat"] == "drone"], key=lambda p: (p["train"], file_number(p), p["a"]))
     venue = _by_time([p for p in after if p["cat"] == "venue"])
     parts.append(("Couple and venue", couple + drone + venue))
     return trs, parts
+
+
+def firstlook_candidates(pieces, vornic_ids=None):
+    """Iris shots of the OTHER cameras that may be the first look: those after their church or on a camera with no
+    church at all (they count as party unless their sound matches the main camera's first look)."""
+    vornic_ids = vornic_ids or set()
+    out = []
+    for tr in trains(dedupe(pieces)):
+        if tr and tr[0]["train"] == 0:
+            continue
+        b, c, a = split_day(tr)
+        out += [p for p in a if p["cat"] == "party" and id(p) not in vornic_ids]
+    return out
 
 
 def vornic_candidates(pieces):
@@ -273,18 +300,64 @@ def vornic_layout(vps, sizes, progress=None):
     return stack_layout(vps, med_t, cut=True, progress=progress, label="Placing the wide camera by the sound")
 
 
-def firstlook_layout(ps, progress=None):
-    """The first look from every camera, synced: the camera with the most first-look footage on V1, the others placed by
-    their sound on top of it (V2). He cuts between them himself."""
+def _clip_audio(p):
+    """Only the selection's sound (not the whole file): mono, 4 kHz."""
+    import subprocess
+    dur = max(0.1, p["b"] - p["a"])
+    cmd = [core.ffmpeg_exe(), "-v", "error", "-nostdin", "-ss", f"{p['a']:.3f}", "-t", f"{dur:.3f}", "-i", p["path"],
+           "-vn", "-ac", "1", "-ar", str(sync.SR), "-f", "f32le", "-"]
+    out = subprocess.run(cmd, capture_output=True, **core._NOWIN).stdout
+    return np.frombuffer(out, np.float32).copy()
+
+
+def firstlook_layout(ps, candidates=(), progress=None):
+    """The first look of every camera, SYNCED: the main camera's (or the camera with the most first look) on V1, every
+    other camera's shot placed by its sound on top of the same moment (V2). Candidates (Iris of other cameras that may
+    be the party) are used only when their sound matches the first look. He cuts between the cameras himself."""
     trs = sorted({p["train"] for p in ps})
-    if len(trs) < 2:
-        t, items = 0.0, []
-        for p in ps:
-            items.append((1, t, p, p["a"], p["b"]))
-            t += p["b"] - p["a"]
-        return t, items
-    master = max(trs, key=lambda k: sum(p["b"] - p["a"] for p in ps if p["train"] == k))
-    return stack_layout(ps, master, cut=False, progress=progress, label="Syncing the first look of the second camera")
+    if not ps:
+        return 0.0, []
+    master = 0 if 0 in trs else max(trs, key=lambda k: sum(p["b"] - p["a"] for p in ps if p["train"] == k))
+    med = [p for p in ps if p["train"] == master]
+    others = [(p, True) for p in ps if p["train"] != master] + [(p, False) for p in candidates]
+    items, t, starts = [], 0.0, []
+    for p in med:
+        items.append((1, t, p, p["a"], p["b"]))
+        starts.append(t)
+        t += p["b"] - p["a"]
+    length = t
+    if not others:
+        return length, items
+    idx = []
+    for p in med:
+        try:
+            x = _clip_audio(p)
+        except Exception:
+            x = np.zeros(sync.SR, np.float32)
+        idx.append(sync.MasterIndex(x if len(x) > sync.SR else np.zeros(sync.SR, np.float32)))
+    lanes = {}
+    for k, (p, keep) in enumerate(others):
+        if progress:
+            progress(f"Syncing the first look of the second camera: {k + 1} of {len(others)}", (k + 1) / max(1, len(others)))
+        try:
+            x = _clip_audio(p)
+            r = sync.sync_clip(idx, x) if len(x) > sync.SR else dict(conf="fail")
+        except Exception:
+            r = dict(conf="fail")
+        if r.get("conf") in ("high", "medium"):
+            g = starts[r["master"]] + r["offset"]
+            s0, s1 = max(0.0, g), min(length, g + (p["b"] - p["a"]))
+            if s1 - s0 > 0.5:
+                # the first free track above the master (two shots of the same moment never on one track)
+                lane = next((tr for tr in (2, 3, 4, 5) if all(not (s0 < e1 and s1 > e0) for e0, e1 in lanes.get(tr, []))), None)
+                if lane:
+                    lanes.setdefault(lane, []).append((s0, s1))
+                    items.append((lane, s0, p, p["a"] + (s0 - g), p["a"] + (s1 - g)))
+                    continue
+        if keep:                                            # his first look but no sound to place it: after, on V1
+            items.append((1, length, p, p["a"], p["b"]))
+            length += p["b"] - p["a"]
+    return length, items
 
 
 def _ai(path):
@@ -297,114 +370,137 @@ def _ai(path):
 def export_xml(parts_layout, out_path, name, teaser_part=None):
     """parts_layout: [(part name, length, [(track, t0 in the part, piece, src in, src out)])]. teaser_part: optional
     (length, [(t0, t1, piece)], [(music path, start, end, src in)]). One 25 fps sequence; the shots on V1 carry their own
-    camera sound on A1/A2 (linked); the teaser's music on A3/A4; a marker on every part."""
+    camera sound on A1/A2, LINKED to the picture the way Premiere / DaVinci expect it (every link names the clip's track
+    and its position in that track, the sound in one group); the teaser's music on A3/A4; a marker on every part."""
+    import i18n
     rate_xml, sf = core._rate(SEQ_FPS)
-    n = [0]
     files, ainfo = {}, {}
-    vt = {1: [], 2: [], 3: []}
-    at = {1: [], 2: [], 3: [], 4: []}
-
-    def nid():
-        n[0] += 1
-        return f"clipitem-{n[0]}"
 
     def info(path):
         if path not in ainfo:
             ainfo[path] = _ai(path)
         return ainfo[path]
 
-    def file_xml(path, p=None):
-        """The full <file> the first time, then only its id."""
-        if path in files:
-            return f'<file id="{files[path]}"/>'
-        files[path] = f"file-{len(files) + 1}"
-        r, ch = info(path)
-        aud = (f'<audio><samplecharacteristics><depth>16</depth><samplerate>{r}</samplerate></samplecharacteristics>'
-               f'<channelcount>{ch}</channelcount></audio>') if ch else ""
-        if p is not None:
-            frate, ffps = core._rate(p["fps"])
-            return (f'<file id="{files[path]}"><name>{escape(Path(path).name)}</name><pathurl>{escape(core._url(path))}</pathurl>'
-                    f'{frate}<duration>{int(p["fdur"] * ffps)}</duration><media><video>{core._sc(frate, p["w"], p["h"], "none")}'
-                    f'</video>{aud}</media></file>')
-        return (f'<file id="{files[path]}"><name>{escape(Path(path).name)}</name><pathurl>{escape(core._url(path))}</pathurl>'
-                f'{rate_xml}<duration>{10 ** 7}</duration><media>{aud}</media></file>')
+    LAB = {"bride": "Rose", "groom": "Blue", "couple": "Purple", "church": "Brown", "venue": "Yellow", "party": "Iris",
+           "drone": "Violet", "vornic": "Mango"}
+    # ---- 1. every clip as an entry, in timeline frames
+    vids, music, markers, g = [], [], [], 0.0      # vids: dict(track, st, en, fin, fout, p, sound)
 
-    def shot(track, t0, p, a, b, sound):
+    def add(track, t0, p, a, b, sound):
         st, en = round(t0 * sf), round((t0 + (b - a)) * sf)
-        if en <= st:
-            return
-        fin = round(a * sf)
-        fout = fin + (en - st)
-        sdur = max(fout, int(p["fdur"] * sf))
-        fx = file_xml(p["path"], p)
-        fid = files[p["path"]]
-        vid = nid()
-        r, ch = info(p["path"])
-        aids = [nid() for _ in range(min(2, ch))] if sound and ch else []
-        links = "".join(f'<link><linkclipref>{x}</linkclipref><mediatype>{m}</mediatype><trackindex>{ti}</trackindex>'
-                        f'<clipindex>1</clipindex></link>'
-                        for x, m, ti in [(vid, "video", 1)] + [(aid, "audio", k + 1) for k, aid in enumerate(aids)]) if aids else ""
-        lab = p.get("label") or {"bride": "Rose", "groom": "Blue", "couple": "Purple", "church": "Brown", "venue": "Yellow",
-                                 "party": "Iris", "drone": "Violet", "vornic": "Mango"}.get(p["cat"], "")
-        labs = f"<labels><label2>{escape(lab)}</label2></labels>" if lab else ""        # his colours stay
-        vt[track].append(f'<clipitem id="{vid}"><name>{escape(Path(p["path"]).name)}</name><duration>{sdur}</duration>{rate_xml}'
-                         f'<start>{st}</start><end>{en}</end><in>{fin}</in><out>{fout}</out>{fx}{links}{labs}</clipitem>')
-        for k, aid in enumerate(aids):
-            at[k + 1].append(f'<clipitem id="{aid}"><name>{escape(Path(p["path"]).name)}</name><duration>{sdur}</duration>'
-                             f'{rate_xml}<start>{st}</start><end>{en}</end><in>{fin}</in><out>{fout}</out><file id="{fid}"/>'
-                             f'<sourcetrack><mediatype>audio</mediatype><trackindex>{min(k + 1, ch)}</trackindex></sourcetrack>'
-                             f'{links}{labs}</clipitem>')
-
-    markers, g = [], 0.0
+        if en > st:
+            fin = round(a * sf)
+            vids.append(dict(track=track, st=st, en=en, fin=fin, fout=fin + (en - st), p=p, sound=sound))
     if teaser_part:
-        tl, shots, music = teaser_part
+        tl, shots, mus = teaser_part
         markers.append(("Teaser", 0.0))
         for t0, t1, p in shots:
-            shot(1, t0, p, p["s"], p["s"] + (t1 - t0), sound=False)
-        for path, s0, s1, src in music:
-            if not Path(path).exists() or s1 <= s0:
-                continue
-            r, ch = info(path)
-            st, en = round(s0 * sf), round(s1 * sf)
-            fin = round(src * sf)
-            for k in range(min(2, max(1, ch))):
-                at[3 + k].append(f'<clipitem id="{nid()}"><name>{escape(Path(path).name)}</name><duration>{fin + en - st}</duration>'
-                                 f'{rate_xml}<start>{st}</start><end>{en}</end><in>{fin}</in><out>{fin + en - st}</out>'
-                                 f'{file_xml(path)}<sourcetrack><mediatype>audio</mediatype><trackindex>{k + 1}</trackindex>'
-                                 f'</sourcetrack></clipitem>')
+            add(1, t0, p, p["s"], p["s"] + (t1 - t0), False)
+        for path, s0, s1, src in mus:
+            if Path(path).exists() and s1 > s0:
+                st, en = round(s0 * sf), round(s1 * sf)
+                music.append(dict(path=path, st=st, en=en, fin=round(src * sf)))
         g = tl
     for pname, length, items in parts_layout:
         if not items:
             continue
         markers.append((pname, g))
         for track, t0, p, a, b in items:
-            shot(track, g + t0, p, a, b, sound=(track == 1))
+            add(track, g + t0, p, a, b, track == 1)
         g += length
     markers.append(("Party (the Multicam edit)", g))
+    # ---- 2. ids and positions (clip index = position in its track, by start)
+    n = [0]
+
+    def nid():
+        n[0] += 1
+        return f"clipitem-{n[0]}"
+    vt = {k: sorted([e for e in vids if e["track"] == k], key=lambda e: e["st"]) for k in (1, 2, 3, 4, 5)}
+    for k, lst in vt.items():
+        for ci, e in enumerate(lst, 1):
+            e["id"], e["ti"], e["ci"] = nid(), k, ci
+    aud = {1: [], 2: []}
+    for e in vt[1]:
+        if e["sound"]:
+            ch = info(e["p"]["path"])[1]
+            e["aud"] = [dict(e=e, k=k) for k in range(min(2, ch))]
+            for a in e["aud"]:
+                aud[a["k"] + 1].append(a)
+    for k, lst in aud.items():
+        lst.sort(key=lambda a: a["e"]["st"])
+        for ci, a in enumerate(lst, 1):
+            a["id"], a["ti"], a["ci"] = nid(), k, ci
+
+    def links(e):
+        if not e.get("aud"):
+            return ""
+        out = [f'<link><linkclipref>{e["id"]}</linkclipref><mediatype>video</mediatype><trackindex>{e["ti"]}</trackindex>'
+               f'<clipindex>{e["ci"]}</clipindex></link>']
+        out += [f'<link><linkclipref>{a["id"]}</linkclipref><mediatype>audio</mediatype><trackindex>{a["ti"]}</trackindex>'
+                f'<clipindex>{a["ci"]}</clipindex><groupindex>1</groupindex></link>' for a in e["aud"]]
+        return "".join(out)
+
+    def file_xml(p):
+        path = p["path"]
+        if path in files:
+            return f'<file id="{files[path]}"/>'
+        files[path] = f"file-{len(files) + 1}"
+        r, ch = info(path)
+        aud_ = (f'<audio><samplecharacteristics><depth>16</depth><samplerate>{r}</samplerate></samplecharacteristics>'
+                f'<channelcount>{ch}</channelcount></audio>') if ch else ""
+        frate, ffps = core._rate(p["fps"])
+        return (f'<file id="{files[path]}"><name>{escape(Path(path).name)}</name><pathurl>{escape(core._url(path))}</pathurl>'
+                f'{frate}<duration>{int(p["fdur"] * ffps)}</duration><media><video>{core._sc(frate, p["w"], p["h"], "none")}'
+                f'</video>{aud_}</media></file>')
+
+    def labels(p):
+        lab = p.get("label") or LAB.get(p["cat"], "")
+        return f"<labels><label2>{escape(lab)}</label2></labels>" if lab else ""
+    # ---- 3. the XML (video first: a file is fully defined the first time it is written)
+    vx = {k: [] for k in (1, 2, 3, 4, 5)}
+    for k in (1, 2, 3, 4, 5):
+        for e in vt[k]:
+            p = e["p"]
+            sdur = max(e["fout"], int(p["fdur"] * sf))
+            vx[k].append(f'<clipitem id="{e["id"]}"><name>{escape(Path(p["path"]).name)}</name><duration>{sdur}</duration>'
+                         f'{rate_xml}<start>{e["st"]}</start><end>{e["en"]}</end><in>{e["fin"]}</in><out>{e["fout"]}</out>'
+                         f'{file_xml(p)}{links(e)}{labels(p)}</clipitem>')
+    ax = {1: [], 2: [], 3: [], 4: []}
+    for k in (1, 2):
+        for a in aud[k]:
+            e, p = a["e"], a["e"]["p"]
+            sdur = max(e["fout"], int(p["fdur"] * sf))
+            ax[k].append(f'<clipitem id="{a["id"]}"><name>{escape(Path(p["path"]).name)}</name><duration>{sdur}</duration>'
+                         f'{rate_xml}<start>{e["st"]}</start><end>{e["en"]}</end><in>{e["fin"]}</in><out>{e["fout"]}</out>'
+                         f'<file id="{files[p["path"]]}"/><sourcetrack><mediatype>audio</mediatype>'
+                         f'<trackindex>{a["k"] + 1}</trackindex></sourcetrack>{links(e)}{labels(p)}</clipitem>')
+    mdef = {}
+    for m in music:
+        r, ch = info(m["path"])
+        if m["path"] not in mdef:
+            mdef[m["path"]] = f"file-m{len(mdef) + 1}"
+            fx = (f'<file id="{mdef[m["path"]]}"><name>{escape(Path(m["path"]).name)}</name>'
+                  f'<pathurl>{escape(core._url(m["path"]))}</pathurl>{rate_xml}<duration>{m["fin"] + m["en"] - m["st"] + 1}</duration>'
+                  f'<media><audio><samplecharacteristics><depth>16</depth><samplerate>{r}</samplerate></samplecharacteristics>'
+                  f'<channelcount>{ch}</channelcount></audio></media></file>')
+        else:
+            fx = f'<file id="{mdef[m["path"]]}"/>'
+        for k in range(min(2, max(1, ch))):
+            ax[3 + k].append(f'<clipitem id="{nid()}"><name>{escape(Path(m["path"]).name)}</name>'
+                             f'<duration>{m["fin"] + m["en"] - m["st"]}</duration>{rate_xml}<start>{m["st"]}</start>'
+                             f'<end>{m["en"]}</end><in>{m["fin"]}</in><out>{m["fin"] + m["en"] - m["st"]}</out>'
+                             f'{fx if k == 0 else chr(60) + "file id=" + chr(34) + mdef[m["path"]] + chr(34) + "/" + chr(62)}'
+                             f'<sourcetrack><mediatype>audio</mediatype><trackindex>{k + 1}</trackindex></sourcetrack></clipitem>')
     total = round(g * sf) + 1
     trk = lambda its: f'<track>{"".join(its)}<enabled>TRUE</enabled><locked>FALSE</locked></track>'
-    import i18n                                    # the markers in the language of the app
     mk = "".join(f'<marker><name>{escape(i18n.T(m))}</name><comment></comment><in>{round(t * sf)}</in><out>-1</out></marker>'
                  for m, t in markers)
     first = next((it[2] for _, _, its in parts_layout for it in its), None) or dict(w=1920, h=1080)
     xml = (f'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4"><sequence id="sequence-1">'
            f'<name>{escape(name)}</name><duration>{total}</duration>{rate_xml}{mk}'
            f'<media><video><format>{core._sc(rate_xml, first["w"], first["h"], "none")}</format>'
-           f'{"".join(trk(vt[k]) for k in (1, 2, 3) if vt[k])}</video>'
-           f'<audio><numOutputChannels>2</numOutputChannels>{"".join(trk(at[k]) for k in (1, 2, 3, 4) if at[k])}</audio>'
+           f'{"".join(trk(vx[k]) for k in (1, 2, 3, 4, 5) if vx[k])}</video>'
+           f'<audio><numOutputChannels>2</numOutputChannels>{"".join(trk(ax[k]) for k in (1, 2, 3, 4) if ax[k])}</audio>'
            f'</media></sequence></xmeml>')
     Path(out_path).write_text(xml, encoding="utf-8")
-    return sum(len(v) for v in vt.values()), [m for m, _ in markers]
-
-
-def teaser_part(tproj_pieces, music, bounds, seed=1):
-    """The teaser of a Teaser Studio project: its shots and music up to 'Teaser ends'."""
-    import teaser
-    e = teaser.build(tproj_pieces, music, bounds, seed=seed)
-    end = bounds["teaser_end"]
-    shots = [(t0, min(t1, end), p) for t0, t1, p in e["shots"] if t0 < end - 0.05]
-    if music["kind"] == "file":
-        mus = [(music["path"], 0.0, end, 0.0)]
-    else:
-        mus = [(it["path"], it["start"], min(it["end"], end), it["a"]) for it in music["items"] if it["start"] < end]
-    return end, shots, mus
+    return len(vids), [m for m, _ in markers]

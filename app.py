@@ -35,7 +35,7 @@ import ai
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.2.0"
+APP, VER = "MoneyMakingMachine", "v3.3.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
 
@@ -4252,8 +4252,10 @@ class LongFilmPage(QWidget):
     def _show(self, parts, layout):
         rows = []
         lens = {n: L for n, L, _ in (layout or [])}
+        counts = {n: len({id(it[2]) for it in its}) for n, _, its in (layout or [])}   # shots found by the sound count too
         for name, ps in parts:
             d = lens.get(name, sum(p["b"] - p["a"] for p in ps))      # the vornic's wide camera lies UNDER the medium one
+            ps = [None] * counts.get(name, len(ps))
             rows.append(f"<tr><td>{i18n.T(name)}</td><td align='right'>{len(ps)}</td><td align='right'>{int(d // 60)}:{int(d % 60):02d}</td></tr>")
         total = sum(L for _, L, _ in layout) if layout else None
         head = f"<tr><td><b>{i18n.T('Part')}</b></td><td><b>{i18n.T('Selections')}</b></td><td><b>{i18n.T('Duration')}</b></td></tr>"
@@ -4287,8 +4289,8 @@ class LongFilmPage(QWidget):
                     L, its = longfilm.vornic_layout(ps, sizes, progress)
                     layout.append((name, L, its))
                     continue
-                if name == "First look" and ps:          # every camera's first look, synced by the sound
-                    L, its = longfilm.firstlook_layout(ps, progress)
+                if name == "First look":                  # every camera's first look, synced by the sound
+                    L, its = longfilm.firstlook_layout(ps, longfilm.firstlook_candidates(pieces, vids), progress)
                     layout.append((name, L, its))
                     continue
                 tt, its = 0.0, []
