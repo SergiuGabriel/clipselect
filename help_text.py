@@ -208,8 +208,8 @@ schimbările de melodie).</li>
 <li><b>Analiza selecțiilor</b> se poate opri oricând cu <b>Cancel</b>; ce s-a analizat rămâne salvat și continuă data
 viitoare de unde a rămas. Poți genera și înainte să se termine (selecțiile neanalizate se folosesc fără alegerea celei mai
 bune bucăți). O vezi și în Analysis Queue.</li>
-<li><b>Blueprint:</b> pe lângă <b>Auto</b> (tăiat pe beat-ul muzicii tale, ca înainte), poți folosi ca șablon unul din
-filmele tale terminate. <b>+ Adaugă un blueprint</b>: alegi XML-ul filmului (exportat din Premiere), îi dai un nume și stilul
+<li><b>Auto sau Blueprint</b> (unul sau altul: când e activ unul, celălalt e oprit). <b>Auto</b> taie pe beat-ul muzicii tale, ca înainte. <b>Blueprint</b> folosește ca șablon unul din
+shortmovie-urile tale terminate. <b>+ Adaugă un blueprint</b>: alegi XML-ul filmului (exportat din Premiere), îi dai un nume și stilul
 (<b>Modern</b> sau <b>Tradițional</b>). Tăieturile, muzica, efectele sonore și ritmul rămân exact ca în filmul tău, iar fiecare
 tăietură e umplută cu un cadru de <b>aceeași culoare</b> din nunta nouă (partea cea mai bună, în ordinea zilei, niciun moment
 de două ori). Interviurile (Tan) rămân locuri goale cu marker „Aici interviul”; sunetul camerelor și al recorder-ului de la nunta
@@ -243,6 +243,11 @@ tale: selecțiile + filmul final). Muzica, interviurile (Tan) și finisajele le 
 <li><b>Filmări:</b> XML-ul sequence-ului de selecții, așezat ca de obicei, cu culorile obișnuite. Camerele sunt recunoscute
 după fișiere, iar ziua fiecărei camere după numerele fișierelor.</li>
 <li><b>Teaser:</b> proiectul din Teaser Studio al aceleiași nunți; teaserul lui (cu muzica) deschide filmul.</li>
+<li><b>Auto sau Blueprint</b> (unul sau altul). <b>Auto</b> construiește filmul cum e descris mai jos. <b>Blueprint</b> folosește
+ca șablon unul din <b>filmele tale lungi</b> terminate (blueprint-urile Long Film sunt separate de cele din Teaser Studio):
+tăieturile, muzica, efectele și ritmul rămân, fiecare tăietură e umplută cu un cadru de aceeași culoare din nunta nouă,
+interviurile (Tan) rămân locuri goale cu marker, iar petrecerea rămâne montajul Multicam (marker). În Blueprint, vornicul e
+reumplut tăietură cu tăietură, ca restul; pentru vornicul sincronizat pe două camere folosește Auto.</li>
 <li><b>Construiește</b>, apoi <b>Export XML</b>.</li>
 </ol>
 <p><b>Ce face, parte cu parte:</b></p>
@@ -538,8 +543,8 @@ each song starts).</li>
 <li><b>Looking at the selections</b> can be stopped any time with <b>Cancel</b>; what is done is saved and continues next
 time where it was. You can generate before it finishes (unanalysed selections are used without picking their best part).
 It also shows in Analysis Queue.</li>
-<li><b>Blueprint:</b> besides <b>Auto</b> (cut on the beat of your music, as before), one of your finished films can be the
-template. <b>+ Add a blueprint</b>: pick the film's XML (exported from Premiere), give it a name and a style (<b>Modern</b> or
+<li><b>Auto or Blueprint</b> (one or the other: when one is on, the other is off). <b>Auto</b> cuts on the beat of your music, as before. <b>Blueprint</b> uses one of your finished
+shortmovies as the template. <b>+ Add a blueprint</b>: pick the film's XML (exported from Premiere), give it a name and a style (<b>Modern</b> or
 <b>Traditional</b>). The cuts, the music, the sound effects and the pacing stay exactly as in your film, and every cut is refilled
 with a shot of <b>the same colour</b> from the new wedding (the best part, the order of the day, never the same moment twice).
 Interviews (Tan) stay empty with an "Interview here" marker; the old wedding's camera and recorder sound is not kept; the
@@ -574,6 +579,11 @@ the Multicam edit.</p>
 <li><b>Footage:</b> the XML of your selects sequence, laid out as usual, with the usual colours. The cameras are recognised
 by their files and every camera's day by its file numbers.</li>
 <li><b>Teaser:</b> the Teaser Studio project of the same wedding; its teaser (with the music) opens the film.</li>
+<li><b>Auto or Blueprint</b> (one or the other). <b>Auto</b> builds the film as described below. <b>Blueprint</b> uses one of
+<b>your finished long films</b> as the template (Long Film blueprints are separate from Teaser Studio's): the cuts, music, sound
+effects and pacing stay, every cut is refilled with a shot of the same colour from the new wedding, the interviews (Tan) stay
+empty with a marker, and the party stays the Multicam edit (marker). In Blueprint the vornic is refilled cut by cut like the rest;
+for the vornic synced on two cameras use Auto.</li>
 <li><b>Build</b>, then <b>Export XML</b>.</li>
 </ol>
 <p><b>What it does, part by part:</b></p>

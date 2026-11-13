@@ -45,7 +45,7 @@ def _recorder_name(name):
     return bool(re.fullmatch(r"[0-9_\-]+", stem)) or bool(re.fullmatch(r"(ZOOM|TASCAM|ZOOM_|DR|LR|TR)[0-9_\-]+", stem, re.I))
 
 
-def extract(path, name=None, style="modern"):
+def extract(path, name=None, style="modern", kind="short"):
     """Read one of his finished films (FCP7 XML from Premiere) into a blueprint."""
     root = ET.parse(path).getroot()
     seqs = list(root.iter("sequence"))
@@ -127,7 +127,7 @@ def extract(path, name=None, style="modern"):
             audio.append(dict(track=ti, start=st / fps, end=en / fps, a=_n(c.findtext("in")) / cr,
                               path=info["path"], name=info["name"], src=_n(c.findtext("sourcetrack/trackindex"), 1)))
     dur = max(s["t1"] for s in slots)
-    return dict(id=uuid.uuid4().hex, name=name or Path(path).stem, style=style if style in STYLES else "modern",
+    return dict(id=uuid.uuid4().hex, kind=kind, name=name or Path(path).stem, style=style if style in STYLES else "modern",
                 source=Path(path).name, created=datetime.now().isoformat(timespec="seconds"), duration=round(dur, 3),
                 slots=[[round(s["t0"], 3), round(s["t1"], 3), s["cat"]] for s in slots], audio=audio)
 
@@ -242,6 +242,11 @@ def export_xml(edit, bp, out_path, name, fps=25.0):
             f'<start>{st}</start><end>{en}</end><in>{fin}</in><out>{fin + en - st}</out>{body}'
             f'<sourcetrack><mediatype>audio</mediatype><trackindex>{it.get("src", 1)}</trackindex></sourcetrack></clipitem>')
     marks = [(f'{i18n.T("Blueprint")}: {bp["name"]}', 0.0)]
+    if bp.get("kind") == "long":                       # long empty stretches of his film = the party (Multicam)
+        sl = sorted(bp["slots"])
+        for (a0, a1, _), (b0, b1, _) in zip(sl, sl[1:]):
+            if b0 - a1 > 60:
+                marks.append((i18n.T("Party (the Multicam edit)"), a1))
     for t0, t1, kind in edit["gaps"]:
         marks.append((i18n.T("Interview here") if kind == "interview" else
                       i18n.T("No footage left for: {}").format(i18n.T(teaser.CAT_NAME.get(kind, kind))), t0))

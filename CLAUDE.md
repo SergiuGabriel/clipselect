@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.5.1), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.6.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -388,6 +388,20 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   tested with a fake model). Next to every file .txt (times) + .srt; Export XML with a marker per sentence. Requirements
   + PyInstaller: faster-whisper, --collect-all faster_whisper / ctranslate2 / av.
 - Hailo ideas NOT done (he chose 1, 3, 4 of the list): choosing the camera by who speaks (vornic / speeches).
+
+- The macOS Apple Silicon build runs on macos-15 (not macos-latest): the owner agreed after the M1-M4 job got no
+  machine three times; pinned also keeps the app working on older Macs.
+
+## v3.6.0: Auto | Blueprint in Teaser Studio AND Long Film
+- BlueprintBox (app.py): two buttons Auto | Blueprint, one or the other (in Auto the blueprint list / add / delete are
+  switched off); project keys "mode" + "blueprint" (an old project with a blueprint and no mode = blueprint).
+  store.app["blueprints"] entries have kind "short" (Teaser Studio: his shortmovies; old ones without kind) or "long"
+  (Long Film: his finished long films); each page lists only its kind.
+- Teaser Studio: Blueprint hides the music card and view (the blueprint brings its music). Long Film: Blueprint switches
+  off the Teaser card (his film brings its own opening), Build refills the long film (blueprint.build), Export uses
+  blueprint.export_xml; long empty stretches of his film (> 60 s, the party nests) get a "Party (the Multicam edit)"
+  marker; Tan = "Interview here". In Blueprint the vornic is refilled cut by cut (not synced): Auto for the synced vornic.
+  Tested: Madalina & Radu - The Movie refilled from the 4 July selects: 496 shots, 20 interview places, 9 groom holes.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

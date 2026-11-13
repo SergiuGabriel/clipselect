@@ -40,7 +40,7 @@ import ai
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.5.1"
+APP, VER = "MoneyMakingMachine", "v3.6.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
 
@@ -3418,6 +3418,150 @@ class AITestDialog(QDialog):
         super().closeEvent(e)
 
 
+# ---------------------------------------------------------------- Auto | Blueprint (Teaser Studio and Long Film)
+
+class BlueprintBox(QWidget):
+    """Auto (the app builds it) or Blueprint (one of his finished films as the template): one or the other. kind is
+    "short" (Teaser Studio: his shortmovies) or "long" (Long Film: his long films)."""
+    changed = Signal()
+
+    def __init__(self, store, kind, auto_text):
+        super().__init__()
+        self.store, self.kind, self.p = store, kind, None
+        self.setStyleSheet("background:transparent")
+        v = QVBoxLayout(self)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(10)
+        v.addWidget(lbl(i18n.T(auto_text) + " " + i18n.T("A blueprint is one of your finished films: its cuts, music, sound "
+                                                         "effects and pacing stay, and every cut is refilled with a shot of "
+                                                         "the same colour from this wedding."), "muted", True))
+        seg = QHBoxLayout()
+        seg.setSpacing(0)
+        self.b_auto = btn("Auto", "seg", lambda: self.set_mode("auto"))
+        self.b_bp = btn("Blueprint", "seg", lambda: self.set_mode("blueprint"))
+        seg.addWidget(self.b_auto)
+        seg.addWidget(self.b_bp)
+        seg.addStretch()
+        v.addLayout(seg)
+        self.combo = QComboBox()
+        self.combo.currentIndexChanged.connect(self._picked)
+        v.addWidget(self.combo)
+        br = QHBoxLayout()
+        self.b_add = btn("+  Add a blueprint", slot=self.add)
+        self.b_del = btn("Delete", "link", self.delete)
+        br.addWidget(self.b_add)
+        br.addWidget(self.b_del)
+        br.addStretch()
+        v.addLayout(br)
+        self.info = lbl("", "muted", True)
+        v.addWidget(self.info)
+
+    def _all(self):
+        return [b for b in self.store.app.setdefault("blueprints", []) if b.get("kind", "short") == self.kind]
+
+    def load(self, project):
+        self.p = project
+        self.combo.blockSignals(True)
+        self.combo.clear()
+        for st in blueprint.STYLES:
+            for b in self._all():
+                if b["style"] == st:
+                    self.combo.addItem(f'{i18n.T(st.capitalize())} · {b["name"]}', b["id"])
+        ix = self.combo.findData(project.get("blueprint"))
+        self.combo.setCurrentIndex(max(0, ix))
+        self.combo.blockSignals(False)
+        self._show()
+
+    def mode(self):
+        if not self.p:
+            return "auto"
+        return self.p.get("mode") or ("blueprint" if self.p.get("blueprint") else "auto")
+
+    def current(self):
+        """The blueprint in use, or None in Auto mode."""
+        if self.mode() != "blueprint":
+            return None
+        bid = self.combo.currentData()
+        return next((b for b in self._all() if b["id"] == bid), None)
+
+    def set_mode(self, m):
+        if self.p is None:
+            return
+        self.p["mode"] = m
+        self.store.save_app()
+        self._show()
+        self.changed.emit()
+
+    def _picked(self, _):
+        if self.p is not None:
+            self.p["blueprint"] = self.combo.currentData()
+            self.store.save_app()
+        self._show()
+        self.changed.emit()
+
+    def _show(self):
+        on = self.mode() == "blueprint"
+        for b_, act in ((self.b_auto, not on), (self.b_bp, on)):
+            b_.setProperty("active", act)
+            repolish(b_)
+        self.combo.setEnabled(on and self.combo.count() > 0)          # Auto on: the blueprint part is switched off
+        self.b_add.setEnabled(on)
+        self.b_del.setEnabled(on and self.combo.count() > 0)
+        b = self.current()
+        if on and not self._all():
+            self.info.setText(i18n.T("No blueprint yet: press + Add a blueprint and pick one of your finished films (XML)."))
+        elif b:
+            s = blueprint.summary(b)
+            need = ", ".join(f"{i18n.T(teaser.CAT_NAME.get(k, k)).lower()} {v / 60:.1f} min" if v >= 90 else
+                             f"{i18n.T(teaser.CAT_NAME.get(k, k)).lower()} {v:.0f} s"
+                             for k, v in sorted(s["need"].items(), key=lambda kv: -kv[1]) if k != "interview")
+            extra = (" · " + i18n.T("{} interview places").format(s["interviews"])) if s["interviews"] else ""
+            self.info.setText(i18n.T("{} cuts · {}:{} · needs: {}").format(s["cuts"], int(s["duration"] // 60),
+                                                                           f"{int(s['duration'] % 60):02d}", need) + extra +
+                              "<br>" + i18n.T("From your film {}, music and sound effects included ({} sounds).").format(b["source"], s["songs"]))
+        else:
+            self.info.setText("")
+
+    def add(self):
+        from PySide6.QtWidgets import QInputDialog
+        f, _ = QFileDialog.getOpenFileName(self, "A finished film of yours (XML from Premiere)", "", "XML (*.xml)")
+        if not f:
+            return
+        name, ok = QInputDialog.getText(self, "New blueprint", "Name:", text=Path(f).stem)
+        if not ok or not name.strip():
+            return
+        styles = [i18n.T("Modern"), i18n.T("Traditional")]
+        st, ok = QInputDialog.getItem(self, "New blueprint", "Style:", styles, 0, False)
+        if not ok:
+            return
+        try:
+            b = blueprint.extract(f, name.strip(), blueprint.STYLES[styles.index(st)], self.kind)
+        except Exception as e:
+            logging.exception("blueprint failed")
+            notify(f"Could not read the film: {e}", error=True)
+            return
+        self.store.app.setdefault("blueprints", []).append(b)
+        if self.p is not None:
+            self.p["blueprint"] = b["id"]
+        self.store.save_app()
+        self.load(self.p or {})
+        self.changed.emit()
+        notify(f"Blueprint added: {b['name']}")
+        logging.info("blueprint (%s) added from %s: %d cuts", self.kind, f, len(b["slots"]))
+
+    def delete(self):
+        from PySide6.QtWidgets import QMessageBox
+        b = self.current()
+        if not b:
+            return
+        if QMessageBox.question(self, "Delete blueprint", f"Delete the blueprint \"{b['name']}\"? Your film is not touched.") != QMessageBox.Yes:
+            return
+        self.store.app["blueprints"].remove(b)
+        self.store.save_app()
+        self.load(self.p or {})
+        self.changed.emit()
+
+
 class TeaserPage(QWidget):
     notify = Signal(str)
     back = Signal()
@@ -3509,20 +3653,10 @@ class TeaserPage(QWidget):
         self.foot_lbl = QLabel("")
         self.foot_lbl.setWordWrap(True)
         l1.addWidget(self.foot_lbl)
-        lb = card(2, "Blueprint")
-        lb.addWidget(lbl("Auto cuts on the beat of your music (as before). A blueprint is one of your finished films: its cuts, "
-                         "music, sound effects and pacing stay, and every cut is refilled with a shot of the same colour from "
-                         "this wedding.", "muted", True))
-        self.bp_combo = QComboBox()
-        self.bp_combo.currentIndexChanged.connect(self._bp_changed)
-        lb.addWidget(self.bp_combo)
-        br = QHBoxLayout()
-        br.addWidget(btn("+  Add a blueprint", slot=self.add_blueprint))
-        br.addWidget(btn("Delete", "link", self.delete_blueprint))
-        br.addStretch()
-        lb.addLayout(br)
-        self.bp_info = lbl("", "muted", True)
-        lb.addWidget(self.bp_info)
+        lb = card(2, "Auto or Blueprint")
+        self.bpbox = BlueprintBox(self.store, "short", "Auto cuts on the beat of your music (as before).")
+        self.bpbox.changed.connect(self._mode_changed)
+        lb.addWidget(self.bpbox)
         l2 = card(3, "Music")
         self.music_card = l2
         l2.addWidget(lbl("Your songs already joined: one audio file, or the XML of your music edit.", "muted", True))
@@ -3608,7 +3742,8 @@ class TeaserPage(QWidget):
         """Reload the footage XML, the music and your six moments from last time."""
         t = self._cur()
         self._face_ui()
-        self._fill_blueprints()
+        self.bpbox.load(t)
+        self._mode_ui()
         foot, mus, b = t.get("footage"), t.get("music"), t.get("bounds")
         then = (lambda: self._load_music_file(mus, b)) if mus and Path(mus).exists() else None
         if foot and Path(foot).exists():
@@ -3947,83 +4082,19 @@ class TeaserPage(QWidget):
             self.summary.setText("Ready: press Generate.")
 
     # ---- blueprints (one of his finished films as a template)
-    def _blueprints(self):
-        return self.store.app.setdefault("blueprints", [])
-
     def _bp(self):
-        bid = self.bp_combo.currentData() if hasattr(self, "bp_combo") else None
-        return next((b for b in self._blueprints() if b["id"] == bid), None)
+        """The blueprint in use (None in Auto mode)."""
+        return self.bpbox.current() if hasattr(self, "bpbox") else None
 
-    def _fill_blueprints(self, select=None):
-        self.bp_combo.blockSignals(True)
-        self.bp_combo.clear()
-        self.bp_combo.addItem(i18n.T("Auto (cut on the beat of your music)"), None)
-        for st in blueprint.STYLES:
-            for b in self._blueprints():
-                if b["style"] == st:
-                    self.bp_combo.addItem(f'{i18n.T(st.capitalize())} · {b["name"]}', b["id"])
-        ix = self.bp_combo.findData(select if select is not None else self._cur().get("blueprint"))
-        self.bp_combo.setCurrentIndex(max(0, ix))
-        self.bp_combo.blockSignals(False)
-        self._bp_info()
-
-    def _bp_info(self):
+    def _mode_ui(self):
         b = self._bp()
         for w_ in self.music_area + [self.music_card.parentWidget()]:          # a blueprint brings its own music
             w_.setVisible(b is None)
-        if not b:
-            self.bp_info.setText("")
-            return
-        s = blueprint.summary(b)
-        need = ", ".join(f"{i18n.T(teaser.CAT_NAME.get(k, k)).lower()} {v:.0f} s" for k, v in
-                         sorted(s["need"].items(), key=lambda kv: -kv[1]) if k != "interview")
-        extra = (" · " + i18n.T("{} interview places").format(s["interviews"])) if s["interviews"] else ""
-        self.bp_info.setText(i18n.T("{} cuts · {}:{} · needs: {}").format(s["cuts"], int(s["duration"] // 60),
-                                                                          f"{int(s['duration'] % 60):02d}", need) + extra +
-                             "<br>" + i18n.T("From your film {}, music and sound effects included ({} sounds).").format(b["source"], s["songs"]))
 
-    def _bp_changed(self, _):
-        self._remember(blueprint=self.bp_combo.currentData())
+    def _mode_changed(self):
         self.edit = None
-        self._bp_info()
+        self._mode_ui()
         self._buttons()
-
-    def add_blueprint(self):
-        from PySide6.QtWidgets import QInputDialog
-        f, _ = QFileDialog.getOpenFileName(self, "A finished film of yours (XML from Premiere)", "", "XML (*.xml)")
-        if not f:
-            return
-        name, ok = QInputDialog.getText(self, "New blueprint", "Name:", text=Path(f).stem)
-        if not ok or not name.strip():
-            return
-        styles = [i18n.T("Modern"), i18n.T("Traditional")]
-        st, ok = QInputDialog.getItem(self, "New blueprint", "Style:", styles, 0, False)
-        if not ok:
-            return
-        try:
-            b = blueprint.extract(f, name.strip(), blueprint.STYLES[styles.index(st)])
-        except Exception as e:
-            logging.exception("blueprint failed")
-            notify(f"Could not read the film: {e}", error=True)
-            return
-        self._blueprints().append(b)
-        self.store.save_app()
-        self._fill_blueprints(select=b["id"])
-        self._bp_changed(0)
-        notify(f"Blueprint added: {b['name']}")
-        logging.info("blueprint added from %s: %d cuts", f, len(b["slots"]))
-
-    def delete_blueprint(self):
-        from PySide6.QtWidgets import QMessageBox
-        b = self._bp()
-        if not b:
-            return
-        if QMessageBox.question(self, "Delete blueprint", f"Delete the blueprint \"{b['name']}\"? Your film is not touched.") != QMessageBox.Yes:
-            return
-        self._blueprints().remove(b)
-        self.store.save_app()
-        self._fill_blueprints(select=None)
-        self._bp_changed(0)
 
     def _generate_blueprint(self, b):
         e = blueprint.build(self.pieces, b, seed=self.seed)
@@ -4080,7 +4151,7 @@ class TeaserPage(QWidget):
         out, _ = QFileDialog.getSaveFileName(self, "Save XML", start, "XML (*.xml)")
         if out:
             try:
-                b = next((x for x in self._blueprints() if x["id"] == self.edit.get("blueprint")), None)
+                b = next((x for x in self.store.app.get("blueprints", []) if x["id"] == self.edit.get("blueprint")), None)
                 n = (blueprint.export_xml(self.edit, b, out, Path(out).stem) if b else
                      teaser.export_xml(self.edit, self.music, out, Path(out).stem))
                 if b:
@@ -4181,13 +4252,19 @@ class LongFilmPage(QWidget):
         self.foot_lbl = QLabel("")
         self.foot_lbl.setWordWrap(True)
         l1.addWidget(self.foot_lbl)
-        l2 = card(2, "Teaser")
+        lb = card(2, "Auto or Blueprint")
+        self.bpbox = BlueprintBox(self.store, "long", "Auto builds it from your selections, the way you cut your long films "
+                                                      "(getting ready, vornic and first look synced, church, couple and venue).")
+        self.bpbox.changed.connect(self._mode_changed)
+        lb.addWidget(self.bpbox)
+        l2 = card(3, "Teaser")
+        self.teaser_card = l2
         l2.addWidget(lbl("The teaser of a Teaser Studio project (the same wedding), with its music, at the start of the film.",
                          "muted", True))
         self.tcombo = QComboBox()
         self.tcombo.currentIndexChanged.connect(lambda i: self._remember(teaser=self.tcombo.itemData(i)))
         l2.addWidget(self.tcombo)
-        l3 = card(3, "Vornic (optional)")
+        l3 = card(4, "Vornic (optional)")
         QTimer.singleShot(0, lambda: l3.parentWidget().hide())      # the vornic is found automatically now (long selections)
         vr = QHBoxLayout()
         vr.addWidget(lbl("This wedding has a vornic", "", True), 1)
@@ -4298,7 +4375,9 @@ class LongFilmPage(QWidget):
         if self._busy():
             return
         t = self._cur()
-        self.pieces, self.layout_ = [], None
+        self.pieces, self.layout_, self.bp_edit = [], None, None
+        self.bpbox.load(t)
+        self.teaser_card.parentWidget().setEnabled(self.bpbox.current() is None)
         self.foot_lbl.setText("")
         self.parts_lbl.setText(i18n.T("Import your labelled XML to start."))
         self.tcombo.blockSignals(True)
@@ -4401,7 +4480,25 @@ class LongFilmPage(QWidget):
                 if total is not None else f"<br>{i18n.T('Press Build.')}")
         self.parts_lbl.setText(f"<table cellspacing='8'>{head}{''.join(rows)}</table>{tail}")
 
+    def _mode_changed(self):
+        """Auto or Blueprint: one or the other; the teaser card belongs to Auto (a blueprint brings its own opening)."""
+        self.layout_, self.bp_edit = None, None
+        self.teaser_card.parentWidget().setEnabled(self.bpbox.current() is None)
+        if self.pieces:
+            self.parts_lbl.setText(i18n.T("Press Build."))
+        self._buttons()
+
     def build(self):
+        b = self.bpbox.current()
+        if b:
+            pieces = self.pieces
+
+            def job_bp(progress=None):
+                if progress:
+                    progress("Refilling your film with this wedding…", 0.5)
+                return blueprint.build(pieces, b, seed=1)
+            self._run("Building the long film…", job_bp, lambda e, b=b: self._built_bp(e, b))
+            return
         t = self._cur()
         pieces = self.pieces
         use_v = bool(t.get("vornic"))
@@ -4425,18 +4522,41 @@ class LongFilmPage(QWidget):
 
     def _built(self, r):
         parts, self.layout_, self.tz, nv = r
+        self.bp_edit = None
         self._show(parts, self.layout_)
         notify("Long film ready")
 
+    def _built_bp(self, e, b):
+        self.bp_edit, self.bp_used = e, b
+        self.layout_ = []                                 # Export XML is enabled (the blueprint edit is exported)
+        holes = [k for *_, k in e["gaps"] if k != "interview"]
+        inter = sum(1 for *_, k in e["gaps"] if k == "interview")
+        txt = i18n.T("{} shots from the blueprint {}, no moment used twice.").format(len(e["shots"]), b["name"])
+        if inter:
+            txt += "<br>" + i18n.T("{} places for your interviews (marker Interview here).").format(inter)
+        txt += "<br>" + i18n.T("The party stays the Multicam edit (marker).")
+        if holes:
+            txt += (f'<br><span style="color:{C["FAIR"]}">' + i18n.T("{} cuts have no footage left of their colour (marker): label more clips.").format(len(holes)) + "</span>")
+        self.parts_lbl.setText(txt)
+        notify("Long film ready")
+        logging.info("long film blueprint %s: %d shots, %d holes", b["name"], len(e["shots"]), len(holes))
+
     def export(self):
-        if not self.layout_:
+        if self.layout_ is None:
             return
         start = str(Path(self._cur().get("footage") or ".").parent / f"{self._cur()['name']} - long film.xml")
         out, _ = QFileDialog.getSaveFileName(self, "Save XML", start, "XML (*.xml)")
         if not out:
             return
         try:
-            n, marks = longfilm.export_xml(self.layout_, out, Path(out).stem, self.tz)
+            if getattr(self, "bp_edit", None):
+                b = self.bp_used
+                n = blueprint.export_xml(self.bp_edit, b, out, Path(out).stem)
+                gone = sorted({x["name"] for x in b["audio"] if not Path(x["path"]).exists()})
+                if gone:
+                    notify(f"{len(gone)} sounds of the blueprint were not found on this computer, e.g. {gone[0]}", error=True)
+            else:
+                n, marks = longfilm.export_xml(self.layout_, out, Path(out).stem, self.tz)
             self.parts_lbl.setText(self.parts_lbl.text() + "<br>" + i18n.T("Saved {} clips to {}. Premiere: File > Import · DaVinci: File > Import > Timeline.").format(n, out))
             notify(f"XML saved: {Path(out).name}")
             logging.info("long film exported: %s (%d clips)", out, n)
