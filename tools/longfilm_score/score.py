@@ -18,8 +18,14 @@ def his(sf, ff, secs):
             if a<=t0<b:
                 k=key(bb[1]["file"], bb[1]["a"])
                 if not seq or seq[-1]!=k: seq.append(k)
-        out[name]=dict(seq=seq, dur=b-a, shots=sum(1 for t0,*_ in m if a<=t0<b))
+        out[name]=dict(seq=seq, dur=b-a, shots=sum(1 for t0,*_ in m if a<=t0<b),
+                       labels=[c["label"] for t0,t1,c,bb in m if a<=t0<b])
     return out
+def blocks(labels):
+    """groom / bride blocks of a getting ready: (first two, median of the rest)"""
+    import itertools
+    runs=[len(list(g)) for k,g in itertools.groupby(l for l in labels if l in ("groom","bride","Blue","Rose"))]
+    rest=sorted(runs[2:]); return runs[:2], (rest[len(rest)//2] if rest else 0), len(runs)
 def kendall(order_a, order_b):
     common=[k for k in order_a if k in set(order_b)]
     pos={k:i for i,k in enumerate(dict.fromkeys(order_b))}
@@ -41,10 +47,16 @@ def score(app_layout, ref, name_map=None):
             if not seq or seq[-1]!=k: seq.append(k)
         A=set(seq); H=set(ref[nm]["seq"])
         inter=len(A&H)
-        res[nm]=dict(found=inter/max(1,len(H)), right=inter/max(1,len(A)), order=kendall(seq, ref[nm]["seq"]),
+        bl=None
+        if nm=="Getting ready":
+            bl=(blocks([p["cat"] for tr,t0,p,a,b in sorted(items,key=lambda x:x[1]) if tr==1]), blocks(ref[nm]["labels"]))
+        res[nm]=dict(blocks=bl, found=inter/max(1,len(H)), right=inter/max(1,len(A)), order=kendall(seq, ref[nm]["seq"]),
                      dur=length/ref[nm]["dur"], app_n=len(A), his_n=len(H), app_min=length/60, his_min=ref[nm]["dur"]/60)
     return res
 def show(title, res):
     print(f"  {title}")
     for k,v in res.items():
         print(f"    {k:22} found {v['found']:4.0%} right {v['right']:4.0%} order {v['order']:4.0%} | length {v['app_min']:5.1f} vs his {v['his_min']:5.1f} min | selections {v['app_n']} vs {v['his_n']}")
+        if v.get("blocks"):
+            (af,am,an),(hf,hm,hn)=v["blocks"]
+            print(f"    {'':22} blocks: first two {af} vs his {hf} | usual block {am} vs his {hm} | number of blocks {an} vs his {hn}")

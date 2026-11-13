@@ -204,7 +204,7 @@ schimbările de melodie).</li>
   </ul>
   Dacă dai muzica ca XML, granițele dintre melodii sunt luate exact de acolo. Timpii trebuie să meargă înainte, în
   ordinea de mai sus.</li>
-<li><b>Proiecte:</b> Teaser Studio și Long Film au, ca pagina Proiecte, câte un card pentru fiecare nuntă: <b>+ Proiect nou</b>, click pe card ca să-l deschizi, ✕ ca să-l ștergi, <b>← Proiecte</b> ca să revii. Fiecare proiect ține minte filmările, muzica, momentele și pozele.</li>
+<li><b>Proiecte:</b> Teaser Studio și Long Film au, ca pagina Selection &amp; Multicam, câte un card pentru fiecare nuntă: <b>+ Proiect nou</b>, click pe card ca să-l deschizi, ✕ ca să-l ștergi, <b>← Proiecte</b> ca să revii. Fiecare proiect ține minte filmările, muzica, momentele și pozele.</li>
 <li><b>Analiza selecțiilor</b> se poate opri oricând cu <b>Cancel</b>; ce s-a analizat rămâne salvat și continuă data
 viitoare de unde a rămas. Poți genera și înainte să se termine (selecțiile neanalizate se folosesc fără alegerea celei mai
 bune bucăți). O vezi și în Analysis Queue.</li>
@@ -243,10 +243,10 @@ după fișiere, iar ziua fiecărei camere după numerele fișierelor.</li>
 <li><b>Copiile</b> de la finalul selecțiilor (tot ce e după blocul de dronă și orice selecție care repetă o bucată deja
 selectată) nu se folosesc: sunt pentru filmul scurt.</li>
 <li><b>Pregătiri:</b> selecțiile scurte de mire și mireasă (până la ~8 s), fără primele ~15% din fiecare, din fiecare
-mijlocul de ~1,3 s; mire și mireasă povestiți în paralel, fiecare în ordinea ta. Cadrele Teal (locația) la început.</li>
+mijlocul de ~1,3 s; în blocuri ca la tine: întâi un bloc mare cu mirele (~14-20 de cadre), apoi unul mare cu mireasa, apoi blocuri scurte alternate (2-7 cadre, de obicei 3-4), fiecare parte în ordinea ta. Cadrele Teal (locația) la început.</li>
 <li><b>Vornic și first look:</b> selecțiile lungi de dimineață de pe camera ta (mire / mireasă peste ~1 min, Iris peste
-15 s) <b>întregi pe V1, cu sunetul continuu</b>; a doua cameră, găsită după sunet (chiar fără biserică pe ea), e pusă pe V2
-pe bucăți alternante de ~3-4 s, la pauzele de vorbire: pe ecran camerele alternează, iar vorbirea nu se rupe. Iris-urile
+15 s) <b>întregi pe V1, cu sunetul continuu</b>; a doua cameră, găsită după sunet (chiar fără biserică pe ea), e pusă <b>întreagă</b> pe V2 (pistă oprită), cu sunetul ei pe A3/A4,
+iar pe V3 bucăți alternante de ~3-4 s, la pauzele de vorbire: pe ecran camerele alternează, iar sunetul ambelor camere e complet. Se folosesc doar potrivirile sigure, în ordinea zilei (o potrivire în afara ordinii e falsă). Iris-urile
 scurte de dimineață urmează ca montaj (~2 s).</li>
 <li><b>Biserica:</b> în ordinea ta; selecțiile scurte întregi, iar din cele foarte lungi câteva bucăți (~12%).</li>
 <li><b>Cuplu și sală:</b> dronă, primul bloc de sală, dronă, primul bloc de cuplu (cadre luate pe toată lungimea lui), cu
@@ -487,7 +487,7 @@ each song starts).</li>
   </ul>
   If you give the music as an XML, the song changes are taken from it exactly. The times must go forward, in the order
   above.</li>
-<li><b>Projects:</b> like the Projects page, Teaser Studio and Long Film have one card per wedding: <b>+ New Project</b>, click a card to open it, ✕ to delete it, <b>← Projects</b> to go back. Every project remembers its footage, music, moments and photos.</li>
+<li><b>Projects:</b> like the Selection &amp; Multicam page, Teaser Studio and Long Film have one card per wedding: <b>+ New Project</b>, click a card to open it, ✕ to delete it, <b>← Projects</b> to go back. Every project remembers its footage, music, moments and photos.</li>
 <li><b>Looking at the selections</b> can be stopped any time with <b>Cancel</b>; what is done is saved and continues next
 time where it was. You can generate before it finishes (unanalysed selections are used without picking their best part).
 It also shows in Analysis Queue.</li>
@@ -527,10 +527,10 @@ by their files and every camera's day by its file numbers.</li>
 <li><b>The copies</b> at the end of your selects (everything after the drone block, and any selection repeating a piece
 already selected) are not used: they are for the short film.</li>
 <li><b>Getting ready:</b> the short groom and bride selections (up to ~8 s), without the first ~15 % of each side, the
-middle ~1.3 s of each; groom and bride told in parallel, each in your order. The Teal (location) shots first.</li>
+middle ~1.3 s of each; in blocks like yours: a big groom block first (~14-20 shots), then a big bride block, then short blocks taking turns (2-7 shots, mostly 3-4), each side in your order. The Teal (location) shots first.</li>
 <li><b>Vornic and first look:</b> the long morning selections of your camera (groom / bride over ~1 min, Iris over 15 s)
-<b>whole on V1, their sound continuous</b>; the second camera, found by the sound (even with no church on it), cut in on V2
-in turns of ~3-4 s at the pauses of the speech: on screen the cameras alternate, the speech is never cut. The short morning
+<b>whole on V1, their sound continuous</b>; the second camera, found by the sound (even with no church on it), goes <b>whole</b> on V2 (track off) with its sound on A3/A4,
+and is cut in on V3 in turns of ~3-4 s at the pauses of the speech: on screen the cameras alternate, the sound of both cameras is complete. Only sure matches in the order of the day are used (a match out of that order is a false one). The short morning
 Iris follow as a montage (~2 s).</li>
 <li><b>Church:</b> in your order; the short selections whole, a few pieces of the very long ones (~12 %).</li>
 <li><b>Couple and venue:</b> drone, the first venue block, drone, the first couple block (shots taken over its whole

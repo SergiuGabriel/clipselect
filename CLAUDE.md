@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.4.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.4.2), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -340,6 +340,21 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   ANY change to Long Film must keep or raise this score on BOTH weddings before it reaches the owner.
 - The vornic card (face photo) is hidden: the vornic is found automatically (long morning selections). faces.py stays
   for the bride / groom in Teaser Studio.
+
+## v3.4.1 (his test of v3.4.0 on Madalina & Radu)
+- Getting ready was 1 groom / 1 bride: the score did not measure the blocks. Now longfilm.interleave_blocks: a big first
+  block (~27 % of the side filmed first, 4-20), a big block of the other side (~20 %, 4-14), then turns of 1-7 (around 4)
+  sized so both end together. His blocks: M&R B14 R11 then 2-7 (median 4); A&V B23 (with Teal) R3 B12 ... (median 3).
+  tools/longfilm_score now prints the blocks (first two, usual block, number of blocks) vs his.
+- Vornic / first look: false sound matches (C9553, C9543, C9575... matched "medium" on room noise) put random 2nd-camera
+  shots. Now only conf "high", overlap >= min(20 s, half the clip), and the longest run whose file numbers grow with the
+  main camera's time (out of the day's order = false). The 2nd camera goes WHOLE on V2 (track off) with its sound on
+  A3/A4 (he wants both cameras' sound complete), the cut-ins on V3; teaser music moved to A5/A6.
+
+## v3.4.2
+- The "Dashboard" page (Footage Selection + Multicam projects) is named "Selection & Multicam" everywhere (sidebar,
+  page title, the back link of the Footage Selection / Multicam project pages, Info), the same in Romanian. The studios
+  (Teaser Studio, Long Film) keep their own "← Projects" back link to their own cards.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

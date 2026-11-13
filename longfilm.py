@@ -135,6 +135,35 @@ def interleave(a, b, max_run=4):
     return out
 
 
+def interleave_blocks(a, b, base=4):
+    """Groom and bride the way HE cuts the getting ready (measured on two weddings): a big first block of the side filmed
+    first (about a quarter of it: 14-20 shots), a big block of the other side, then short blocks taking turns (2-7 shots,
+    mostly 3-4), sized so both sides end together. Each side keeps the order it was filmed in."""
+    a = sorted(a, key=lambda p: (file_number(p), p["a"]))
+    b = sorted(b, key=lambda p: (file_number(p), p["a"]))
+    if not a or not b:
+        return a + b
+    if (file_number(b[0]), b[0]["a"]) < (file_number(a[0]), a[0]["a"]):
+        a, b = b, a
+    out = []
+    i = min(len(a), max(4, min(20, round(len(a) * 0.27))))
+    j = min(len(b), max(4, min(14, round(len(b) * 0.2))))
+    out += a[:i] + b[:j]
+    turn = 0
+    while i < len(a) or j < len(b):
+        ra, rb = len(a) - i, len(b) - j
+        if turn == 0 and ra:
+            n = ra if not rb else max(1, min(7, round(base * ra / max(1, rb) * 0.5 + base * 0.5)))
+            out += a[i:i + n]
+            i += n
+        elif rb:
+            n = rb if not ra else max(1, min(7, round(base * rb / max(1, ra) * 0.5 + base * 0.5)))
+            out += b[j:j + n]
+            j += n
+        turn ^= 1
+    return out
+
+
 def dedupe(pieces):
     """The same selection twice (same file, same in / out: a copy on another track) is used once."""
     seen, out = set(), []
@@ -406,7 +435,7 @@ def export_xml(parts_layout, out_path, name, teaser_part=None):
             continue
         markers.append((pname, g))
         for track, t0, p, a, b in items:
-            add(track, g + t0, p, a, b, track == 1)
+            add(track, g + t0, p, a, b, track in (1, 2))       # V1 sound on A1/A2, V2 (2nd camera, whole) on A3/A4
         g += length
     markers.append(("Party (the Multicam edit)", g))
     # ---- 2. ids and positions (clip index = position in its track, by start)
@@ -419,13 +448,14 @@ def export_xml(parts_layout, out_path, name, teaser_part=None):
     for k, lst in vt.items():
         for ci, e in enumerate(lst, 1):
             e["id"], e["ti"], e["ci"] = nid(), k, ci
-    aud = {1: [], 2: []}
-    for e in vt[1]:
-        if e["sound"]:
-            ch = info(e["p"]["path"])[1]
-            e["aud"] = [dict(e=e, k=k) for k in range(min(2, ch))]
-            for a in e["aud"]:
-                aud[a["k"] + 1].append(a)
+    aud = {1: [], 2: [], 3: [], 4: []}
+    for vk, base in ((1, 0), (2, 2)):
+        for e in vt[vk]:
+            if e["sound"]:
+                ch = info(e["p"]["path"])[1]
+                e["aud"] = [dict(e=e, k=k, at=base + k + 1) for k in range(min(2, ch))]
+                for a in e["aud"]:
+                    aud[a["at"]].append(a)
     for k, lst in aud.items():
         lst.sort(key=lambda a: a["e"]["st"])
         for ci, a in enumerate(lst, 1):
@@ -465,8 +495,8 @@ def export_xml(parts_layout, out_path, name, teaser_part=None):
             vx[k].append(f'<clipitem id="{e["id"]}"><name>{escape(Path(p["path"]).name)}</name><duration>{sdur}</duration>'
                          f'{rate_xml}<start>{e["st"]}</start><end>{e["en"]}</end><in>{e["fin"]}</in><out>{e["fout"]}</out>'
                          f'{file_xml(p)}{links(e)}{labels(p)}</clipitem>')
-    ax = {1: [], 2: [], 3: [], 4: []}
-    for k in (1, 2):
+    ax = {k: [] for k in range(1, 7)}
+    for k in (1, 2, 3, 4):
         for a in aud[k]:
             e, p = a["e"], a["e"]["p"]
             sdur = max(e["fout"], int(p["fdur"] * sf))
@@ -486,21 +516,21 @@ def export_xml(parts_layout, out_path, name, teaser_part=None):
         else:
             fx = f'<file id="{mdef[m["path"]]}"/>'
         for k in range(min(2, max(1, ch))):
-            ax[3 + k].append(f'<clipitem id="{nid()}"><name>{escape(Path(m["path"]).name)}</name>'
+            ax[5 + k].append(f'<clipitem id="{nid()}"><name>{escape(Path(m["path"]).name)}</name>'
                              f'<duration>{m["fin"] + m["en"] - m["st"]}</duration>{rate_xml}<start>{m["st"]}</start>'
                              f'<end>{m["en"]}</end><in>{m["fin"]}</in><out>{m["fin"] + m["en"] - m["st"]}</out>'
                              f'{fx if k == 0 else chr(60) + "file id=" + chr(34) + mdef[m["path"]] + chr(34) + "/" + chr(62)}'
                              f'<sourcetrack><mediatype>audio</mediatype><trackindex>{k + 1}</trackindex></sourcetrack></clipitem>')
     total = round(g * sf) + 1
-    trk = lambda its: f'<track>{"".join(its)}<enabled>TRUE</enabled><locked>FALSE</locked></track>'
+    trk = lambda its, on=True: f'<track>{"".join(its)}<enabled>{"TRUE" if on else "FALSE"}</enabled><locked>FALSE</locked></track>'
     mk = "".join(f'<marker><name>{escape(i18n.T(m))}</name><comment></comment><in>{round(t * sf)}</in><out>-1</out></marker>'
                  for m, t in markers)
     first = next((it[2] for _, _, its in parts_layout for it in its), None) or dict(w=1920, h=1080)
     xml = (f'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4"><sequence id="sequence-1">'
            f'<name>{escape(name)}</name><duration>{total}</duration>{rate_xml}{mk}'
            f'<media><video><format>{core._sc(rate_xml, first["w"], first["h"], "none")}</format>'
-           f'{"".join(trk(vx[k]) for k in (1, 2, 3, 4, 5) if vx[k])}</video>'
-           f'<audio><numOutputChannels>2</numOutputChannels>{"".join(trk(ax[k]) for k in (1, 2, 3, 4) if ax[k])}</audio>'
+           f'{"".join(trk(vx[k], k != 2) for k in (1, 2, 3, 4, 5) if vx[k] or (k == 2 and vx[3]))}</video>'
+           f'<audio><numOutputChannels>2</numOutputChannels>{"".join(trk(ax[k]) for k in range(1, 7) if ax[k] or any(ax[m] for m in range(k + 1, 7)))}</audio>'
            f'</media></sequence></xmeml>')
     Path(out_path).write_text(xml, encoding="utf-8")
     return len(vids), [m for m, _ in markers]
@@ -563,9 +593,11 @@ def _montage(seq, share, lo, hi):
 
 
 def vornic_cut(main, others, progress=None, cancel=None):
-    """Vornic + first look: his camera's long morning selections WHOLE on V1 (their sound continuous, linked), and the
-    other cameras' shots of the same moment (placed by the sound) cut in on V2 in turns of about 3-4 s at the pauses of
-    the speech: on screen the cameras alternate, the speech is never cut."""
+    """Vornic + first look: his camera's long morning selections WHOLE on V1 (their sound on A1/A2, continuous); the
+    second camera's shots of the same moment WHOLE and synced by the sound on V2 (track switched off; their sound on
+    A3/A4, so both cameras' sound is complete), and cut in on V3 every other stretch of about 3-4 s at the pauses of the
+    speech. Only SURE matches are used, and only those that follow the order of the day (the second camera's file numbers
+    grow with the main camera's time): a match out of that order is a false one (it sounded alike)."""
     items, starts, t = [], [], 0.0
     for p in main:
         items.append((1, t, p, p["a"], p["b"]))
@@ -583,7 +615,7 @@ def vornic_cut(main, others, progress=None, cancel=None):
         x = x if len(x) > sync.SR else np.zeros(sync.SR, np.float32)
         auds.append(x)
         idx.append(sync.MasterIndex(x))
-    cover = []                                   # (start, end, piece, where it sits) of the 2nd camera on the film
+    found = []                                     # (start on the film, end, piece, where its start would sit)
     for k, p in enumerate(others):
         if cancel and cancel():
             raise InterruptedError("Cancelled")
@@ -594,21 +626,36 @@ def vornic_cut(main, others, progress=None, cancel=None):
             r = sync.sync_clip(idx, x) if len(x) > sync.SR else dict(conf="fail")
         except Exception:
             r = dict(conf="fail")
-        if r.get("conf") in ("high", "medium"):
-            g = starts[r["master"]] + r["offset"]
-            s0, s1 = max(0.0, g), min(length, g + (p["b"] - p["a"]))
-            if s1 - s0 > 2.0:
-                cover.append((s0, s1, p, g))
+        if r.get("conf") != "high":                  # only sure matches
+            continue
+        g = starts[r["master"]] + r["offset"]
+        s0, s1 = max(0.0, g), min(length, g + (p["b"] - p["a"]))
+        if s1 - s0 >= min(20.0, 0.5 * (p["b"] - p["a"])):
+            found.append((s0, s1, p, g))
+    # the order of the day: keep the longest run where the second camera's file numbers grow with the time
+    found.sort(key=lambda c: c[0])
+    best = []
+    for k, c in enumerate(found):
+        prev = max((best[m] for m in range(k) if (file_number(found[m][2]), found[m][2]["a"]) < (file_number(c[2]), c[2]["a"])),
+                   key=len, default=[])
+        best.append(prev + [k])
+    keep = [found[k] for k in max(best, key=len, default=[])]
+    cover, busy = [], []
+    for s0, s1, p, g in keep:
+        if any(s0 < e1 and s1 > e0 for e0, e1 in busy):     # one shot at a time on V2
+            continue
+        busy.append((s0, s1))
+        cover.append((s0, s1, p, g))
+        items.append((2, s0, p, p["a"] + (s0 - g), p["a"] + (s1 - g)))     # whole, with its sound
     if not cover:
         return length, items
-    # cut points: pauses of the speech, at least 3 s apart; the second camera takes every other stretch it covers
     pz = sorted(st + q for st, x in zip(starts, auds) for q in _pauses(x))
     cuts, last = [0.0], 0.0
     for q in pz:
         if 3.0 <= q - last:
             cuts.append(q)
             last = q
-    for q in np.arange(0, length, 4.0):          # no pause for long: a cut every ~4 s anyway
+    for q in np.arange(0, length, 4.0):
         if all(abs(q - c) > 2.0 for c in cuts):
             cuts.append(float(q))
     cuts = sorted(set(cuts + [length]))
@@ -619,7 +666,7 @@ def vornic_cut(main, others, progress=None, cancel=None):
         w = next((c for c in cover if c[0] <= a and c[1] >= b), None)
         if turn and w:
             s0, s1, p, g = w
-            items.append((2, a, p, p["a"] + (a - g), p["a"] + (b - g)))
+            items.append((3, a, p, p["a"] + (a - g), p["a"] + (b - g)))
         turn = not turn
     return length, items
 
@@ -664,7 +711,7 @@ def build_film(pieces, progress=None, cancel=None):
         return [p for p in seq if p["b"] - p["a"] <= GR_MAX]
     groom, bride = side("groom"), side("bride")
     loc = order([p for p in ps if p["cat"] == "location"])
-    L, its = _montage(loc + interleave(groom, bride, max_run=6), 0.55, 0.8, 2.0)
+    L, its = _montage(loc + interleave_blocks(groom, bride), 0.55, 0.8, 2.0)
     layout.append(("Getting ready", L, its))
     # 2. vornic + first look: the long morning selections of his camera (+ the 2nd camera by the sound), then the
     #    short morning Iris as a montage

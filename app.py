@@ -35,7 +35,7 @@ import ai
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.4.0"
+APP, VER = "MoneyMakingMachine", "v3.4.2"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
 
@@ -906,7 +906,7 @@ class Dashboard(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(28, 22, 28, 22)
         head = QHBoxLayout()
-        head.addWidget(lbl("Projects", "h1"))
+        head.addWidget(lbl("Selection & Multicam", "h1"))
         head.addStretch()
         head.addWidget(btn("+  New Project", "primary", self.new_project.emit))
         v.addLayout(head)
@@ -970,7 +970,7 @@ class ProjectPage(QWidget):
         head.setObjectName("head")
         hh = QHBoxLayout(head)
         hh.setContentsMargins(20, 10, 20, 10)
-        hh.addWidget(btn("←  Projects", "link", self.back.emit))
+        hh.addWidget(btn("←  Selection && Multicam", "link", self.back.emit))
         self.title = lbl("", "h2")
         hh.addWidget(self.title)
         hh.addStretch()
@@ -2060,7 +2060,7 @@ class MulticamPage(QWidget):
         head.setObjectName("head")
         hh = QHBoxLayout(head)
         hh.setContentsMargins(20, 10, 20, 10)
-        hh.addWidget(btn("←  Projects", "link", self.back.emit))
+        hh.addWidget(btn("←  Selection && Multicam", "link", self.back.emit))
         self.title = lbl("", "h2")
         hh.addWidget(self.title)
         hh.addStretch()
@@ -4483,7 +4483,7 @@ class Main(QMainWindow):
         top.addLayout(col, 1)
         sv.addLayout(top)
         sv.addSpacing(14)
-        self.nav = {"dash": btn("Dashboard", "nav", lambda: self.go("dash")),
+        self.nav = {"dash": btn("Selection && Multicam", "nav", lambda: self.go("dash")),
                     "teaser": btn("Teaser Studio", "nav", lambda: self.go("teaser")),
                     "long": btn("Long Film", "nav", lambda: self.go("long")),
                     "queue": btn("Analysis Queue", "nav", lambda: self.go("queue")),
