@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.5.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.5.1), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -374,6 +374,15 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   used / type (diskutil) / read speed shown, folder editable per card; backup twins (two slots of one camera) found by
   names + sizes + CONTENT samples (lavaliers never paired: same names / sizes, different sound) -> the fastest copied,
   the other "check only" (offload.verify_only) after its twin's copy. MMM_VOLUMES env = a test folder instead of /Volumes.
+  + his test on the Mac: the Mac's own "Data" volume and the app's DMG were listed -> offload._is_card (diskutil:
+  not internal-and-not-removable, not "Disk Image"); the date picker looked cheap -> day / month / year lists; the name
+  follows the app language (WEDDING 4 JULY Alexandra and Vlad 2026 in English); the folder list closed under the mouse
+  (the rows were rebuilt by the 3 s timer) -> rows rebuilt only when something changed and never while a list is open,
+  non-editable list + "Other folder…" with an empty field; "Only what was filmed at this wedding" (window = wedding
+  day 05:00 -> next day 05:00, editable; shot_time = st_birthtime on mac; sidecars follow their clip); twins measured on
+  the SMALLER card (one card may miss a clip) and verify_only COPIES a clip that is only on the backup.
+- UI everywhere: drop-down lists have their own arrow area (chevron drawn at start, _arrow_png) and padding; cards
+  (Teaser / Long) margins 16 and spacing 10; more space under the page descriptions; Transcribe panes have a frame.
 - Transcribe (transcribe.py + TranscribePage after Long Film): faster-whisper local, large-v3-turbo (fast) / large-v3
   (best), int8, model in <data>/ai_model/whisper (downloaded once from Hugging Face; NOT testable in Claude's sandbox:
   tested with a fake model). Next to every file .txt (times) + .srt; Export XML with a marker per sentence. Requirements

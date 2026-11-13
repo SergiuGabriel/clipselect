@@ -19,6 +19,24 @@ PROXY = {".lrf", ".lrv", ".thm"}
 SYSTEM_VOLUMES = {"Macintosh HD", "Macintosh HD - Data", "Recovery", "Preboot", "VM", "Update", "com.apple.TimeMachine.localsnapshots"}
 
 
+def _is_card(v):
+    """A card or an external drive: not the Mac's own disk ("Data", "Macintosh HD") and not a disk image (a DMG)."""
+    if v.name in SYSTEM_VOLUMES or v.name in ("Data", "Macintosh HD - Data"):
+        return False
+    if sys.platform != "darwin" or os.environ.get("MMM_VOLUMES"):
+        return True
+    try:
+        import plistlib
+        d = plistlib.loads(subprocess.run(["diskutil", "info", "-plist", str(v)], capture_output=True, timeout=10).stdout)
+    except Exception:
+        return True
+    if (d.get("BusProtocol") or "") == "Disk Image" or d.get("VirtualOrPhysical") == "Virtual":
+        return False
+    internal = d.get("Internal", False)
+    removable = d.get("Removable") or d.get("RemovableMedia") or d.get("Ejectable") or d.get("RemovableMediaOrExternalDevice")
+    return bool(removable) or not internal
+
+
 def cards():
     """The cards / drives plugged in now (macOS: /Volumes; Windows: removable drive letters)."""
     out = []
@@ -32,7 +50,8 @@ def cards():
                     continue
             except OSError:
                 continue
-            out.append(v)
+            if _is_card(v):
+                out.append(v)
     elif os.name == "nt":
         import string
         for d in string.ascii_uppercase[3:]:
@@ -67,10 +86,21 @@ def fingerprint(source, limit=4000):
     return frozenset((str(r), s) for r, s in scan(source)[:limit])
 
 
-def scan(source, skip_proxies=False):
-    """Every file to copy on a card / folder: (relative path, size)."""
+MEDIA = {".mxf", ".mp4", ".mov", ".mts", ".m2ts", ".avi", ".mkv", ".wav", ".mp3", ".m4a", ".aif", ".aiff", ".flac",
+         ".jpg", ".jpeg", ".dng", ".arw", ".heic", ".insv", ".braw", ".r3d", ".crm"}
+
+
+def shot_time(p):
+    """When a clip was filmed (by the camera's clock): the creation time on macOS, else the modification time."""
+    st = p.stat()
+    return getattr(st, "st_birthtime", None) or st.st_mtime
+
+
+def scan(source, skip_proxies=False, window=None):
+    """Every file to copy on a card / folder: (relative path, size). window = (start, end) timestamps: only the clips
+    filmed in it (a card can still hold another wedding); the other files (catalogues, sidecars of kept clips) stay."""
     source = Path(source)
-    files = []
+    files, left = [], set()
     for dirpath, dirnames, filenames in os.walk(source):
         dirnames[:] = sorted(d for d in dirnames if d not in SKIP_DIRS and not d.startswith("."))
         for f in sorted(filenames):
@@ -80,10 +110,34 @@ def scan(source, skip_proxies=False):
                 continue
             p = Path(dirpath) / f
             try:
+                if window and p.suffix.lower() in MEDIA and not (window[0] <= shot_time(p) < window[1]):
+                    left.add(p.stem.upper())             # filmed at another wedding: stays on the card
+                    continue
                 files.append((p.relative_to(source), p.stat().st_size))
             except OSError:
                 continue
+    if left:                                         # a sidecar (C9375M01.XML, .THM, .LRF) stays with its clip
+        files = [(r, n) for r, n in files if r.suffix.lower() in MEDIA or
+                 not any(Path(r.name).stem.upper().startswith(stem) for stem in left)]
     return files
+
+
+def window_count(source, window):
+    """(clips of this wedding, clips from other days) on a card."""
+    inside = outside = 0
+    for dirpath, dirnames, filenames in os.walk(source):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
+        for f in filenames:
+            p = Path(dirpath) / f
+            if p.suffix.lower() in MEDIA and p.suffix.lower() not in PROXY and not f.startswith("."):
+                try:
+                    if window[0] <= shot_time(p) < window[1]:
+                        inside += 1
+                    else:
+                        outside += 1
+                except OSError:
+                    pass
+    return inside, outside
 
 
 def _hash(path, cancel=None, on_bytes=None):
@@ -111,11 +165,11 @@ def _free_name(dest):
 
 
 def offload(source, dest_dir, verify=True, keep_folders=True, skip_proxies=False, report=True,
-            progress=None, cancel=None, on_file=None):
+            progress=None, cancel=None, on_file=None, window=None):
     """Copy one card into dest_dir. progress(done_bytes, total_bytes, current file); on_file(rel, status) with status
     'copied', 'verified', 'already there', 'renamed', 'FAILED: ...'. Returns the summary."""
     source, dest_dir = Path(source), Path(dest_dir)
-    files = scan(source, skip_proxies)
+    files = scan(source, skip_proxies, window)
     total = sum(s for _, s in files) * (2 if verify else 1)
     done = [0]
     t0 = time.time()
@@ -208,8 +262,14 @@ SONY = {"ILME-FX6": "fx6", "ILME-FX6V": "fx6", "ILME-FX6T": "fx6", "ILME-FX3": "
         "ILCE-7SM3": "a7s3", "ILCE-7M3": "a73", "ILCE-1": "a1", "ILCE-7RM5": "a7r5", "ILCE-7CM2": "a7c2", "ILME-FR7": "fr7"}
 
 
-def wedding_name(day, month, bride, groom, year):
-    """His folder name: NUNTA 4 IULIE Alexandra si Vlad 2026."""
+MONTHS_EN = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER",
+             "NOVEMBER", "DECEMBER"]
+
+
+def wedding_name(day, month, bride, groom, year, lang="ro"):
+    """His folder name, in the app's language: NUNTA 4 IULIE Alexandra si Vlad 2026 / WEDDING 4 JULY Alexandra and Vlad 2026."""
+    if lang == "en":
+        return f"WEDDING {int(day)} {MONTHS_EN[int(month) - 1]} {bride.strip()} and {groom.strip()} {int(year)}"
     return f"NUNTA {int(day)} {MONTHS[int(month) - 1]} {bride.strip()} si {groom.strip()} {int(year)}"
 
 
@@ -316,11 +376,13 @@ def signature(vol, sampled=6):
 
 
 def same_clips(a, b):
-    """The same clips: 90 % of the files match by name and size AND every sampled file matches by content."""
+    """The same clips: 90 % of the smaller card's files are on the other one by name and size, AND every sampled file
+    they share matches by content."""
     if not a or not b:
         return False
     plain = lambda sig: {(r, n) for r, n, _ in sig}
-    if len(plain(a) & plain(b)) < 0.9 * max(len(a), len(b)):
+    # measured on the SMALLER card: one of the two may have missed a clip (that is exactly why it is checked)
+    if len(plain(a) & plain(b)) < 0.9 * min(len(a), len(b)):
         return False
     fa = {(r, n): h for r, n, h in a if h}
     fb = {(r, n): h for r, n, h in b if h}
@@ -349,23 +411,34 @@ def read_speed(vol, mb=96):
     return got / 1e6 / max(1e-3, time.time() - t)
 
 
-def verify_only(source, dest_dir, progress=None, cancel=None):
-    """A backup card: nothing is copied, every file on it is compared with the copy already at the destination."""
+def verify_only(source, dest_dir, progress=None, cancel=None, window=None, keep_folders=True):
+    """A backup card: every file on it is compared with the copy already made from its twin. A clip that the first card
+    did NOT record (a camera can miss a clip on one of its two cards) is copied from the backup, so nothing is lost."""
     source, dest_dir = Path(source), Path(dest_dir)
-    files = scan(source, skip_proxies=True)
+    files = scan(source, skip_proxies=True, window=window)
     total = sum(s for _, s in files) * 2
     done = [0]
-    ok = bad = missing = 0
+    ok = bad = added = 0
     rows = []
     for rel, size in files:
         if cancel and cancel():
             raise InterruptedError("Cancelled")
-        dst = dest_dir / rel
-        if not dst.exists():
+        dst = dest_dir / (rel if keep_folders else rel.name)
+        if not dst.exists() and (dest_dir / rel.name).exists():
             dst = dest_dir / rel.name
-        if not dst.exists():
-            missing += 1
-            rows.append((str(rel), size, "MISSING at the destination"))
+        if not dst.exists():                             # only on the backup: copy it
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            part = dst.with_name(dst.name + ".part")
+            shutil.copyfile(source / rel, part)
+            shutil.copystat(source / rel, part)
+            if _hash(part, cancel) != _hash(source / rel, cancel):
+                part.unlink()
+                bad += 1
+                rows.append((str(rel), size, "COULD NOT be copied from the backup"))
+            else:
+                part.replace(dst)
+                added += 1
+                rows.append((str(rel), size, "only on the backup card: copied from it"))
             done[0] += 2 * size
             continue
         same = dst.stat().st_size == size and _hash(source / rel, cancel) == _hash(dst, cancel)
@@ -378,5 +451,24 @@ def verify_only(source, dest_dir, progress=None, cancel=None):
         else:
             bad += 1
             rows.append((str(rel), size, "DIFFERENT from the copy"))
+    if rows:
+        with open(dest_dir / "_offload_report.txt", "a", encoding="utf-8") as f:
+            f.write(f"\n\nBackup card checked: {source}\nSame {ok}, different {bad}, copied from the backup {added}\n")
+            f.writelines(f"{r}\t{n}\t{st}\n" for r, n, st in rows)
     return dict(source=str(source), dest=str(dest_dir), files=len(files), bytes=sum(s for _, s in files), same=ok,
-                different=bad, missing=missing, rows=rows)
+                different=bad, missing=0, added=added, rows=rows)
+
+
+def media_times(vol):
+    """The time of every clip on a card (read once; the wedding's window is applied on them as often as needed)."""
+    out = []
+    for dirpath, dirnames, filenames in os.walk(vol):
+        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
+        for f in filenames:
+            p = Path(dirpath) / f
+            if p.suffix.lower() in MEDIA and p.suffix.lower() not in PROXY and not f.startswith("."):
+                try:
+                    out.append(shot_time(p))
+                except OSError:
+                    pass
+    return out

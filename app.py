@@ -13,7 +13,7 @@ import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
@@ -40,7 +40,7 @@ import ai
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.5.0"
+APP, VER = "MoneyMakingMachine", "v3.5.1"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
 
@@ -124,9 +124,12 @@ QPushButton#seg{border-radius:4px;padding:6px;border:1px solid #4a4a4a;backgroun
 QPushButton#seg[active="true"]{border:1px solid @HOT;background:#1d3557;color:white}
 QPushButton#del{border:none;background:transparent;color:@MUTED;padding:2px 6px;font-weight:500}
 QPushButton#del:hover{color:@POOR;background:transparent}
-QLineEdit{background:#161616;border:1px solid #4a4a4a;border-radius:3px;padding:5px 6px;selection-background-color:@BLUE}
+QLineEdit{background:#161616;border:1px solid #4a4a4a;border-radius:4px;padding:6px 10px;selection-background-color:@BLUE}
 QLineEdit:focus{border:1px solid @HOT}
-QComboBox{background:#161616;border:1px solid #4a4a4a;border-radius:3px;padding:5px 8px}
+QComboBox{background:#161616;border:1px solid #4a4a4a;border-radius:4px;padding:6px 34px 6px 10px;min-height:18px}
+QComboBox::drop-down{subcontrol-origin:padding;subcontrol-position:center right;width:30px;border:none}
+QComboBox::down-arrow{image:url(@ARROW);width:10px;height:6px}
+QComboBox QAbstractItemView::item{min-height:24px;padding:2px 8px}
 QComboBox:hover{border-color:#6a6a6a}
 QComboBox QAbstractItemView{background:#2a2a2a;border:1px solid #4a4a4a;selection-background-color:@BLUE}
 QSlider::groove:horizontal{height:2px;background:#4a4a4a;border-radius:1px}
@@ -3451,6 +3454,7 @@ class TeaserPage(QWidget):
         sv.addWidget(lbl("Builds your shortmovie structure (teaser with drop → getting ready → church → party) from your colour "
                          "labels, cut on the beat of your music. Testimonials and vows: add them in Premiere afterwards "
                          "(the export has a marker for every part).", "muted", True))
+        sv.addSpacing(8)
         pr = QHBoxLayout()
         pr.addWidget(lbl("Project", "section"))
         self.pcombo = QComboBox()
@@ -3485,7 +3489,8 @@ class TeaserPage(QWidget):
             f.setObjectName("card")
             f.setFixedWidth(390)
             l = QVBoxLayout(f)
-            l.setContentsMargins(14, 12, 14, 12)
+            l.setContentsMargins(16, 14, 16, 16)
+            l.setSpacing(10)
             h = QHBoxLayout()
             num = QLabel(str(n))
             num.setFixedSize(22, 22)
@@ -4120,6 +4125,7 @@ class LongFilmPage(QWidget):
         v.addWidget(lbl("The long film pre-cut from your labelled selections, every selection whole and in your order: teaser, "
                         "getting ready, first look, (vornic), church, couple and venue. The party is the Multicam edit. You add "
                         "the music, the interviews and the final touches in Premiere.", "muted", True))
+        v.addSpacing(8)
         pr = QHBoxLayout()
         pr.addWidget(lbl("Project", "section"))
         self.pcombo = QComboBox()
@@ -4153,7 +4159,8 @@ class LongFilmPage(QWidget):
             f = QFrame()
             f.setObjectName("card")
             l = QVBoxLayout(f)
-            l.setContentsMargins(14, 12, 14, 12)
+            l.setContentsMargins(16, 14, 16, 16)
+            l.setSpacing(10)
             h = QHBoxLayout()
             num = QLabel(str(n))
             num.setFixedSize(22, 22)
@@ -4452,12 +4459,14 @@ class _OffloadWorker(QThread):
     def run(self):
         try:
             prog = lambda d, t, name: self.moved.emit(self.k, float(d), float(max(1, t)))
+            win = self.opts.get("window")
             if self.check_only:
-                r = offload.verify_only(self.source, self.dest, progress=prog, cancel=self.stop)
+                r = offload.verify_only(self.source, self.dest, progress=prog, cancel=self.stop, window=win,
+                                        keep_folders=self.opts["folders"])
             else:
                 r = offload.offload(self.source, self.dest, verify=self.opts["verify"], keep_folders=self.opts["folders"],
                                     skip_proxies=self.opts["proxies"], report=self.opts["report"], progress=prog,
-                                    cancel=self.stop)
+                                    cancel=self.stop, window=win)
             self.ended.emit(self.k, r, "")
         except InterruptedError:
             self.ended.emit(self.k, None, "Cancelled")
@@ -4479,14 +4488,15 @@ class _CardLook(QThread):
             try:
                 what, folder = offload.identify(p)
                 info = dict(what=what, folder=folder, **offload.media_info(p), sig=offload.signature(p),
-                            speed=offload.read_speed(p))
+                            speed=offload.read_speed(p), times=offload.media_times(p))
             except Exception as e:
                 logging.warning("card look failed %s: %s", p, e)
-                info = dict(what="", folder="", total=0, used=0, kind="", sig=set(), speed=0.0)
+                info = dict(what="", folder="", total=0, used=0, kind="", sig=set(), speed=0.0, times=[])
             self.seen.emit(str(p), info)
 
 
 CHECK_ONLY = "check only (backup)"
+OTHER = "Other folder…"
 
 
 class OffloadPage(QWidget):
@@ -4514,43 +4524,84 @@ class OffloadPage(QWidget):
         v.addWidget(lbl("Every ticked card is copied at the same time and every file is checked after copying. The cards are "
                         "only read: nothing on them is changed, renamed or deleted, and nothing at the destination is "
                         "overwritten.", "muted", True))
+        v.addSpacing(14)
         body = QHBoxLayout()
         body.setSpacing(24)
         v.addLayout(body, 1)
         left = QVBoxLayout()
         left.addWidget(lbl("WEDDING", "section"))
+        left.addSpacing(4)
         wr = QHBoxLayout()
-        from PySide6.QtWidgets import QDateEdit
-        from PySide6.QtCore import QDate
-        self.w_date = QDateEdit(QDate.currentDate())
-        self.w_date.setCalendarPopup(True)
-        self.w_date.setDisplayFormat("dd.MM.yyyy")
+        wr.setSpacing(8)
+        today = datetime.now()
+        months = offload.MONTHS if i18n.LANG == "ro" else offload.MONTHS_EN
+        self.w_day, self.w_month, self.w_year = QComboBox(), QComboBox(), QComboBox()
+        self.w_day.addItems([str(d) for d in range(1, 32)])
+        self.w_month.addItems([m.capitalize() for m in months])
+        self.w_year.addItems([str(y) for y in range(today.year - 1, today.year + 3)])
+        self.w_day.setCurrentIndex(today.day - 1)
+        self.w_month.setCurrentIndex(today.month - 1)
+        self.w_year.setCurrentText(str(today.year))
+        self.w_day.setMinimumWidth(92)
+        self.w_month.setMinimumWidth(150)
+        self.w_year.setMinimumWidth(110)
         self.w_bride, self.w_groom = QLineEdit(), QLineEdit()
-        self.w_bride.setPlaceholderText("Alexandra")
-        self.w_groom.setPlaceholderText("Vlad")
-        for wdg in (self.w_date, self.w_bride, self.w_groom):
+        self.w_bride.setPlaceholderText(i18n.T("Bride"))
+        self.w_groom.setPlaceholderText(i18n.T("Groom"))
+        for wdg in (self.w_day, self.w_month, self.w_year, self.w_bride, self.w_groom):
             wr.addWidget(wdg)
         left.addLayout(wr)
-        self.w_date.dateChanged.connect(self._name_from_fields)
+        for c_ in (self.w_day, self.w_month, self.w_year):
+            c_.currentIndexChanged.connect(self._name_from_fields)
         self.w_bride.textChanged.connect(self._name_from_fields)
         self.w_groom.textChanged.connect(self._name_from_fields)
+        left.addSpacing(6)
         self.wedding = QLineEdit(self.cfg.get("wedding", ""))
-        self.wedding.setPlaceholderText("NUNTA 4 IULIE Alexandra si Vlad 2026")
+        self.wedding.setPlaceholderText(offload.wedding_name(4, 7, "Alexandra", "Vlad", 2026, i18n.LANG))
         self.wedding.textChanged.connect(lambda t: (self.cfg.update(wedding=t), self._where()))
         left.addWidget(self.wedding)
+        left.addSpacing(8)
+        tw = QHBoxLayout()
+        tw.setSpacing(8)
+        self.only_this = QCheckBox(i18n.T("Only what was filmed at this wedding"))
+        self.only_this.setChecked(self.cfg.get("only_this", True))
+        self.t_from, self.t_to = QComboBox(), QComboBox()
+        for c_ in (self.t_from, self.t_to):
+            c_.addItems([f"{h:02d}:00" for h in range(24)])
+            c_.setCurrentIndex(5)
+            c_.setMinimumWidth(112)
+            c_.currentIndexChanged.connect(lambda _=None: self._rows())
+        self.t_from.setCurrentIndex(self.cfg.get("from_h", 5))
+        self.t_to.setCurrentIndex(self.cfg.get("to_h", 5))
+        self.only_this.toggled.connect(lambda on: (self.cfg.update(only_this=on), self._rows()))
+        left.addWidget(self.only_this)
+        left.addSpacing(4)
+        tw.addSpacing(26)
+        tw.addWidget(lbl("from", "muted"))
+        tw.addWidget(self.t_from)
+        tw.addWidget(lbl("to the next day at", "muted"))
+        tw.addWidget(self.t_to)
+        tw.addStretch()
+        left.addLayout(tw)
         left.addSpacing(8)
         left.addWidget(lbl("CARDS", "section"))
         self.card_box = QVBoxLayout()
         self.card_box.setSpacing(0)
+        self.card_box.setContentsMargins(0, 0, 8, 0)
         lw = QWidget()
         lw.setLayout(self.card_box)
-        left.addWidget(lw)
+        cs = QScrollArea()                                # many cards: they scroll, every row keeps its height
+        cs.setWidgetResizable(True)
+        cs.setFrameShape(QFrame.NoFrame)
+        cs.setWidget(lw)
+        left.addWidget(cs, 1)
         rr = QHBoxLayout()
         rr.addWidget(btn("Refresh", "link", lambda: self.refresh(force=True)))
-        rr.addWidget(btn("+  Add a folder", "link", self.add_folder))
+        af = btn("+  Add a folder (not a card)", "link", self.add_folder)
+        af.setToolTip(i18n.T("Footage that is not on a card: a folder on the computer, a backup on another drive, a card reader that does not show up by itself."))
+        rr.addWidget(af)
         rr.addStretch()
         left.addLayout(rr)
-        left.addStretch()
         body.addLayout(left, 3)
         right = QVBoxLayout()
         right.addWidget(lbl("DESTINATION", "section"))
@@ -4587,7 +4638,8 @@ class OffloadPage(QWidget):
         right.addStretch()
         body.addLayout(right, 2)
         self.timer = QTimer(self)
-        self.timer.timeout.connect(lambda: self.isVisible() and not self._busy() and self.refresh())
+        self.timer.timeout.connect(lambda: self.isVisible() and not self._busy() and
+                                   not any(c.view().isVisible() for c in getattr(self, "row_combos", [])) and self.refresh())
         self.timer.start(3000)
         self._where()
         self.refresh()
@@ -4597,8 +4649,22 @@ class OffloadPage(QWidget):
     def _name_from_fields(self, *_):
         b, g = self.w_bride.text().strip(), self.w_groom.text().strip()
         if b and g:
-            d = self.w_date.date()
-            self.wedding.setText(offload.wedding_name(d.day(), d.month(), b, g, d.year()))
+            self.wedding.setText(offload.wedding_name(self.w_day.currentIndex() + 1, self.w_month.currentIndex() + 1, b, g,
+                                                      int(self.w_year.currentText()), i18n.LANG))
+        self._rows()
+
+    def _window(self):
+        """The wedding's hours: from the wedding day at "from" to the next day at "to" (None when not asked)."""
+        if not self.only_this.isChecked():
+            return None
+        try:
+            d = datetime(int(self.w_year.currentText()), self.w_month.currentIndex() + 1, self.w_day.currentIndex() + 1)
+        except ValueError:
+            return None
+        self.cfg.update(from_h=self.t_from.currentIndex(), to_h=self.t_to.currentIndex())
+        start = d.replace(hour=self.t_from.currentIndex())
+        end = (d + timedelta(days=1)).replace(hour=self.t_to.currentIndex())
+        return start.timestamp(), end.timestamp()
 
     # ---- cards
     def _sources(self):
@@ -4654,8 +4720,17 @@ class OffloadPage(QWidget):
         self._rows()
 
     def _rows(self):
+        if not hasattr(self, "only_this"):
+            return
+        win = self._window()
+        key = (tuple(getattr(self, "order", [])), tuple(sorted(self.info)), tuple(sorted(self.twin_of.items())) if hasattr(self, "twin_of") else (),
+               win, tuple(sorted(self.choice.items())))
+        if key == getattr(self, "_rows_key", None) or any(c.view().isVisible() for c in getattr(self, "row_combos", [])):
+            self._where()
+            return                                       # nothing changed / a list is open: do not rebuild under the mouse
+        self._rows_key = key
         ticked = {cb.property("src"): cb.isChecked() for cb in getattr(self, "row_cbs", [])}
-        self.row_cbs = []
+        self.row_cbs, self.row_combos = [], []
         while self.card_box.count():
             it = self.card_box.takeAt(0)
             if it.widget():
@@ -4667,7 +4742,8 @@ class OffloadPage(QWidget):
             row = QFrame()
             row.setStyleSheet(f"QFrame{{border-bottom:1px solid {C['BORDER']};}} QLabel{{border:none;}}")
             h = QHBoxLayout(row)
-            h.setContentsMargins(4, 8, 4, 8)
+            h.setContentsMargins(4, 10, 4, 10)
+            h.setSpacing(10)
             cb = QCheckBox()
             cb.setProperty("src", s)
             cb.setChecked(ticked.get(s, True))
@@ -4675,6 +4751,7 @@ class OffloadPage(QWidget):
             cb.toggled.connect(lambda _=None: (self._where(), self._buttons()))
             h.addWidget(cb, 0, Qt.AlignTop)
             col = QVBoxLayout()
+            col.setSpacing(3)
             inf = self.info.get(s)
             title = f"<b>{escape(Path(s).name or s)}</b>"
             if inf and inf["kind"]:
@@ -4690,6 +4767,15 @@ class OffloadPage(QWidget):
                 if inf["speed"] > 1:
                     bits.append(f"~{inf['speed']:.0f} MB/s")
                 col.addWidget(lbl(" · ".join(bits), "muted"))
+                if win and inf.get("times"):
+                    ins = sum(1 for t in inf["times"] if win[0] <= t < win[1])
+                    out = len(inf["times"]) - ins
+                    msg = i18n.T("{} clips from this wedding").format(ins)
+                    if out:
+                        msg += " · " + i18n.T("{} from other days stay on the card").format(out)
+                    note = QLabel(f'<span style="color:{C["GOOD"] if ins else C["POOR"]}">{msg}</span>')
+                    note.setWordWrap(True)
+                    col.addWidget(note)
                 if s in self.twin_of:
                     note = QLabel(f'<span style="color:{C["FAIR"]}">' + i18n.T("The same clips as {} (a backup): only checked, the faster card is copied").format(
                         escape(Path(self.twin_of[s]).name)) + "</span>")
@@ -4699,15 +4785,36 @@ class OffloadPage(QWidget):
                 col.addWidget(lbl("Reading the card…", "muted"))
             h.addLayout(col, 1)
             combo = QComboBox()
-            combo.setEditable(True)
-            combo.setMinimumWidth(190)
-            combo.addItems(offload.FOLDERS + [CHECK_ONLY])
+            combo.setMinimumWidth(200)
             want = self.choice.get(s) or (CHECK_ONLY if s in self.twin_of else self.auto_folder.get(s, ""))
-            combo.setCurrentText(i18n.T(want) if want == CHECK_ONLY else want)
-            combo.currentTextChanged.connect(lambda t, s=s: (self.choice.__setitem__(s, CHECK_ONLY if t == i18n.T(CHECK_ONLY) else t), self._where()))
-            combo.setItemText(len(offload.FOLDERS), i18n.T(CHECK_ONLY))
-            h.addWidget(combo, 0, Qt.AlignTop)
+            items = list(offload.FOLDERS)
+            if want and want not in items and want != CHECK_ONLY:
+                items.append(want)                       # a folder he typed, or one the app found (fx30, a7s3...)
+            values = items + [CHECK_ONLY, OTHER]
+            combo.addItems([i18n.T(x) if x in (CHECK_ONLY, OTHER) else x for x in values])
+            combo.setCurrentIndex(values.index(want) if want in values else 0)
+            fcol = QVBoxLayout()
+            fcol.addWidget(combo)
+            other = QLineEdit()
+            other.setPlaceholderText(i18n.T("Name of the camera folder"))
+            other.setVisible(False)
+            fcol.addWidget(other)
+
+            def picked(i, s=s, values=values, other=other):
+                if values[i] == OTHER:
+                    other.setVisible(True)
+                    other.setFocus()
+                else:
+                    other.setVisible(False)
+                    self.choice[s] = values[i]
+                    self._where()
+            combo.currentIndexChanged.connect(picked)
+            other.editingFinished.connect(lambda s=s, other=other: other.text().strip() and (
+                self.choice.__setitem__(s, other.text().strip()), self._rows()))
+            self.row_combos.append(combo)
+            h.addLayout(fcol)
             self.card_box.addWidget(row)
+        self.card_box.addStretch()
         self._where()
         self._buttons()
 
@@ -4762,6 +4869,7 @@ class OffloadPage(QWidget):
     def start(self):
         root = self._root()
         opts = {k: cb.isChecked() for k, cb in self.opts.items()}
+        opts["window"] = self._window()
         self._stop = False
         self.workers, self.state, self.waiting = [], {}, {}
         jobs = []
@@ -4844,6 +4952,8 @@ class OffloadPage(QWidget):
             if r and s["check"]:
                 ok = r["different"] == 0 and r["missing"] == 0
                 txt = i18n.T("backup checked: {} of {} files the same as the copy").format(r["same"], r["files"])
+                if r.get("added"):
+                    txt += " · " + i18n.T("{} files were only on this card: copied from it").format(r["added"])
                 if not ok:
                     txt += f' · <span style="color:{C["POOR"]}">' + i18n.T("{} different, {} missing").format(r["different"], r["missing"]) + "</span>"
                 rows.append(f'<b style="color:{C["GOOD"] if ok else C["POOR"]}">{"✓" if ok else "✕"}</b> {head}: {txt}')
@@ -4919,6 +5029,7 @@ class TranscribePage(QWidget):
                         "uploaded). Next to every file you get a .txt with the times and a .srt (subtitles); an XML with a "
                         "marker on every sentence shows in Premiere where each thing is said. The first time the speech "
                         "model is downloaded once (1.5-3 GB).", "muted", True))
+        v.addSpacing(10)
         self.why = lbl("", "muted", True)
         v.addWidget(self.why)
         body = QHBoxLayout()
@@ -4928,6 +5039,8 @@ class TranscribePage(QWidget):
         left.addWidget(lbl("FILES", "section"))
         self.list = QListWidget()
         self.list.setMinimumWidth(340)
+        box = (f"background:#181818;border:1px solid {C['BORDER']};border-radius:6px;padding:6px;")
+        self.list.setStyleSheet(f"QListWidget{{{box}}} QListWidget::item{{padding:6px 4px}}")
         self.list.currentRowChanged.connect(self._show)
         left.addWidget(self.list, 1)
         fr = QHBoxLayout()
@@ -4940,6 +5053,7 @@ class TranscribePage(QWidget):
         self.c_lang = QComboBox()
         self.c_lang.setProperty("i18n", True)
         self.c_lang.addItems(["Romanian", "English", "Detect it"])
+        self.c_lang.setMinimumWidth(150)
         self.c_lang.setCurrentIndex(["ro", "en", "auto"].index(self.cfg.get("lang", "ro")))
         self.c_lang.currentIndexChanged.connect(lambda i: (self.cfg.update(lang=["ro", "en", "auto"][i]), self.store.save_app()))
         opt.addWidget(self.c_lang)
@@ -4947,6 +5061,7 @@ class TranscribePage(QWidget):
         self.c_q = QComboBox()
         self.c_q.setProperty("i18n", True)
         self.c_q.addItems(["Fast (large-v3-turbo)", "The most precise (large-v3, slower)"])
+        self.c_q.setMinimumWidth(280)
         self.c_q.setCurrentIndex(0 if self.cfg.get("quality", "fast") == "fast" else 1)
         self.c_q.currentIndexChanged.connect(lambda i: (self.cfg.update(quality=["fast", "best"][i]), self.store.save_app()))
         opt.addWidget(self.c_q)
@@ -4955,6 +5070,7 @@ class TranscribePage(QWidget):
         right = QVBoxLayout()
         right.addWidget(lbl("TEXT", "section"))
         self.text = QTextBrowser()
+        self.text.setStyleSheet(f"QTextBrowser{{background:#181818;border:1px solid {C['BORDER']};border-radius:6px;padding:10px}}")
         right.addWidget(self.text, 1)
         rb = QHBoxLayout()
         self.b_copy = btn("Copy the text", slot=self.copy)
@@ -5499,6 +5615,22 @@ def setup_logging(folder):
     sys.excepthook = hook
 
 
+def _arrow_png():
+    """A small chevron for the drop-down lists (drawn once, kept in the data folder)."""
+    from PySide6.QtGui import QPixmap, QPainter, QPen, QColor
+    path = Path(QStandardPaths.writableLocation(QStandardPaths.TempLocation)) / "mmm_arrow.png"
+    if not path.exists():
+        pm = QPixmap(20, 12)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(QPen(QColor("#b8b8b8"), 2.2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        p.drawPolyline([QPoint(3, 3), QPoint(10, 9), QPoint(17, 3)])
+        p.end()
+        pm.save(str(path))
+    return str(path).replace("\\", "/")
+
+
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP)
@@ -5506,7 +5638,7 @@ def main():
     ic = Path(getattr(sys, "_MEIPASS", Path(__file__).parent)) / "icon.png"
     if ic.exists():
         app.setWindowIcon(QIcon(str(ic)))
-    app.setStyleSheet(STYLE)
+    app.setStyleSheet(STYLE.replace("@ARROW", _arrow_png()))
     w = Main()
     setup_logging(w.store.dir)
     w.show()

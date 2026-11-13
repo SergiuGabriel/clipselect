@@ -269,10 +269,16 @@ ritmul exact pe muzică și alegerea finală le faci tu.</p>
 <b>camera recunoscută</b> (Sony scrie modelul lângă clipuri: FX6, FX3, A7 IV; drona DJI, Osmo, Zoom, RODE Wireless PRO) și viteza de citire.
 Fiecare card primește singur <b>folderul lui</b>: fx6, fx3, a74, osmo, recorder, lavaliere/lav 1 și lav 2 (pe rând), drona; îl poți schimba din listă.
 <b>Carduri de backup</b> (aceleași clipuri pe două carduri, verificat după conținut): se copiază doar cel mai rapid, iar celălalt e
-<b>doar verificat</b> față de copie, după ce aceasta e gata. Două lavaliere nu sunt niciodată luate drept backup.</li>
+<b>doar verificat</b> față de copie, după ce aceasta e gata; un clip pe care primul card nu l-a înregistrat e <b>copiat de pe backup</b>.
+Două lavaliere nu sunt niciodată luate drept backup. Pentru alt folder alegi <b>Alt folder…</b> și scrii numele. Discul intern al Mac-ului
+și imaginile de disc (DMG) nu apar în listă.</li>
+<li><b>Doar ce s-a filmat la nunta asta</b> (bifat implicit): un card poate avea și altă nuntă (de exemplu cardul mare de FX6,
+neformatat într-un weekend cu trei nunți). Se copiază doar clipurile filmate de la data nunții, ora aleasă (05:00), până a doua zi
+la ora aleasă (05:00), după ceasul camerei; restul rămân pe card. Pe fiecare card scrie câte clipuri sunt de la nunta asta și câte
+rămân de la alte zile (dacă scrie 0 la nunta asta, verifică ceasul camerei).</li>
 <li>Introdu cardurile: apar singure în listă, <b>bifate</b>. Debifează ce nu vrei să copiezi. Pentru un cititor sau un backup,
 <b>+ Adaugă un folder</b>.</li>
-<li><b>Nunta:</b> data și numele mirilor; folderul se numește singur, ca la tine: „NUNTA 4 IULIE Alexandra si Vlad 2026” (îl poți și scrie de mână). <b>Destinație:</b> discul tău.</li>
+<li><b>Nunta:</b> data și numele mirilor; folderul se numește singur, ca la tine: „NUNTA 4 IULIE Alexandra si Vlad 2026” (în limba aplicației; îl poți și scrie de mână). <b>Destinație:</b> discul tău.</li>
 <li>Bifează opțiunile și apasă <b>Copiază cardurile bifate</b>.</li>
 </ol>
 <ul>
@@ -594,10 +600,16 @@ starts here.</p>
 (CFexpress, SD), <b>the camera recognised</b> (Sony writes the model next to its clips: FX6, FX3, A7 IV; DJI drone, Osmo, Zoom, RODE
 Wireless PRO) and its read speed. Every card gets <b>its folder</b> by itself: fx6, fx3, a74, osmo, recorder, lavaliere/lav 1 and lav 2
 (in turn), drona; you can change it from the list. <b>Backup cards</b> (the same clips on two cards, checked by content): only the
-fastest is copied, the other one is <b>only checked</b> against the copy once it is done. Two lavaliers are never taken for a backup.</li>
+fastest is copied, the other one is <b>only checked</b> against the copy once it is done; a clip the first card did not record is
+<b>copied from the backup</b>. Two lavaliers are never taken for a backup. For another folder choose <b>Other folder…</b> and type its
+name. The Mac's own disk and disk images (DMG) are not listed.</li>
+<li><b>Only what was filmed at this wedding</b> (ticked by default): a card can still hold another wedding (e.g. the big FX6 card,
+not formatted in a weekend with three weddings). Only the clips filmed from the wedding day at the chosen hour (05:00) to the next
+day at the chosen hour (05:00) are copied, by the camera's clock; the rest stays on the card. Every card shows how many clips are from
+this wedding and how many from other days (0 from this wedding: check that camera's clock).</li>
 <li>Put the cards in: they appear in the list by themselves, <b>ticked</b>. Untick what you do not want copied. For a card reader
 or a backup, <b>+ Add a folder</b>.</li>
-<li><b>Wedding:</b> the date and the couple's names; the folder names itself, like yours: "NUNTA 4 IULIE Alexandra si Vlad 2026" (you can also type it). <b>Destination:</b> your drive.</li>
+<li><b>Wedding:</b> the date and the couple's names; the folder names itself, in the app's language: "WEDDING 4 JULY Alexandra and Vlad 2026" (you can also type it). <b>Destination:</b> your drive.</li>
 <li>Tick the options and press <b>Copy the ticked cards</b>.</li>
 </ol>
 <ul>
