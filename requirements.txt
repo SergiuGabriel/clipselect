@@ -6,3 +6,4 @@ onnxruntime
 tokenizers
 certifi
 opencv-python-headless
+faster-whisper

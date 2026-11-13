@@ -208,6 +208,13 @@ schimbările de melodie).</li>
 <li><b>Analiza selecțiilor</b> se poate opri oricând cu <b>Cancel</b>; ce s-a analizat rămâne salvat și continuă data
 viitoare de unde a rămas. Poți genera și înainte să se termine (selecțiile neanalizate se folosesc fără alegerea celei mai
 bune bucăți). O vezi și în Analysis Queue.</li>
+<li><b>Blueprint:</b> pe lângă <b>Auto</b> (tăiat pe beat-ul muzicii tale, ca înainte), poți folosi ca șablon unul din
+filmele tale terminate. <b>+ Adaugă un blueprint</b>: alegi XML-ul filmului (exportat din Premiere), îi dai un nume și stilul
+(<b>Modern</b> sau <b>Tradițional</b>). Tăieturile, muzica, efectele sonore și ritmul rămân exact ca în filmul tău, iar fiecare
+tăietură e umplută cu un cadru de <b>aceeași culoare</b> din nunta nouă (partea cea mai bună, în ordinea zilei, niciun moment
+de două ori). Interviurile (Tan) rămân locuri goale cu marker „Aici interviul”; sunetul camerelor și al recorder-ului de la nunta
+veche nu se păstrează; adjustment layer-ul (Lavender) e ignorat. În modul blueprint nu ai nevoie de muzică. Blueprint-urile
+sunt salvate pe acest calculator, pentru toate proiectele.</li>
 <li><b>Mirii (opțional):</b> câte o poză bună cu mireasa și cu mirele, din ziua nunții, apoi <b>Găsește-i în selecții</b>.
 Recunoaștere facială locală, gratuită. La generare, cadrele de mireasă, mire, cuplu, biserică și petrecere preferă selecțiile în
 care apar ei. Căutarea se face o singură dată pe proiect (rămâne salvată).</li>
@@ -254,6 +261,40 @@ câte o dronă la ~7 cadre; ~1,3-1,6 s fiecare.</li>
 </ul>
 <p>Fiecare cadru își păstrează culoarea ta și are sunetul legat de imagine; un marker pe fiecare parte. E un pre-montaj:
 ritmul exact pe muzică și alegerea finală le faci tu.</p>
+<h2>Descărcare carduri</h2>
+<p>Copiază cardurile pe disc, <b>toate deodată</b>, cu fiecare fișier verificat. Prima pagină din meniu, pentru că de aici
+începe orice nuntă.</p>
+<ol>
+<li>Introdu cardurile: apar singure în listă, <b>bifate</b>, fiecare cu mărimea cardului, cât e folosit, tipul (CFexpress, SD),
+<b>camera recunoscută</b> (Sony scrie modelul lângă clipuri: FX6, FX3, A7 IV; drona DJI, Osmo, Zoom, RODE Wireless PRO) și viteza de citire.
+Fiecare card primește singur <b>folderul lui</b>: fx6, fx3, a74, osmo, recorder, lavaliere/lav 1 și lav 2 (pe rând), drona; îl poți schimba din listă.
+<b>Carduri de backup</b> (aceleași clipuri pe două carduri, verificat după conținut): se copiază doar cel mai rapid, iar celălalt e
+<b>doar verificat</b> față de copie, după ce aceasta e gata. Două lavaliere nu sunt niciodată luate drept backup.</li>
+<li>Introdu cardurile: apar singure în listă, <b>bifate</b>. Debifează ce nu vrei să copiezi. Pentru un cititor sau un backup,
+<b>+ Adaugă un folder</b>.</li>
+<li><b>Nunta:</b> data și numele mirilor; folderul se numește singur, ca la tine: „NUNTA 4 IULIE Alexandra si Vlad 2026” (îl poți și scrie de mână). <b>Destinație:</b> discul tău.</li>
+<li>Bifează opțiunile și apasă <b>Copiază cardurile bifate</b>.</li>
+</ol>
+<ul>
+<li><b>Siguranță:</b> cardurile sunt doar citite: nimic nu e schimbat, redenumit sau șters de pe ele. La destinație nu se
+suprascrie nimic: un fișier identic e recunoscut („deja acolo”), unul diferit cu același nume primește „ (2)”. O copie se scrie
+întâi ca .part și primește numele abia când e completă; dacă oprești, nu rămân copii pe jumătate.</li>
+<li><b>Verifică fiecare fișier:</b> copia e citită înapoi de pe disc și comparată cu cardul (sumă de control). O copie stricată
+apare EȘUATĂ, în roșu.</li>
+<li><b>Raportul</b> (_offload_report.txt) stă lângă filmări: fiecare fișier, mărimea, suma de control și starea.</li>
+<li>Datele fișierelor rămân cele de pe card (aplicația citește din ele ordinea zilei).</li>
+</ul>
+<h2>Transcriere</h2>
+<p>Interviurile, discursurile, vornicul sau predica devin text, <b>pe acest calculator</b>, gratuit (Whisper, de la OpenAI;
+nu se urcă nimic).</p>
+<ol>
+<li><b>+ Adaugă fișiere</b>: sunet (lavaliere, recorder) sau video.</li>
+<li>Alege <b>limba</b> (română, engleză sau detectează singur) și <b>precizia</b>: <b>Rapid</b> (large-v3-turbo, de câteva ori mai
+rapid, aproape la fel de bun) sau <b>Cel mai precis</b> (large-v3, mai lent). Prima dată modelul se descarcă o singură dată (1,5-3 GB).</li>
+<li><b>Transcriere</b>. Lângă fiecare fișier apar un <b>.txt</b> (textul cu orele) și un <b>.srt</b> (subtitrare).</li>
+<li><b>Export XML cu markere</b>: clipul, cu un marker pe fiecare frază (textul frazei e în marker). În Premiere vezi unde se spune
+fiecare lucru și alegi repede bucățile bune pentru poveste.</li>
+</ol>
 <h2>Update-uri și probleme</h2>
 <ul>
 <li>Aplicația verifică singură la pornire dacă există o versiune nouă și te anunță. În <b>Settings &gt; Check for updates</b>
@@ -491,6 +532,13 @@ each song starts).</li>
 <li><b>Looking at the selections</b> can be stopped any time with <b>Cancel</b>; what is done is saved and continues next
 time where it was. You can generate before it finishes (unanalysed selections are used without picking their best part).
 It also shows in Analysis Queue.</li>
+<li><b>Blueprint:</b> besides <b>Auto</b> (cut on the beat of your music, as before), one of your finished films can be the
+template. <b>+ Add a blueprint</b>: pick the film's XML (exported from Premiere), give it a name and a style (<b>Modern</b> or
+<b>Traditional</b>). The cuts, the music, the sound effects and the pacing stay exactly as in your film, and every cut is refilled
+with a shot of <b>the same colour</b> from the new wedding (the best part, the order of the day, never the same moment twice).
+Interviews (Tan) stay empty with an "Interview here" marker; the old wedding's camera and recorder sound is not kept; the
+adjustment layer (Lavender) is ignored. In blueprint mode no music is needed. Blueprints are saved on this computer, for every
+project.</li>
 <li><b>Bride and groom (optional):</b> a good photo of each from the wedding day, then <b>Find them in the selections</b>.
 Local, free face recognition. When generating, the bride, groom, couple, church and party shots prefer the selections where
 they are seen. The search runs once per project (it is saved).</li>
@@ -538,6 +586,40 @@ length), a drone every ~7 shots; ~1.3-1.6 s each.</li>
 </ul>
 <p>Every shot keeps your colour and has its sound linked to the picture; a marker on every part. It is a pre-cut: the exact
 rhythm on the music and the final choice are yours.</p>
+<h2>Card Offload</h2>
+<p>Copies the cards to your drive, <b>all at once</b>, every file checked. The first page of the menu, because every wedding
+starts here.</p>
+<ol>
+<li>Put the cards in: they appear in the list by themselves, <b>ticked</b>, each with the card's size, how much is used, its type
+(CFexpress, SD), <b>the camera recognised</b> (Sony writes the model next to its clips: FX6, FX3, A7 IV; DJI drone, Osmo, Zoom, RODE
+Wireless PRO) and its read speed. Every card gets <b>its folder</b> by itself: fx6, fx3, a74, osmo, recorder, lavaliere/lav 1 and lav 2
+(in turn), drona; you can change it from the list. <b>Backup cards</b> (the same clips on two cards, checked by content): only the
+fastest is copied, the other one is <b>only checked</b> against the copy once it is done. Two lavaliers are never taken for a backup.</li>
+<li>Put the cards in: they appear in the list by themselves, <b>ticked</b>. Untick what you do not want copied. For a card reader
+or a backup, <b>+ Add a folder</b>.</li>
+<li><b>Wedding:</b> the date and the couple's names; the folder names itself, like yours: "NUNTA 4 IULIE Alexandra si Vlad 2026" (you can also type it). <b>Destination:</b> your drive.</li>
+<li>Tick the options and press <b>Copy the ticked cards</b>.</li>
+</ol>
+<ul>
+<li><b>Safety:</b> the cards are only read: nothing on them is changed, renamed or deleted. Nothing at the destination is
+overwritten: an identical file is recognised ("already there"), a different one with the same name gets " (2)". A copy is first
+written as .part and gets its name only when complete; if you stop, no half copy is left.</li>
+<li><b>Check every file:</b> the copy is read back from the drive and compared with the card (checksum). A broken copy shows as
+FAILED, in red.</li>
+<li><b>The report</b> (_offload_report.txt) sits next to the footage: every file, its size, checksum and state.</li>
+<li>The files keep the card's dates (the app reads the order of the day from them).</li>
+</ul>
+<h2>Transcribe</h2>
+<p>Interviews, speeches, the vornic or the sermon become text, <b>on this computer</b>, for free (Whisper, by OpenAI; nothing is
+uploaded).</p>
+<ol>
+<li><b>+ Add files</b>: sound (lavaliers, recorder) or video.</li>
+<li>Choose the <b>language</b> (Romanian, English or detect it) and the <b>precision</b>: <b>Fast</b> (large-v3-turbo, several times
+faster, almost as good) or <b>The most precise</b> (large-v3, slower). The first time the model is downloaded once (1.5-3 GB).</li>
+<li><b>Transcribe</b>. Next to every file you get a <b>.txt</b> (the text with the times) and a <b>.srt</b> (subtitles).</li>
+<li><b>Export XML with markers</b>: the clip with a marker on every sentence (the sentence is in the marker). In Premiere you see
+where each thing is said and pick the good pieces for the story quickly.</li>
+</ol>
 <h2>Updates and problems</h2>
 <ul>
 <li>At start the app checks by itself for a new version and tells you. <b>Settings &gt; Check for updates</b> checks any time,

@@ -3,6 +3,8 @@ import json
 import logging
 import logging.handlers
 import os
+import shutil
+from html import escape
 import platform
 import re
 import subprocess
@@ -31,11 +33,14 @@ import help_text
 import i18n
 import teaser
 import longfilm
+import blueprint
+import offload
+import transcribe
 import ai
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.4.2"
+APP, VER = "MoneyMakingMachine", "v3.5.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
 
@@ -3499,7 +3504,22 @@ class TeaserPage(QWidget):
         self.foot_lbl = QLabel("")
         self.foot_lbl.setWordWrap(True)
         l1.addWidget(self.foot_lbl)
-        l2 = card(2, "Music")
+        lb = card(2, "Blueprint")
+        lb.addWidget(lbl("Auto cuts on the beat of your music (as before). A blueprint is one of your finished films: its cuts, "
+                         "music, sound effects and pacing stay, and every cut is refilled with a shot of the same colour from "
+                         "this wedding.", "muted", True))
+        self.bp_combo = QComboBox()
+        self.bp_combo.currentIndexChanged.connect(self._bp_changed)
+        lb.addWidget(self.bp_combo)
+        br = QHBoxLayout()
+        br.addWidget(btn("+  Add a blueprint", slot=self.add_blueprint))
+        br.addWidget(btn("Delete", "link", self.delete_blueprint))
+        br.addStretch()
+        lb.addLayout(br)
+        self.bp_info = lbl("", "muted", True)
+        lb.addWidget(self.bp_info)
+        l2 = card(3, "Music")
+        self.music_card = l2
         l2.addWidget(lbl("Your songs already joined: one audio file, or the XML of your music edit.", "muted", True))
         r = QHBoxLayout()
         r.addWidget(btn("Audio file", slot=lambda: self.pick_music(False)))
@@ -3507,7 +3527,7 @@ class TeaserPage(QWidget):
         l2.addLayout(r)
         self.mus_lbl = lbl("", "muted", True)
         l2.addWidget(self.mus_lbl)
-        l3 = card(3, "Parts")
+        l3 = card(4, "Parts")
         self.f = {}
         g = QGridLayout()
         g.setVerticalSpacing(8)
@@ -3532,7 +3552,7 @@ class TeaserPage(QWidget):
         self.b_detect.setToolTip("Sets the six moments back to what the app found in the music (song changes, drop).")
         self.b_detect.setEnabled(False)
         l3.addWidget(self.b_detect)
-        l4b = card(4, "Bride and groom (optional)")
+        l4b = card(5, "Bride and groom (optional)")
         l4b.addWidget(lbl("A good photo of each (from the wedding day, face well visible): the teaser and the couple shots "
                           "prefer the selections where they are seen. Local face recognition, nothing is uploaded.", "muted", True))
         fr = QHBoxLayout()
@@ -3543,7 +3563,7 @@ class TeaserPage(QWidget):
         l4b.addWidget(self.face_lbl)
         self.b_faces = btn("Find them in the selections", "primary", self.find_faces)
         l4b.addWidget(self.b_faces)
-        l5 = card(5, "AI test (experimental)")
+        l5 = card(6, "AI test (experimental)")
         l5.addWidget(lbl("Checks if a free AI model, running on this Mac, recognises your shots like your colour labels. "
                          "It does not change your teaser.", "muted", True))
         self.b_ai = btn("Test the AI on my labelled clips", slot=self.ai_test)
@@ -3552,10 +3572,11 @@ class TeaserPage(QWidget):
         lscroll.setWidget(lw)
         body.addWidget(lscroll)
         right = QVBoxLayout()
-        right.addWidget(lbl("MUSIC", "section"))
-        self.mv = MusicView()
-        right.addWidget(self.mv)
-        right.addWidget(lbl("The small ticks under the music show where the cuts fall. The pink line is the drop.", "muted"))
+        self.music_area = [lbl("MUSIC", "section"), MusicView(),
+                           lbl("The small ticks under the music show where the cuts fall. The pink line is the drop.", "muted")]
+        self.mv = self.music_area[1]
+        for w_ in self.music_area:
+            right.addWidget(w_)
         right.addWidget(lbl("YOUR SHORTMOVIE", "section"))
         self.strip = ShotStrip()
         right.addWidget(self.strip)
@@ -3582,6 +3603,7 @@ class TeaserPage(QWidget):
         """Reload the footage XML, the music and your six moments from last time."""
         t = self._cur()
         self._face_ui()
+        self._fill_blueprints()
         foot, mus, b = t.get("footage"), t.get("music"), t.get("bounds")
         then = (lambda: self._load_music_file(mus, b)) if mus and Path(mus).exists() else None
         if foot and Path(foot).exists():
@@ -3909,7 +3931,7 @@ class TeaserPage(QWidget):
 
     # ---- build / export
     def _buttons(self):
-        ok = bool(self.pieces) and self.music is not None
+        ok = bool(self.pieces) and (self.music is not None or self._bp() is not None)
         self.b_gen.setEnabled(ok)
         self.b_shuffle.setEnabled(ok and self.edit is not None)
         self.b_exp.setEnabled(self.edit is not None)
@@ -3919,7 +3941,105 @@ class TeaserPage(QWidget):
         elif self.edit is None:
             self.summary.setText("Ready: press Generate.")
 
+    # ---- blueprints (one of his finished films as a template)
+    def _blueprints(self):
+        return self.store.app.setdefault("blueprints", [])
+
+    def _bp(self):
+        bid = self.bp_combo.currentData() if hasattr(self, "bp_combo") else None
+        return next((b for b in self._blueprints() if b["id"] == bid), None)
+
+    def _fill_blueprints(self, select=None):
+        self.bp_combo.blockSignals(True)
+        self.bp_combo.clear()
+        self.bp_combo.addItem(i18n.T("Auto (cut on the beat of your music)"), None)
+        for st in blueprint.STYLES:
+            for b in self._blueprints():
+                if b["style"] == st:
+                    self.bp_combo.addItem(f'{i18n.T(st.capitalize())} · {b["name"]}', b["id"])
+        ix = self.bp_combo.findData(select if select is not None else self._cur().get("blueprint"))
+        self.bp_combo.setCurrentIndex(max(0, ix))
+        self.bp_combo.blockSignals(False)
+        self._bp_info()
+
+    def _bp_info(self):
+        b = self._bp()
+        for w_ in self.music_area + [self.music_card.parentWidget()]:          # a blueprint brings its own music
+            w_.setVisible(b is None)
+        if not b:
+            self.bp_info.setText("")
+            return
+        s = blueprint.summary(b)
+        need = ", ".join(f"{i18n.T(teaser.CAT_NAME.get(k, k)).lower()} {v:.0f} s" for k, v in
+                         sorted(s["need"].items(), key=lambda kv: -kv[1]) if k != "interview")
+        extra = (" · " + i18n.T("{} interview places").format(s["interviews"])) if s["interviews"] else ""
+        self.bp_info.setText(i18n.T("{} cuts · {}:{} · needs: {}").format(s["cuts"], int(s["duration"] // 60),
+                                                                          f"{int(s['duration'] % 60):02d}", need) + extra +
+                             "<br>" + i18n.T("From your film {}, music and sound effects included ({} sounds).").format(b["source"], s["songs"]))
+
+    def _bp_changed(self, _):
+        self._remember(blueprint=self.bp_combo.currentData())
+        self.edit = None
+        self._bp_info()
+        self._buttons()
+
+    def add_blueprint(self):
+        from PySide6.QtWidgets import QInputDialog
+        f, _ = QFileDialog.getOpenFileName(self, "A finished film of yours (XML from Premiere)", "", "XML (*.xml)")
+        if not f:
+            return
+        name, ok = QInputDialog.getText(self, "New blueprint", "Name:", text=Path(f).stem)
+        if not ok or not name.strip():
+            return
+        styles = [i18n.T("Modern"), i18n.T("Traditional")]
+        st, ok = QInputDialog.getItem(self, "New blueprint", "Style:", styles, 0, False)
+        if not ok:
+            return
+        try:
+            b = blueprint.extract(f, name.strip(), blueprint.STYLES[styles.index(st)])
+        except Exception as e:
+            logging.exception("blueprint failed")
+            notify(f"Could not read the film: {e}", error=True)
+            return
+        self._blueprints().append(b)
+        self.store.save_app()
+        self._fill_blueprints(select=b["id"])
+        self._bp_changed(0)
+        notify(f"Blueprint added: {b['name']}")
+        logging.info("blueprint added from %s: %d cuts", f, len(b["slots"]))
+
+    def delete_blueprint(self):
+        from PySide6.QtWidgets import QMessageBox
+        b = self._bp()
+        if not b:
+            return
+        if QMessageBox.question(self, "Delete blueprint", f"Delete the blueprint \"{b['name']}\"? Your film is not touched.") != QMessageBox.Yes:
+            return
+        self._blueprints().remove(b)
+        self.store.save_app()
+        self._fill_blueprints(select=None)
+        self._bp_changed(0)
+
+    def _generate_blueprint(self, b):
+        e = blueprint.build(self.pieces, b, seed=self.seed)
+        self.edit = dict(shots=e["shots"], gaps=e["gaps"], blueprint=b["id"])
+        self.strip.set(self.edit["shots"], b["duration"])
+        holes = [k for *_, k in e["gaps"] if k != "interview"]
+        inter = sum(1 for *_, k in e["gaps"] if k == "interview")
+        txt = i18n.T("{} shots from the blueprint {}, no moment used twice.").format(len(e["shots"]), b["name"])
+        if inter:
+            txt += "<br>" + i18n.T("{} places for your interviews (marker Interview here).").format(inter)
+        if holes:
+            txt += (f'<br><span style="color:{C["FAIR"]}">' + i18n.T("{} cuts have no footage left of their colour (marker): label more clips.").format(len(holes)) + "</span>")
+        self.summary.setText(txt)
+        self.notify.emit(f"Shortmovie generated: {len(e['shots'])} shots")
+        logging.info("blueprint %s generated: %d shots, %d holes", b["name"], len(e["shots"]), len(holes))
+        self._buttons()
+
     def generate(self):
+        b = self._bp()
+        if b and self.pieces:
+            return self._generate_blueprint(b)
         if not self.pieces or self.music is None:
             return
         self.edit = teaser.build(self.pieces, self.music, self.bounds, seed=self.seed, chronological=True)
@@ -3955,7 +4075,13 @@ class TeaserPage(QWidget):
         out, _ = QFileDialog.getSaveFileName(self, "Save XML", start, "XML (*.xml)")
         if out:
             try:
-                n = teaser.export_xml(self.edit, self.music, out, Path(out).stem)
+                b = next((x for x in self._blueprints() if x["id"] == self.edit.get("blueprint")), None)
+                n = (blueprint.export_xml(self.edit, b, out, Path(out).stem) if b else
+                     teaser.export_xml(self.edit, self.music, out, Path(out).stem))
+                if b:
+                    gone = sorted({x["name"] for x in b["audio"] if not Path(x["path"]).exists()})
+                    if gone:
+                        notify(f"{len(gone)} sounds of the blueprint were not found on this computer, e.g. {gone[0]}", error=True)
                 self.summary.setText(f"Saved {n} shots to {out}. Premiere: File > Import · DaVinci: File > Import > Timeline.")
                 self.notify.emit(f"XML saved: {Path(out).name}")
             except Exception as e:
@@ -4312,6 +4438,651 @@ class LongFilmPage(QWidget):
             notify(f"Export failed: {e}", error=True)
 
 
+# ---------------------------------------------------------------- Card offload
+
+class _OffloadWorker(QThread):
+    """One card in its own thread (every card at once): copied, or only checked against its twin's copy."""
+    moved = Signal(int, float, float)          # card index, done bytes, total bytes
+    ended = Signal(int, object, str)           # card index, summary, error ("" when fine)
+
+    def __init__(self, k, source, dest, opts, stop, check_only=False):
+        super().__init__()
+        self.k, self.source, self.dest, self.opts, self.stop, self.check_only = k, source, dest, opts, stop, check_only
+
+    def run(self):
+        try:
+            prog = lambda d, t, name: self.moved.emit(self.k, float(d), float(max(1, t)))
+            if self.check_only:
+                r = offload.verify_only(self.source, self.dest, progress=prog, cancel=self.stop)
+            else:
+                r = offload.offload(self.source, self.dest, verify=self.opts["verify"], keep_folders=self.opts["folders"],
+                                    skip_proxies=self.opts["proxies"], report=self.opts["report"], progress=prog,
+                                    cancel=self.stop)
+            self.ended.emit(self.k, r, "")
+        except InterruptedError:
+            self.ended.emit(self.k, None, "Cancelled")
+        except Exception as e:
+            logging.exception("offload failed")
+            self.ended.emit(self.k, None, str(e))
+
+
+class _CardLook(QThread):
+    """Reads what a card is (camera, size, speed, its clips) without blocking the window."""
+    seen = Signal(str, object)
+
+    def __init__(self, paths):
+        super().__init__()
+        self.paths = paths
+
+    def run(self):
+        for p in self.paths:
+            try:
+                what, folder = offload.identify(p)
+                info = dict(what=what, folder=folder, **offload.media_info(p), sig=offload.signature(p),
+                            speed=offload.read_speed(p))
+            except Exception as e:
+                logging.warning("card look failed %s: %s", p, e)
+                info = dict(what="", folder="", total=0, used=0, kind="", sig=set(), speed=0.0)
+            self.seen.emit(str(p), info)
+
+
+CHECK_ONLY = "check only (backup)"
+
+
+class OffloadPage(QWidget):
+    """Copy the cards to the drive, every card at once, verified file by file (see offload.py)."""
+
+    def __init__(self, store):
+        super().__init__()
+        self.store = store
+        self.cfg = store.app.setdefault("offload", dict(dest="", verify=True, folders=True, proxies=False, report=True,
+                                                        eject=False, twins=True))
+        self.cfg.setdefault("twins", True)
+        self.extra, self.workers, self.state, self._stop = [], [], {}, False
+        self.looks, self.info, self.choice, self.looker = {}, {}, {}, None
+        v = QVBoxLayout(self)
+        v.setContentsMargins(28, 22, 28, 22)
+        v.setSpacing(10)
+        top = QHBoxLayout()
+        top.addWidget(lbl("Card Offload", "h1"))
+        top.addStretch()
+        self.b_cancel = btn("Cancel", slot=self.cancel)
+        self.b_start = btn("Copy the ticked cards", "primary", self.start)
+        top.addWidget(self.b_cancel)
+        top.addWidget(self.b_start)
+        v.addLayout(top)
+        v.addWidget(lbl("Every ticked card is copied at the same time and every file is checked after copying. The cards are "
+                        "only read: nothing on them is changed, renamed or deleted, and nothing at the destination is "
+                        "overwritten.", "muted", True))
+        body = QHBoxLayout()
+        body.setSpacing(24)
+        v.addLayout(body, 1)
+        left = QVBoxLayout()
+        left.addWidget(lbl("WEDDING", "section"))
+        wr = QHBoxLayout()
+        from PySide6.QtWidgets import QDateEdit
+        from PySide6.QtCore import QDate
+        self.w_date = QDateEdit(QDate.currentDate())
+        self.w_date.setCalendarPopup(True)
+        self.w_date.setDisplayFormat("dd.MM.yyyy")
+        self.w_bride, self.w_groom = QLineEdit(), QLineEdit()
+        self.w_bride.setPlaceholderText("Alexandra")
+        self.w_groom.setPlaceholderText("Vlad")
+        for wdg in (self.w_date, self.w_bride, self.w_groom):
+            wr.addWidget(wdg)
+        left.addLayout(wr)
+        self.w_date.dateChanged.connect(self._name_from_fields)
+        self.w_bride.textChanged.connect(self._name_from_fields)
+        self.w_groom.textChanged.connect(self._name_from_fields)
+        self.wedding = QLineEdit(self.cfg.get("wedding", ""))
+        self.wedding.setPlaceholderText("NUNTA 4 IULIE Alexandra si Vlad 2026")
+        self.wedding.textChanged.connect(lambda t: (self.cfg.update(wedding=t), self._where()))
+        left.addWidget(self.wedding)
+        left.addSpacing(8)
+        left.addWidget(lbl("CARDS", "section"))
+        self.card_box = QVBoxLayout()
+        self.card_box.setSpacing(0)
+        lw = QWidget()
+        lw.setLayout(self.card_box)
+        left.addWidget(lw)
+        rr = QHBoxLayout()
+        rr.addWidget(btn("Refresh", "link", lambda: self.refresh(force=True)))
+        rr.addWidget(btn("+  Add a folder", "link", self.add_folder))
+        rr.addStretch()
+        left.addLayout(rr)
+        left.addStretch()
+        body.addLayout(left, 3)
+        right = QVBoxLayout()
+        right.addWidget(lbl("DESTINATION", "section"))
+        dr = QHBoxLayout()
+        self.dest_lbl = lbl("", "muted", True)
+        dr.addWidget(self.dest_lbl, 1)
+        dr.addWidget(btn("Choose", slot=self.pick_dest))
+        right.addLayout(dr)
+        self.where = QLabel("")
+        self.where.setTextFormat(Qt.RichText)
+        self.where.setWordWrap(True)
+        right.addWidget(self.where)
+        right.addSpacing(8)
+        right.addWidget(lbl("OPTIONS", "section"))
+        self.opts = {}
+        for key, text in (("verify", "Check every file after copying (reads the copy back)"),
+                          ("twins", "Backup cards (the same clips): copy only the fastest, only check the other"),
+                          ("folders", "Keep the card's folders"),
+                          ("proxies", "Skip the camera proxies (.LRF, .LRV, .THM)"),
+                          ("report", "Write a report next to the footage"),
+                          ("eject", "Eject the cards when everything is copied")):
+            cb = QCheckBox(text)
+            cb.setChecked(bool(self.cfg.get(key)))
+            cb.toggled.connect(lambda on, k=key: (self.cfg.update({k: on}), self.store.save_app(), self._plan(), self._where()))
+            self.opts[key] = cb
+            right.addWidget(cb)
+        right.addSpacing(8)
+        self.pp = ProgressPanel()
+        right.addWidget(self.pp)
+        self.status = QLabel("")
+        self.status.setTextFormat(Qt.RichText)
+        self.status.setWordWrap(True)
+        right.addWidget(self.status)
+        right.addStretch()
+        body.addLayout(right, 2)
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(lambda: self.isVisible() and not self._busy() and self.refresh())
+        self.timer.start(3000)
+        self._where()
+        self.refresh()
+        self._buttons()
+
+    # ---- the wedding's folder name
+    def _name_from_fields(self, *_):
+        b, g = self.w_bride.text().strip(), self.w_groom.text().strip()
+        if b and g:
+            d = self.w_date.date()
+            self.wedding.setText(offload.wedding_name(d.day(), d.month(), b, g, d.year()))
+
+    # ---- cards
+    def _sources(self):
+        return [*offload.cards(), *[Path(x) for x in self.extra]]
+
+    def refresh(self, force=False):
+        srcs = [str(s) for s in self._sources()]
+        if force:
+            self.info = {}
+        for k in list(self.info):
+            if k not in srcs:
+                self.info.pop(k)
+        new = [s for s in srcs if s not in self.info and s not in self.looks]
+        if new and not (self.looker and self.looker.isRunning()):
+            for s in new:
+                self.looks[s] = True
+            self.looker = _CardLook([Path(s) for s in new])
+            self.looker.seen.connect(self._seen)
+            self.looker.start()
+        self.order = srcs
+        self._plan()
+
+    def _seen(self, path, info):
+        self.looks.pop(path, None)
+        self.info[path] = info
+        self._plan()
+
+    def _plan(self):
+        """Folder of every card: lavaliers in turn (lav 1, lav 2), backup twins -> the fastest copied, the others checked."""
+        order = [s for s in getattr(self, "order", []) if s in self.info]
+        folder, twin_of = {}, {}
+        lav = 0
+        for s in order:
+            f = self.info[s]["folder"] or Path(s).name
+            if f == "lavaliere":
+                lav += 1
+                f = f"lavaliere/lav {lav}"
+            folder[s] = f
+        if self.opts["twins"].isChecked():
+            groups = []
+            for s in order:
+                if self.info[s]["folder"] == "lavaliere":          # two lavaliers are never each other's backup
+                    continue
+                g = next((g for g in groups if offload.same_clips(self.info[g[0]]["sig"], self.info[s]["sig"])), None)
+                (g.append(s) if g else groups.append([s]))
+            for g in groups:
+                if len(g) > 1:
+                    best = max(g, key=lambda x: self.info[x]["speed"])
+                    for s in g:
+                        if s != best:
+                            twin_of[s] = best
+        self.auto_folder, self.twin_of = folder, twin_of
+        self._rows()
+
+    def _rows(self):
+        ticked = {cb.property("src"): cb.isChecked() for cb in getattr(self, "row_cbs", [])}
+        self.row_cbs = []
+        while self.card_box.count():
+            it = self.card_box.takeAt(0)
+            if it.widget():
+                it.widget().deleteLater()
+        srcs = getattr(self, "order", [])
+        if not srcs:
+            self.card_box.addWidget(lbl("No card found. Put a card in (it appears here by itself) or add a folder.", "muted", True))
+        for s in srcs:
+            row = QFrame()
+            row.setStyleSheet(f"QFrame{{border-bottom:1px solid {C['BORDER']};}} QLabel{{border:none;}}")
+            h = QHBoxLayout(row)
+            h.setContentsMargins(4, 8, 4, 8)
+            cb = QCheckBox()
+            cb.setProperty("src", s)
+            cb.setChecked(ticked.get(s, True))
+            self.row_cbs.append(cb)
+            cb.toggled.connect(lambda _=None: (self._where(), self._buttons()))
+            h.addWidget(cb, 0, Qt.AlignTop)
+            col = QVBoxLayout()
+            inf = self.info.get(s)
+            title = f"<b>{escape(Path(s).name or s)}</b>"
+            if inf and inf["kind"]:
+                title += f' <span style="color:{C["MUTED"]}">· {escape(inf["kind"])}</span>'
+            col.addWidget(QLabel(title))
+            if inf:
+                bits = []
+                if inf["total"]:
+                    bits.append(i18n.T("{} GB card").format(f"{inf['total'] / 1e9:.0f}"))
+                    bits.append(i18n.T("{} GB used").format(f"{inf['used'] / 1e9:.0f}"))
+                if inf["what"]:
+                    bits.append(i18n.T(inf["what"]))
+                if inf["speed"] > 1:
+                    bits.append(f"~{inf['speed']:.0f} MB/s")
+                col.addWidget(lbl(" · ".join(bits), "muted"))
+                if s in self.twin_of:
+                    note = QLabel(f'<span style="color:{C["FAIR"]}">' + i18n.T("The same clips as {} (a backup): only checked, the faster card is copied").format(
+                        escape(Path(self.twin_of[s]).name)) + "</span>")
+                    note.setWordWrap(True)
+                    col.addWidget(note)
+            else:
+                col.addWidget(lbl("Reading the card…", "muted"))
+            h.addLayout(col, 1)
+            combo = QComboBox()
+            combo.setEditable(True)
+            combo.setMinimumWidth(190)
+            combo.addItems(offload.FOLDERS + [CHECK_ONLY])
+            want = self.choice.get(s) or (CHECK_ONLY if s in self.twin_of else self.auto_folder.get(s, ""))
+            combo.setCurrentText(i18n.T(want) if want == CHECK_ONLY else want)
+            combo.currentTextChanged.connect(lambda t, s=s: (self.choice.__setitem__(s, CHECK_ONLY if t == i18n.T(CHECK_ONLY) else t), self._where()))
+            combo.setItemText(len(offload.FOLDERS), i18n.T(CHECK_ONLY))
+            h.addWidget(combo, 0, Qt.AlignTop)
+            self.card_box.addWidget(row)
+        self._where()
+        self._buttons()
+
+    def _folder(self, s):
+        return self.choice.get(s) or (CHECK_ONLY if s in self.twin_of else self.auto_folder.get(s, "")) or Path(s).name
+
+    def add_folder(self):
+        d = QFileDialog.getExistingDirectory(self, "A folder to copy (a card reader, a backup)")
+        if d and d not in self.extra:
+            self.extra.append(d)
+            self.refresh()
+
+    def pick_dest(self):
+        d = QFileDialog.getExistingDirectory(self, "Where the footage goes (your drive)", self.cfg.get("dest", ""))
+        if d:
+            self.cfg["dest"] = d
+            self.store.save_app()
+            self._where()
+            self._buttons()
+
+    def _root(self):
+        return Path(self.cfg["dest"]) / ((self.cfg.get("wedding") or "").strip() or time.strftime("Offload %Y-%m-%d"))
+
+    def _where(self):
+        d = self.cfg.get("dest") or ""
+        self.dest_lbl.setText(d or i18n.T("No destination yet."))
+        if not d:
+            self.where.setText("")
+            return
+        lines = [f"<b>{escape((self.cfg.get('wedding') or '').strip() or '…')}</b>"]
+        for s in self._ticked_paths():
+            f = self._folder(s)
+            if f != CHECK_ONLY:
+                lines.append(f"&nbsp;&nbsp;&nbsp;{escape(f)} &larr; {escape(Path(s).name)}")
+        self.where.setText("<br>".join(lines))
+
+    def _ticked_paths(self):
+        return [cb.property("src") for cb in getattr(self, "row_cbs", []) if cb.isChecked()]
+
+    def _ticked(self):
+        return [Path(s) for s in self._ticked_paths()]
+
+    def _busy(self):
+        return any(w.isRunning() for w in self.workers)
+
+    def _buttons(self):
+        busy = self._busy()
+        self.b_start.setEnabled(not busy and bool(self.cfg.get("dest")) and bool(self._ticked()))
+        self.b_cancel.setVisible(busy)
+
+    # ---- copying
+    def start(self):
+        root = self._root()
+        opts = {k: cb.isChecked() for k, cb in self.opts.items()}
+        self._stop = False
+        self.workers, self.state, self.waiting = [], {}, {}
+        jobs = []
+        for s in self._ticked_paths():
+            f = self._folder(s)
+            if f == CHECK_ONLY:
+                twin = self.twin_of.get(s)
+                if twin is None or twin not in self._ticked_paths():
+                    notify("A backup card to check has no ticked twin to compare with", error=True)
+                    return
+                jobs.append((s, root / self._folder(twin), True, twin))
+            else:
+                jobs.append((s, root / f, False, None))
+        for k, (s, dest, check, twin) in enumerate(jobs):
+            w = _OffloadWorker(k, Path(s), dest, opts, lambda: self._stop, check_only=check)
+            w.moved.connect(self._moved)
+            w.ended.connect(self._ended)
+            self.state[k] = dict(name=Path(s).name, src=s, folder=dest.relative_to(root), done=0.0, total=1.0, result=None,
+                                 error=None, check=check, twin=twin)
+            self.workers.append(w)
+        self.pp.start(i18n.T("Copying {} cards…").format(len(jobs)))
+        self.pp.allow_cancel(self.cancel)
+        for k, w in enumerate(self.workers):
+            if not self.state[k]["check"]:
+                w.start()                                  # a backup card is checked when its twin's copy is finished
+        self._show()
+        self._buttons()
+        logging.info("offload of %d cards to %s", len(jobs), root)
+
+    def cancel(self):
+        self._stop = True
+
+    def _moved(self, k, d, t):
+        self.state[k].update(done=d, total=t)
+        D = sum(s["done"] for s in self.state.values())
+        T = sum(s["total"] for s in self.state.values())
+        self.pp.set(i18n.T("Copying and checking: {}%").format(int(100 * D / max(1, T))), D / max(1, T))
+        self._show()
+
+    def _ended(self, k, result, error):
+        self.state[k].update(result=result, error=error)
+        for j, s in self.state.items():                    # its backup twins can be checked now
+            if s["check"] and s["twin"] == self.state[k]["src"] and not self.workers[j].isRunning() and s["result"] is None and not s["error"]:
+                if error:
+                    s["error"] = "Its twin could not be copied"
+                else:
+                    self.workers[j].start()
+        if not self._busy() and all(s["result"] is not None or s["error"] for s in self.state.values()):
+            QTimer.singleShot(100, self._all_done)
+        self._show()
+
+    def _all_done(self):
+        if self._busy():
+            return
+        self.pp.hide()
+        self.pp.allow_cancel(None)
+        failed = sum((s["result"] or {}).get("failed", 0) + (s["result"] or {}).get("different", 0) +
+                     (s["result"] or {}).get("missing", 0) for s in self.state.values())
+        bad = [s["name"] for s in self.state.values() if s["error"] and s["error"] != "Cancelled"]
+        if any(s["error"] == "Cancelled" for s in self.state.values()):
+            notify("Offload stopped: what is copied is kept", error=True)
+        elif failed or bad:
+            notify(f"Offload finished with problems: {failed} files failed", error=True)
+        else:
+            n = sum((s["result"] or {}).get("files", 0) for s in self.state.values() if not s["check"])
+            notify(f"Every card copied and checked: {n} files")
+            if self.opts["eject"].isChecked():
+                for s in self.state.values():
+                    if str(s["src"]).startswith("/Volumes/"):
+                        offload.eject(s["src"])
+                QTimer.singleShot(1500, lambda: self.refresh(force=True))
+        self._show()
+        self._buttons()
+
+    def _show(self):
+        rows = []
+        for s in self.state.values():
+            r = s["result"]
+            head = f'<b>{escape(s["name"])}</b> → {escape(str(s["folder"]))}'
+            if r and s["check"]:
+                ok = r["different"] == 0 and r["missing"] == 0
+                txt = i18n.T("backup checked: {} of {} files the same as the copy").format(r["same"], r["files"])
+                if not ok:
+                    txt += f' · <span style="color:{C["POOR"]}">' + i18n.T("{} different, {} missing").format(r["different"], r["missing"]) + "</span>"
+                rows.append(f'<b style="color:{C["GOOD"] if ok else C["POOR"]}">{"✓" if ok else "✕"}</b> {head}: {txt}')
+            elif r:
+                ok = r["failed"] == 0
+                txt = (i18n.T("{} files, {} GB · {} checked, {} already there").format(r["files"], f"{r['bytes'] / 1e9:.1f}", r["verified"], r["already"])
+                       + (f' · {i18n.T("{} renamed (a different file had the name)").format(r["renamed"])}' if r["renamed"] else "")
+                       + (f' · <span style="color:{C["POOR"]}">{i18n.T("{} FAILED (see the report)").format(r["failed"])}</span>' if r["failed"] else ""))
+                rows.append(f'<b style="color:{C["GOOD"] if ok else C["POOR"]}">{"✓" if ok else "✕"}</b> {head}: {txt}')
+            elif s["error"]:
+                rows.append(f'<b style="color:{C["POOR"]}">✕</b> {head}: {escape(i18n.T(s["error"]))}')
+            elif s["check"] and not s["done"]:
+                rows.append(f'<span style="color:{C["MUTED"]}">…</span> {head}: ' + i18n.T("waiting for its twin's copy, then checked"))
+            else:
+                rows.append(f'<span style="color:{C["MUTED"]}">…</span> {head}: {int(100 * s["done"] / max(1, s["total"]))}%')
+        self.status.setText("<br>".join(rows))
+
+
+# ---------------------------------------------------------------- Transcribe
+
+class _TranscribeWorker(QThread):
+    progress = Signal(str, float)
+    one = Signal(str, object, str)                 # path, segments, error
+    ended = Signal(str)                            # "" or the reason it stopped
+
+    def __init__(self, paths, base, lang, quality, stop):
+        super().__init__()
+        self.paths, self.base, self.lang, self.quality, self.stop = paths, base, lang, quality, stop
+
+    def run(self):
+        try:
+            model = transcribe.load_model(self.base, self.quality, lambda t, f: self.progress.emit(t, f))
+        except Exception as e:
+            logging.exception("speech model failed")
+            self.ended.emit(str(e))
+            return
+        for k, p in enumerate(self.paths):
+            if self.stop():
+                self.ended.emit("Cancelled")
+                return
+            try:
+                segs = transcribe.transcribe(p, model, self.lang, lambda t, f, k=k: self.progress.emit(
+                    f"{k + 1} / {len(self.paths)} · {t}", (k + f) / len(self.paths)), self.stop)
+                transcribe.write_files(p, segs)
+                self.one.emit(p, segs, "")
+            except InterruptedError:
+                self.ended.emit("Cancelled")
+                return
+            except Exception as e:
+                logging.exception("transcription failed: %s", p)
+                self.one.emit(p, None, str(e))
+        self.ended.emit("")
+
+
+class TranscribePage(QWidget):
+    """Local speech-to-text for interviews, speeches, the vornic, the sermon (see transcribe.py)."""
+
+    def __init__(self, store):
+        super().__init__()
+        self.store = store
+        self.cfg = store.app.setdefault("transcribe", dict(files=[], lang="ro", quality="fast"))
+        self.worker, self._stop = None, False
+        v = QVBoxLayout(self)
+        v.setContentsMargins(28, 22, 28, 22)
+        v.setSpacing(10)
+        top = QHBoxLayout()
+        top.addWidget(lbl("Transcribe", "h1"))
+        top.addStretch()
+        self.b_go = btn("Transcribe", "primary", self.start)
+        top.addWidget(self.b_go)
+        v.addLayout(top)
+        v.addWidget(lbl("Interviews, speeches, the vornic, the sermon: the speech becomes text, on this computer (nothing is "
+                        "uploaded). Next to every file you get a .txt with the times and a .srt (subtitles); an XML with a "
+                        "marker on every sentence shows in Premiere where each thing is said. The first time the speech "
+                        "model is downloaded once (1.5-3 GB).", "muted", True))
+        self.why = lbl("", "muted", True)
+        v.addWidget(self.why)
+        body = QHBoxLayout()
+        body.setSpacing(20)
+        v.addLayout(body, 1)
+        left = QVBoxLayout()
+        left.addWidget(lbl("FILES", "section"))
+        self.list = QListWidget()
+        self.list.setMinimumWidth(340)
+        self.list.currentRowChanged.connect(self._show)
+        left.addWidget(self.list, 1)
+        fr = QHBoxLayout()
+        fr.addWidget(btn("+  Add files", slot=self.add))
+        fr.addWidget(btn("Remove", "link", self.remove))
+        fr.addStretch()
+        left.addLayout(fr)
+        opt = QHBoxLayout()
+        opt.addWidget(lbl("Language", "muted"))
+        self.c_lang = QComboBox()
+        self.c_lang.setProperty("i18n", True)
+        self.c_lang.addItems(["Romanian", "English", "Detect it"])
+        self.c_lang.setCurrentIndex(["ro", "en", "auto"].index(self.cfg.get("lang", "ro")))
+        self.c_lang.currentIndexChanged.connect(lambda i: (self.cfg.update(lang=["ro", "en", "auto"][i]), self.store.save_app()))
+        opt.addWidget(self.c_lang)
+        opt.addWidget(lbl("Precision", "muted"))
+        self.c_q = QComboBox()
+        self.c_q.setProperty("i18n", True)
+        self.c_q.addItems(["Fast (large-v3-turbo)", "The most precise (large-v3, slower)"])
+        self.c_q.setCurrentIndex(0 if self.cfg.get("quality", "fast") == "fast" else 1)
+        self.c_q.currentIndexChanged.connect(lambda i: (self.cfg.update(quality=["fast", "best"][i]), self.store.save_app()))
+        opt.addWidget(self.c_q)
+        left.addLayout(opt)
+        body.addLayout(left, 1)
+        right = QVBoxLayout()
+        right.addWidget(lbl("TEXT", "section"))
+        self.text = QTextBrowser()
+        right.addWidget(self.text, 1)
+        rb = QHBoxLayout()
+        self.b_copy = btn("Copy the text", slot=self.copy)
+        self.b_xml = btn("Export XML with markers", slot=self.export)
+        rb.addWidget(self.b_copy)
+        rb.addWidget(self.b_xml)
+        rb.addStretch()
+        right.addLayout(rb)
+        self.pp = ProgressPanel()
+        right.addWidget(self.pp)
+        body.addLayout(right, 2)
+        miss = transcribe.available()
+        if miss:
+            self.why.setText(f'<span style="color:{C["POOR"]}">' + i18n.T("The speech engine is missing from this build ({}).").format(miss) + "</span>")
+        self._fill()
+
+    def _files(self):
+        return self.cfg["files"]
+
+    def _fill(self, select=None):
+        self.list.blockSignals(True)
+        self.list.clear()
+        for f in self._files():
+            mark = "✓" if f.get("segs") is not None else ("✕" if f.get("error") else "·")
+            self.list.addItem(f"{mark}  {Path(f['path']).name}")
+        self.list.blockSignals(False)
+        if self._files():
+            self.list.setCurrentRow(select if select is not None else 0)
+        self._show(self.list.currentRow())
+        self._buttons()
+
+    def _busy(self):
+        return bool(self.worker and self.worker.isRunning())
+
+    def _buttons(self):
+        f = self._cur()
+        self.b_go.setEnabled(not self._busy() and not transcribe.available() and
+                             any(x.get("segs") is None for x in self._files()))
+        self.b_copy.setEnabled(bool(f and f.get("segs")))
+        self.b_xml.setEnabled(bool(f and f.get("segs")))
+
+    def _cur(self):
+        r = self.list.currentRow()
+        return self._files()[r] if 0 <= r < len(self._files()) else None
+
+    def add(self):
+        fs, _ = QFileDialog.getOpenFileNames(self, "Files to transcribe (sound or video)", "",
+                                             "Sound / video (*.wav *.WAV *.mp3 *.m4a *.aif *.aiff *.flac *.mp4 *.MP4 *.mov *.MOV *.mxf *.MXF);;All files (*)")
+        have = {f["path"] for f in self._files()}
+        for f in fs:
+            if f not in have:
+                self._files().append(dict(path=f, segs=None))
+        self.store.save_app()
+        self._fill(select=len(self._files()) - 1 if fs else None)
+
+    def remove(self):
+        r = self.list.currentRow()
+        if 0 <= r < len(self._files()) and not self._busy():
+            del self._files()[r]
+            self.store.save_app()
+            self._fill()
+
+    def _show(self, r):
+        f = self._files()[r] if 0 <= r < len(self._files()) else None
+        if not f:
+            self.text.setPlainText("")
+        elif f.get("segs") is not None:
+            self.text.setPlainText("\n".join(f"[{int(a // 60)}:{int(a % 60):02d}] {t}" for a, b, t in f["segs"]) or i18n.T("No speech found."))
+        elif f.get("error"):
+            self.text.setPlainText(i18n.T("Error: {}").format(i18n.T(f["error"])))
+        else:
+            self.text.setPlainText(i18n.T("Not transcribed yet: press Transcribe."))
+        self._buttons()
+
+    def start(self):
+        todo = [f["path"] for f in self._files() if f.get("segs") is None]
+        if not todo or self._busy():
+            return
+        self._stop = False
+        self.worker = _TranscribeWorker(todo, self.store.dir, self.cfg.get("lang", "ro"), self.cfg.get("quality", "fast"),
+                                        lambda: self._stop)
+        self.worker.progress.connect(self.pp.set)
+        self.worker.one.connect(self._one)
+        self.worker.ended.connect(self._ended)
+        self.pp.start(i18n.T("Transcribing {} files…").format(len(todo)))
+        self.pp.allow_cancel(lambda: setattr(self, "_stop", True))
+        self.worker.start()
+        self._buttons()
+
+    def _one(self, path, segs, err):
+        f = next((x for x in self._files() if x["path"] == path), None)
+        if f is not None:
+            f["segs"] = [list(s) for s in segs] if segs is not None else None
+            f["error"] = err or None
+            self.store.save_app()
+        self._fill(select=self.list.currentRow())
+
+    def _ended(self, why):
+        self.pp.hide()
+        self.pp.allow_cancel(None)
+        if why and why != "Cancelled":
+            notify(f"Transcription stopped: {why}", error=True)
+        elif not why:
+            bad = sum(1 for f in self._files() if f.get("error"))
+            notify("Transcription finished" + (f": {bad} files failed" if bad else ""), error=bool(bad))
+        self._buttons()
+
+    def copy(self):
+        f = self._cur()
+        if f and f.get("segs"):
+            QApplication.clipboard().setText(self.text.toPlainText())
+            notify("Text copied")
+
+    def export(self):
+        f = self._cur()
+        if not f or not f.get("segs"):
+            return
+        start = str(Path(f["path"]).with_name(Path(f["path"]).stem + " - transcript.xml"))
+        out, _ = QFileDialog.getSaveFileName(self, "Save XML", start, "XML (*.xml)")
+        if out:
+            try:
+                n = transcribe.export_markers(f["path"], [tuple(s) for s in f["segs"]], out)
+                notify(f"XML saved: {Path(out).name} ({n} markers)")
+            except Exception as e:
+                logging.exception("transcript export failed")
+                notify(f"Export failed: {e}", error=True)
+
+
 # ---------------------------------------------------------------- project pages for Teaser Studio / Long Film
 
 class StudioCard(QFrame):
@@ -4483,15 +5254,17 @@ class Main(QMainWindow):
         top.addLayout(col, 1)
         sv.addLayout(top)
         sv.addSpacing(14)
-        self.nav = {"dash": btn("Selection && Multicam", "nav", lambda: self.go("dash")),
+        self.nav = {"offload": btn("Card Offload", "nav", lambda: self.go("offload")),
+                    "dash": btn("Selection && Multicam", "nav", lambda: self.go("dash")),
                     "teaser": btn("Teaser Studio", "nav", lambda: self.go("teaser")),
                     "long": btn("Long Film", "nav", lambda: self.go("long")),
+                    "transcribe": btn("Transcribe", "nav", lambda: self.go("transcribe")),
                     "queue": btn("Analysis Queue", "nav", lambda: self.go("queue")),
                     "settings": btn("Settings", "nav", lambda: self.go("settings")),
                     "info": btn("Info / How to use", "nav", lambda: self.go("info"))}
         for b in self.nav.values():
             sv.addWidget(b)
-        for key in ("teaser", "long"):
+        for key in ("offload", "teaser", "long", "transcribe"):
             nb = QHBoxLayout(self.nav[key])
             nb.setContentsMargins(0, 0, 8, 0)
             nb.addStretch()
@@ -4518,6 +5291,8 @@ class Main(QMainWindow):
         name_of = lambda f: Path(f).name if f else i18n.T("No footage yet")
         self.teaser_hub = StudioHub(self.store, self.teaser, "Teaser Studio", "teaser", "TEASER", "#e5534b",
                                     lambda p: [name_of(p.get("footage")), f"{i18n.T('Updated')} {nice_date(p.get('when', ''))}"])
+        self.offload = OffloadPage(self.store)
+        self.transcribe = TranscribePage(self.store)
         self.long_hub = StudioHub(self.store, self.long, "Long Film", "long", "LONG FILM", "#2e9e6a",
                                   lambda p: [name_of(p.get("footage")),
                                              (i18n.T("with vornic") + " · " if p.get("vornic") else "") +
@@ -4527,7 +5302,7 @@ class Main(QMainWindow):
         _NOTIFY = lambda text, error=False, ms=None: self.toast.show_msg(text, ms, error)
         self.res.export_done = lambda name: (self.toast.show_msg(f"XML saved: {name}"), logging.info("footage export %s", name))
         self.teaser.notify.connect(self.toast.show_msg)
-        for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser_hub, self.long_hub):
+        for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser_hub, self.long_hub, self.offload, self.transcribe):
             self.stack.addWidget(w)
         self.dash.new_project.connect(self.new_project)
         self.dash.open_project.connect(self.open_project)
@@ -4573,6 +5348,13 @@ class Main(QMainWindow):
     def closeEvent(self, e):
         self.store.flush()
         # stop the background jobs cleanly (what is analysed so far is kept), so quitting never ends in a crash report
+        if self.transcribe._busy():
+            self.transcribe._stop = True
+            self.transcribe.worker.wait(10000)
+        if self.offload._busy():                       # copies stop cleanly (no half file is left)
+            self.offload._stop = True
+            for w_ in self.offload.workers:
+                w_.wait(10000)
         for pg in (self.teaser, self.long):
             r = getattr(pg, "runner", None)
             if r and r.isRunning():
@@ -4592,7 +5374,8 @@ class Main(QMainWindow):
         self.stack.setCurrentWidget(w)
         for k, b in self.nav.items():
             b.setProperty("active", (k == "dash" and w in (self.dash, self.proj, self.res, self.mc)) or (k == "queue" and w in (self.queue, self.anl))
-                          or (k == "settings" and w is self.settings) or (k == "info" and w is self.info) or (k == "teaser" and w is self.teaser_hub) or (k == "long" and w is self.long_hub))
+                          or (k == "settings" and w is self.settings) or (k == "info" and w is self.info) or (k == "teaser" and w is self.teaser_hub) or (k == "long" and w is self.long_hub)
+                          or (k == "offload" and w is self.offload) or (k == "transcribe" and w is self.transcribe))
             repolish(b)
 
     def go(self, where):
@@ -4603,6 +5386,11 @@ class Main(QMainWindow):
             self.show_page(self.settings)
         elif where == "info":
             self.show_page(self.info)
+        elif where == "transcribe":
+            self.show_page(self.transcribe)
+        elif where == "offload":
+            self.offload.refresh()
+            self.show_page(self.offload)
         elif where == "teaser":
             self.teaser_hub.show_grid()
             self.show_page(self.teaser_hub)

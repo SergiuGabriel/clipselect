@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.4.2), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.5.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -355,6 +355,30 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 - The "Dashboard" page (Footage Selection + Multicam projects) is named "Selection & Multicam" everywhere (sidebar,
   page title, the back link of the Footage Selection / Multicam project pages, Info), the same in Romanian. The studios
   (Teaser Studio, Long Film) keep their own "← Projects" back link to their own cards.
+
+## v3.5.0: Blueprints, Card Offload, Transcribe (after a study of Hailo, hailo.studio)
+- Blueprints (blueprint.py, Teaser Studio card 2): one of HIS finished films becomes a template (cuts, music, sound
+  effects, pacing); every cut refilled with a shot of the SAME colour from the new wedding via teaser.Pool (best part,
+  order of the day, never twice; the film's opening teaser = mixed moments until the first run of 6 groom / bride
+  cuts). Tan = interview gap + marker; nests = party; Lavender ignored; audio = his music / SFX tracks exactly, without
+  camera files (.mxf/.mp4/...) and recorder names (digits only, ZOOM..., TASCAM...). Styles Modern / Traditional, saved
+  in store.app["blueprints"] (this computer, all projects). Auto (beat-cut) stays as before. Tested on his 6 shortmovies:
+  100 % refilled from both selects, no moment twice.
+- Card Offload (offload.py + OffloadPage, first in the sidebar): every ticked card at once (one thread each), cards only
+  read, .part then rename, blake2b checksum read back from the destination, identical = "already there", different =
+  " (2)", dates kept, _offload_report.txt next to the footage, optional eject (mac). 5 ticks: verify, keep folders, skip
+  proxies, report, eject.
+  + (his answers): wedding folder "NUNTA 4 IULIE Alexandra si Vlad 2026" (offload.wedding_name, date + names fields),
+  every card identified (Sony modelName in the XML sidecars -> fx6 / fx3 / a74..., RODE *_Wireless_PRO.WAV ->
+  lavaliere lav 1, lav 2 in turn, Zoom / Tascam / mostly WAV -> recorder, DJI -> drona or osmo by ffprobe tags), size /
+  used / type (diskutil) / read speed shown, folder editable per card; backup twins (two slots of one camera) found by
+  names + sizes + CONTENT samples (lavaliers never paired: same names / sizes, different sound) -> the fastest copied,
+  the other "check only" (offload.verify_only) after its twin's copy. MMM_VOLUMES env = a test folder instead of /Volumes.
+- Transcribe (transcribe.py + TranscribePage after Long Film): faster-whisper local, large-v3-turbo (fast) / large-v3
+  (best), int8, model in <data>/ai_model/whisper (downloaded once from Hugging Face; NOT testable in Claude's sandbox:
+  tested with a fake model). Next to every file .txt (times) + .srt; Export XML with a marker per sentence. Requirements
+  + PyInstaller: faster-whisper, --collect-all faster_whisper / ctranslate2 / av.
+- Hailo ideas NOT done (he chose 1, 3, 4 of the list): choosing the camera by who speaks (vornic / speeches).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower
