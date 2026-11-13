@@ -230,21 +230,30 @@ cade pe beat. <b>Shuffle</b> alege alte cadre; <b>Export XML</b> are markere pen
 jurămintele în Premiere (markere: Teaser, DROP, Getting ready, Church, Couple + vows, Party: venue, Party).</li>
 </ol>
 <h2>Long Film (filmul lung)</h2>
-<p>Filmul lung pre-montat din selecțiile tale etichetate. Fiecare selecție e pusă <b>întreagă, în ordinea ta</b>; muzica,
-interviurile și finisajele le adaugi tu în Premiere. Petrecerea rămâne montajul din Multicam.</p>
+<p>Filmul lung până la petrecere, pre-montat din selecțiile tale, <b>cum îl montezi tu</b> (măsurat pe două din nunțile
+tale: selecțiile + filmul final). Muzica, interviurile (Tan) și finisajele le pui tu în Premiere; petrecerea e montajul Multicam.</p>
 <ol>
-<li><b>Filmări:</b> XML-ul sequence-ului de selecții, cu aceleași culori ca în Teaser Studio, așezat cum vrei (una sau mai multe piste, goluri, orice ordine). Aplicația recunoaște <b>camerele după fișiere</b> (de exemplu fx6, fx3, a74, dronă; chiar și două aparate care numesc fișierele la fel se deosebesc după rezoluție și frame rate) și citește ziua fiecărei camere din <b>numerele fișierelor</b> (ordinea în care a filmat), deci nu contează ceasul camerelor. Pe fiecare cameră, blocul de biserică desparte dimineața (Iris = first look) de rest (Iris = petrecere); o cameră fără biserică e socotită de petrecere. Camera principală (cu cele mai multe pregătiri) dă pregătirile.</li>
-<li><b>Teaser:</b> alegi proiectul din Teaser Studio al aceleiași nunți; teaserul lui (cu muzica) deschide filmul.</li>
-<li><b>Vornic (opțional, oprit implicit):</b> pornește-l doar la nunțile cu vornic și alege o poză bună cu el (fața bine
-vizibilă). Aplicația îi găsește cadrele Iris de dimineață după față, pe ambele camere (recunoaștere facială locală, gratuită).
-Camera unde fața lui e mai mare e cea medium (V1), cealaltă (wide) e așezată după sunet pe V2, iar pe V3 ai o variantă
-tăiată automat, care alternează camerele în pauzele lui de vorbire. Poți marca cadrele de vornic și cu Mango.</li>
+<li><b>Filmări:</b> XML-ul sequence-ului de selecții, așezat ca de obicei, cu culorile obișnuite. Camerele sunt recunoscute
+după fișiere, iar ziua fiecărei camere după numerele fișierelor.</li>
+<li><b>Teaser:</b> proiectul din Teaser Studio al aceleiași nunți; teaserul lui (cu muzica) deschide filmul.</li>
 <li><b>Construiește</b>, apoi <b>Export XML</b>.</li>
 </ol>
-<p>Pregătirile sunt povestite <b>în paralel</b>, ca și cum s-ar întâmpla în același timp: fiecare parte (mire, mireasă) rămâne în ordinea filmării, iar partea rămasă în urmă primește următoarele 1-4 cadre, ca amândouă să ajungă la final împreună. First look-ul e <b>găsit și sincronizat după sunet</b> pe toate camerele: camera principală pe V1, iar cadrele Iris ale celorlalte camere care au același sunet ca first look-ul (chiar și pe o cameră fără biserică) sunt puse pe V2, exact deasupra aceluiași moment; cele care nu se potrivesc sunt de petrecere și nu intră. O selecție pusă de două ori în sequence (de exemplu o copie pe V2) intră o singură dată. Fiecare clip își păstrează <b>culoarea ta</b> și are sunetul legat de imagine.</p>
-<p>Părțile, în ordine: Teaser · Pregătiri (doar camera 1) · First look (ambele camere) · Vornic · Biserica (exact în ordinea ta,
-ambele camere) · Cuplu și sală (cuplul după biserică, apoi drona și sala) · un marker „Petrecere". Fiecare parte are un
-marker; fiecare cadru are sunetul camerei pe A1/A2, teaserul are muzica pe A3/A4.</p>
+<p><b>Ce face, parte cu parte:</b></p>
+<ul>
+<li><b>Copiile</b> de la finalul selecțiilor (tot ce e după blocul de dronă și orice selecție care repetă o bucată deja
+selectată) nu se folosesc: sunt pentru filmul scurt.</li>
+<li><b>Pregătiri:</b> selecțiile scurte de mire și mireasă (până la ~8 s), fără primele ~15% din fiecare, din fiecare
+mijlocul de ~1,3 s; mire și mireasă povestiți în paralel, fiecare în ordinea ta. Cadrele Teal (locația) la început.</li>
+<li><b>Vornic și first look:</b> selecțiile lungi de dimineață de pe camera ta (mire / mireasă peste ~1 min, Iris peste
+15 s) <b>întregi pe V1, cu sunetul continuu</b>; a doua cameră, găsită după sunet (chiar fără biserică pe ea), e pusă pe V2
+pe bucăți alternante de ~3-4 s, la pauzele de vorbire: pe ecran camerele alternează, iar vorbirea nu se rupe. Iris-urile
+scurte de dimineață urmează ca montaj (~2 s).</li>
+<li><b>Biserica:</b> în ordinea ta; selecțiile scurte întregi, iar din cele foarte lungi câteva bucăți (~12%).</li>
+<li><b>Cuplu și sală:</b> dronă, primul bloc de sală, dronă, primul bloc de cuplu (cadre luate pe toată lungimea lui), cu
+câte o dronă la ~7 cadre; ~1,3-1,6 s fiecare.</li>
+</ul>
+<p>Fiecare cadru își păstrează culoarea ta și are sunetul legat de imagine; un marker pe fiecare parte. E un pre-montaj:
+ritmul exact pe muzică și alegerea finală le faci tu.</p>
 <h2>Update-uri și probleme</h2>
 <ul>
 <li>Aplicația verifică singură la pornire dacă există o versiune nouă și te anunță. În <b>Settings &gt; Check for updates</b>
@@ -504,21 +513,31 @@ Every cut lands on a beat. <b>Shuffle</b> picks other shots; <b>Export XML</b> h
 testimonials and vows in Premiere (markers: Teaser, DROP, Getting ready, Church, Couple + vows, Party: venue, Party).</li>
 </ol>
 <h2>Long Film</h2>
-<p>The long film pre-cut from your labelled selections. Every selection goes in <b>whole, in your order</b>; you add the music,
-the interviews and the final touches in Premiere. The party stays the Multicam edit.</p>
+<p>The long film up to the party, pre-cut from your selections <b>the way you cut it</b> (measured on two of your weddings:
+the selects + the finished film). You add the music, the interviews (Tan) and the final touches in Premiere; the party is
+the Multicam edit.</p>
 <ol>
-<li><b>Footage:</b> the XML of your selects sequence, same colours as Teaser Studio, laid out as you like (one or more tracks, gaps, any order). The app recognises <b>the cameras by their files</b> (e.g. fx6, fx3, a74, drone; even two bodies that name their files the same differ by size and frame rate) and reads every camera's day from its <b>file numbers</b> (the order it filmed), so the cameras' clocks do not matter. On every camera the church block separates the morning (Iris = first look) from the rest (Iris = party); a camera without a church counts as party. The main camera (most getting-ready shots) gives the getting ready.</li>
-<li><b>Teaser:</b> pick the Teaser Studio project of the same wedding; its teaser (with the music) opens the film.</li>
-<li><b>Vornic (optional, off by default):</b> turn it on only for weddings with a vornic and pick a good photo of him (face
-well visible). The app finds his Iris shots of the morning by his face, on both cameras (local, free face recognition). The
-camera where his face is bigger is the medium one (V1), the other one (wide) is placed by the sound on V2, and V3 holds a cut
-version that alternates the cameras in the pauses of his speech. You can also mark the vornic shots Mango.</li>
+<li><b>Footage:</b> the XML of your selects sequence, laid out as usual, with the usual colours. The cameras are recognised
+by their files and every camera's day by its file numbers.</li>
+<li><b>Teaser:</b> the Teaser Studio project of the same wedding; its teaser (with the music) opens the film.</li>
 <li><b>Build</b>, then <b>Export XML</b>.</li>
 </ol>
-<p>The getting ready is told <b>in parallel</b>, as if it happened at the same time: each side (groom, bride) keeps the order it was filmed in, and the side that is behind gets the next 1-4 shots, so both reach the end together. The first look is <b>found and synced by the sound</b> on every camera: the main camera on V1, and the other cameras' Iris shots that share the first look's sound (even on a camera with no church) on V2, right above the same moment; the ones that do not match are the party and stay out. A selection laid twice in the sequence (e.g. a copy on V2) goes in once. Every clip keeps <b>your colour</b> and has its sound linked to the picture.</p>
-<p>The parts, in order: Teaser · Getting ready (camera 1 only) · First look (both cameras) · Vornic · Church (exactly your
-order, both cameras) · Couple and venue (the couple after the church, then the drone and the venue) · a "Party" marker. Every
-part has a marker; every shot carries its camera sound on A1/A2, the teaser its music on A3/A4.</p>
+<p><b>What it does, part by part:</b></p>
+<ul>
+<li><b>The copies</b> at the end of your selects (everything after the drone block, and any selection repeating a piece
+already selected) are not used: they are for the short film.</li>
+<li><b>Getting ready:</b> the short groom and bride selections (up to ~8 s), without the first ~15 % of each side, the
+middle ~1.3 s of each; groom and bride told in parallel, each in your order. The Teal (location) shots first.</li>
+<li><b>Vornic and first look:</b> the long morning selections of your camera (groom / bride over ~1 min, Iris over 15 s)
+<b>whole on V1, their sound continuous</b>; the second camera, found by the sound (even with no church on it), cut in on V2
+in turns of ~3-4 s at the pauses of the speech: on screen the cameras alternate, the speech is never cut. The short morning
+Iris follow as a montage (~2 s).</li>
+<li><b>Church:</b> in your order; the short selections whole, a few pieces of the very long ones (~12 %).</li>
+<li><b>Couple and venue:</b> drone, the first venue block, drone, the first couple block (shots taken over its whole
+length), a drone every ~7 shots; ~1.3-1.6 s each.</li>
+</ul>
+<p>Every shot keeps your colour and has its sound linked to the picture; a marker on every part. It is a pre-cut: the exact
+rhythm on the music and the final choice are yours.</p>
 <h2>Updates and problems</h2>
 <ul>
 <li>At start the app checks by itself for a new version and tells you. <b>Settings &gt; Check for updates</b> checks any time,

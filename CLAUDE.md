@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.3.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.4.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -318,6 +318,28 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 - First look not synced: his 2nd camera had NO church, so its Iris counted as party. Now firstlook_candidates (other
   cameras' Iris after their church / on cameras without one) are matched BY SOUND to the main camera's first look
   (_clip_audio decodes only the selection); matches go on V2+ (one shot per track at a moment), the rest is party.
+
+## v3.4.0: Long Film rebuilt from HIS films (measured, not guessed)
+- He gave two pairs (selects XML + his finished long film of the same wedding): Madalina & Radu, Alexandra & Vlad. His
+  layout is the SAME every wedding. Findings: 100 % of his shots come from selections; ~40 % of the selections are used;
+  his selects END with the drone block and then COPIES (church / Forest party / venue) for the short film: never used.
+  Teal = getting-ready location shots. Tan = interviews he puts between the party's music blocks (not ours).
+  At Madalina & Radu the vornic + first look starts at 00:03:34:18 of his film.
+- longfilm.build_film (the engine now; plan() only feeds the footage card):
+  drop_copies (everything after the drone block + any selection repeating an earlier selected piece of the same file) ->
+  Getting ready: groom / bride selections <= 8 s (GR_MAX), without the first 15 % of each side, the middle 55 % (0.8-2 s),
+  told in parallel (interleave by SHOT progress, runs <= 6), Teal first ->
+  Vornic and first look: morning long selections of the main camera (groom / bride > 60 s = VORNIC, Iris > 15 s) WHOLE
+  on V1 with continuous linked sound; other cameras' long Iris (before their church, or all when no church) synced by
+  sound and cut in on V2 every other stretch (~3-4 s, speech pauses); then the short morning Iris as a 2 s montage ->
+  Church: Brown in his timeline order, short ones whole, long (> 15 s) ones a few 6 s pieces (~12 %) ->
+  Couple and venue: drone, FIRST venue block (spread to 18), drone, FIRST couple block (spread to 26), a drone every 7.
+- tools/longfilm_score: compares build_film with his films part by part. v3.4.0 score (found / right, length app vs his):
+  M&R getting ready 95/78 % 3.2 vs 2.6 min, vornic+FL right 92 % (fx3 only syncs on his Mac), church 91/92 % 9.3 vs 9.8,
+  couple+venue 93/57 %; A&V getting ready 94/70 % 2.7 vs 2.5, church 87/72 % 6.8 vs 5.7, couple+venue 47/49 %.
+  ANY change to Long Film must keep or raise this score on BOTH weddings before it reaches the owner.
+- The vornic card (face photo) is hidden: the vornic is found automatically (long morning selections). faces.py stays
+  for the bride / groom in Teaser Studio.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

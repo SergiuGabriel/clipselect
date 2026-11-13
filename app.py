@@ -35,7 +35,7 @@ import ai
 import xmlimport
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.3.0"
+APP, VER = "MoneyMakingMachine", "v3.4.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
 
@@ -4055,6 +4055,7 @@ class LongFilmPage(QWidget):
         self.tcombo.currentIndexChanged.connect(lambda i: self._remember(teaser=self.tcombo.itemData(i)))
         l2.addWidget(self.tcombo)
         l3 = card(3, "Vornic (optional)")
+        QTimer.singleShot(0, lambda: l3.parentWidget().hide())      # the vornic is found automatically now (long selections)
         vr = QHBoxLayout()
         vr.addWidget(lbl("This wedding has a vornic", "", True), 1)
         self.sw_v = Switch(False)
@@ -4226,21 +4227,25 @@ class LongFilmPage(QWidget):
 
     def _loaded(self, r):
         self.pieces, skipped = r
-        trs, parts = longfilm.plan(self.pieces)
+        kept = longfilm.drop_copies(self.pieces)
+        trs, parts = longfilm.plan(kept)
         rows = [f"<b>{Path(self._cur()['footage']).name}</b>"]
         for k, tr in enumerate(trs):
             b, c, _ = longfilm.split_day(tr)
             rows.append(f"<b>{longfilm.camera_name(tr)}</b>: " + i18n.T("{} selections").format(len(tr)) +
                         (f' · {i18n.T("main camera (getting ready)")}' if k == 0 else "") +
-                        ("" if c else f' <span style="color:{C["MUTED"]}">{i18n.T("(no church on this camera: its Iris counts as the party)")}</span>'))
+                        ("" if c or not any(p["cat"] == "party" for p in tr) else
+                         f' <span style="color:{C["MUTED"]}">{i18n.T("(no church on this camera: its first look is found by the sound)")}</span>'))
         if longfilm.looks_like_an_edit(self.pieces):
             rows.append(f'<span style="color:{C["FAIR"]}">' + i18n.T("This looks like a finished film (cuts of 1-2 s), not your selects sequence: "
                         "the long film would reuse those short cuts. Import the sequence with your selections.") + "</span>")
         missing = sum(1 for p in self.pieces if not Path(p["path"]).exists())
         if missing:
             rows.append(f'<span style="color:{C["POOR"]}">' + i18n.T("{} clips not found on this computer: connect the disk with the footage.").format(missing) + "</span>")
+        if len(kept) < len(self.pieces):
+            rows.append(f'<span style="color:{C["MUTED"]}">' + i18n.T("{} copies at the end of your selects left out (they are for the short film).").format(len(self.pieces) - len(kept)) + "</span>")
         self.foot_lbl.setText("<br>".join(rows))
-        self._show(parts, None)
+        self.parts_lbl.setText(i18n.T("Press Build."))
         notify(f"Footage loaded: {len(self.pieces)} selections")
 
     def pick_photo(self):
@@ -4252,13 +4257,13 @@ class LongFilmPage(QWidget):
     def _show(self, parts, layout):
         rows = []
         lens = {n: L for n, L, _ in (layout or [])}
-        counts = {n: len({id(it[2]) for it in its}) for n, _, its in (layout or [])}   # shots found by the sound count too
+        counts = {n: len(its) for n, _, its in (layout or [])}                      # shots (pieces of selections)
         for name, ps in parts:
             d = lens.get(name, sum(p["b"] - p["a"] for p in ps))      # the vornic's wide camera lies UNDER the medium one
             ps = [None] * counts.get(name, len(ps))
             rows.append(f"<tr><td>{i18n.T(name)}</td><td align='right'>{len(ps)}</td><td align='right'>{int(d // 60)}:{int(d % 60):02d}</td></tr>")
         total = sum(L for _, L, _ in layout) if layout else None
-        head = f"<tr><td><b>{i18n.T('Part')}</b></td><td><b>{i18n.T('Selections')}</b></td><td><b>{i18n.T('Duration')}</b></td></tr>"
+        head = f"<tr><td><b>{i18n.T('Part')}</b></td><td><b>{i18n.T('Shots')}</b></td><td><b>{i18n.T('Duration')}</b></td></tr>"
         tail = (f"<br>{i18n.T('Built. The long film is about {} min long (without the teaser and the party). Press Export XML.').format(max(1, round(total / 60)))}"
                 if total is not None else f"<br>{i18n.T('Press Build.')}")
         self.parts_lbl.setText(f"<table cellspacing='8'>{head}{''.join(rows)}</table>{tail}")
@@ -4273,48 +4278,22 @@ class LongFilmPage(QWidget):
         base = self.store.dir
 
         def job(progress=None):
-            vids, sizes = set(), {}
-            if use_v and photo:
-                import faces
-                fm = faces.Faces(faces.ensure_models(base, progress))
-                ref = fm.person(photo)
-                cands = longfilm.vornic_candidates(pieces)
-                res = faces.find_person(cands, ref, fm, progress=progress, cancel=lambda: self._stop)
-                sizes = res
-                vids = {i for i, (s, w) in res.items() if s >= faces.SAME}
-            trs, parts = longfilm.plan(pieces, vids)
-            layout = []
-            for name, ps in parts:
-                if name == "Vornic" and ps:
-                    L, its = longfilm.vornic_layout(ps, sizes, progress)
-                    layout.append((name, L, its))
-                    continue
-                if name == "First look":                  # every camera's first look, synced by the sound
-                    L, its = longfilm.firstlook_layout(ps, longfilm.firstlook_candidates(pieces, vids), progress)
-                    layout.append((name, L, its))
-                    continue
-                tt, its = 0.0, []
-                for p in ps:
-                    its.append((1, tt, p, p["a"], p["b"]))
-                    tt += p["b"] - p["a"]
-                layout.append((name, tt, its))
+            trs, layout = longfilm.build_film(pieces, progress, cancel=lambda: self._stop)
             tz = None
             if tpro and tpro.get("footage") and tpro.get("music") and tpro.get("bounds"):
                 if progress:
                     progress("Building the teaser from Teaser Studio…", 0.5)
                 tps, _ = teaser.load_footage(tpro["footage"])
                 tz = longfilm.teaser_part(tps, teaser.load_music(tpro["music"]), tpro["bounds"])
-            return parts, layout, tz, len(vids)
+            parts = [(n, [it[2] for it in its]) for n, _, its in layout]
+            return parts, layout, tz, 0
 
         self._run("Building the long film…", job, self._built)
 
     def _built(self, r):
         parts, self.layout_, self.tz, nv = r
         self._show(parts, self.layout_)
-        msg = "Long film ready"
-        if self._cur().get("vornic"):
-            msg += f" · {nv} vornic shots found" if self._cur().get("photo") else " · vornic: Mango shots only (no photo)"
-        notify(msg)
+        notify("Long film ready")
 
     def export(self):
         if not self.layout_:

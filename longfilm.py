@@ -504,3 +504,205 @@ def export_xml(parts_layout, out_path, name, teaser_part=None):
            f'</media></sequence></xmeml>')
     Path(out_path).write_text(xml, encoding="utf-8")
     return len(vids), [m for m, _ in markers]
+
+
+# ================================================================ v4: the long film as HE cuts it
+# Measured on two of his weddings (selects + his finished film): every shot of his film comes from a selection; ~40 %
+# of the selections are used; copies at the end of the selects are never used; getting ready = the middle ~55 % of the
+# short groom / bride selections (~1.3 s) told in parallel; vornic + first look = the long morning selections of his
+# camera with the 2nd camera (found by the sound) cut in on top; church = his order, short ones whole, ~12 % of the long
+# ones; couple + venue = drone, venue, drone, couple (the first ones of each block, ~1.4 s).
+
+LONG = 15.0          # a selection longer than this is a "long" one (first look Iris, ceremony)
+VORNIC = 60.0        # a groom / bride selection longer than this is the vornic (shorter ones are getting ready)
+GR_MAX = 8.0         # getting ready: he uses the short selections only (1.4-3.3 s; the 8-60 s ones stay out)
+
+
+def drop_copies(pieces):
+    """His selects always end with the drone block and then COPIES of church / party / venue shots for the short film:
+    everything after the drone block is a copy, and so is a selection that repeats part of a clip already selected
+    EARLIER on the timeline. Copies are not used again (on two weddings he used 1 of 250)."""
+    out, seen = [], {}
+    drones = [p for p in pieces if p["cat"] == "drone"]
+    end = max((p["order"] + p["b"] - p["a"] for p in drones), default=None)
+    if end is not None:
+        pieces = [p for p in pieces if p["cat"] == "drone" or p["order"] < end - 1.0]
+    for p in sorted(pieces, key=lambda p: p["order"]):
+        prev = seen.setdefault(p["path"], [])
+        ln = p["b"] - p["a"]
+        if any(min(b, p["b"]) - max(a, p["a"]) > 0.3 * min(b - a, ln) for a, b in prev):
+            continue
+        prev.append((p["a"], p["b"]))
+        out.append(p)
+    return out
+
+
+def _mid(p, share, lo, hi):
+    """The middle part of a selection: `share` of it, between lo and hi seconds."""
+    ln = p["b"] - p["a"]
+    d = min(ln, max(lo, min(hi, ln * share)))
+    a = p["a"] + (ln - d) / 2
+    return a, a + d
+
+
+def _pieces_of(p, share=0.12, shot=6.0, most=9):
+    """A long selection: a few shots spread over it (about `share` of it in total)."""
+    ln = p["b"] - p["a"]
+    n = max(1, min(most, round(ln * share / shot)))
+    step = ln / n
+    return [(p["a"] + step * k + (step - shot) / 2, p["a"] + step * k + (step + shot) / 2) for k in range(n)]
+
+
+def _montage(seq, share, lo, hi):
+    items, t = [], 0.0
+    for p in seq:
+        a, b = _mid(p, share, lo, hi)
+        items.append((1, t, p, a, b))
+        t += b - a
+    return t, items
+
+
+def vornic_cut(main, others, progress=None, cancel=None):
+    """Vornic + first look: his camera's long morning selections WHOLE on V1 (their sound continuous, linked), and the
+    other cameras' shots of the same moment (placed by the sound) cut in on V2 in turns of about 3-4 s at the pauses of
+    the speech: on screen the cameras alternate, the speech is never cut."""
+    items, starts, t = [], [], 0.0
+    for p in main:
+        items.append((1, t, p, p["a"], p["b"]))
+        starts.append(t)
+        t += p["b"] - p["a"]
+    length = t
+    if not main or not others:
+        return length, items
+    auds, idx = [], []
+    for p in main:
+        try:
+            x = _clip_audio(p)
+        except Exception:
+            x = np.zeros(sync.SR, np.float32)
+        x = x if len(x) > sync.SR else np.zeros(sync.SR, np.float32)
+        auds.append(x)
+        idx.append(sync.MasterIndex(x))
+    cover = []                                   # (start, end, piece, where it sits) of the 2nd camera on the film
+    for k, p in enumerate(others):
+        if cancel and cancel():
+            raise InterruptedError("Cancelled")
+        if progress:
+            progress(f"Syncing the first look of the second camera: {k + 1} of {len(others)}", (k + 1) / max(1, len(others)))
+        try:
+            x = _clip_audio(p)
+            r = sync.sync_clip(idx, x) if len(x) > sync.SR else dict(conf="fail")
+        except Exception:
+            r = dict(conf="fail")
+        if r.get("conf") in ("high", "medium"):
+            g = starts[r["master"]] + r["offset"]
+            s0, s1 = max(0.0, g), min(length, g + (p["b"] - p["a"]))
+            if s1 - s0 > 2.0:
+                cover.append((s0, s1, p, g))
+    if not cover:
+        return length, items
+    # cut points: pauses of the speech, at least 3 s apart; the second camera takes every other stretch it covers
+    pz = sorted(st + q for st, x in zip(starts, auds) for q in _pauses(x))
+    cuts, last = [0.0], 0.0
+    for q in pz:
+        if 3.0 <= q - last:
+            cuts.append(q)
+            last = q
+    for q in np.arange(0, length, 4.0):          # no pause for long: a cut every ~4 s anyway
+        if all(abs(q - c) > 2.0 for c in cuts):
+            cuts.append(float(q))
+    cuts = sorted(set(cuts + [length]))
+    turn = False
+    for a, b in zip(cuts, cuts[1:]):
+        if b - a < 1.0:
+            continue
+        w = next((c for c in cover if c[0] <= a and c[1] >= b), None)
+        if turn and w:
+            s0, s1, p, g = w
+            items.append((2, a, p, p["a"] + (a - g), p["a"] + (b - g)))
+        turn = not turn
+    return length, items
+
+
+def first_block(seq, gap=60.0):
+    """The first block of selections of one kind: they follow each other on his timeline (pauses under `gap` s)."""
+    seq = sorted(seq, key=lambda p: p["order"])
+    out = []
+    for p in seq:
+        if out and p["order"] - (out[-1]["order"] + out[-1]["b"] - out[-1]["a"]) > gap:
+            break
+        out.append(p)
+    return out
+
+
+def spread(seq, n):
+    """n selections spread evenly over the block, in order."""
+    if len(seq) <= n:
+        return list(seq)
+    return [seq[round(k * (len(seq) - 1) / (n - 1))] for k in range(n)] if n > 1 else seq[:1]
+
+
+def build_film(pieces, progress=None, cancel=None):
+    """The long film before the party, as he cuts it. Returns (cameras, [(part, length, items)])."""
+    ps = drop_copies([p for p in pieces if p["cat"] != "vornic" or True])
+    trs = trains(ps)
+    mains = trs[0] if trs else []
+    before, after = {}, {}
+    for tr in trs:
+        b, c, a = split_day(tr)
+        before[tr[0]["train"] if tr else 0] = b
+        after[tr[0]["train"] if tr else 0] = a
+    order = lambda xs: sorted(xs, key=lambda p: p["order"])
+    morning = order(before.get(0, mains))
+    layout = []
+    # 1. getting ready: short groom / bride selections, in parallel; the location (Teal) first
+    def side(cat):
+        """His getting-ready shots of one side: the short selections (he never uses the 8-60 s ones there), without the
+        first ~15 % of the side (the shots before it really starts; measured on two of his weddings)."""
+        seq = [p for p in morning if p["cat"] == cat and p["b"] - p["a"] <= VORNIC]
+        seq = seq[int(len(seq) * 0.15):]
+        return [p for p in seq if p["b"] - p["a"] <= GR_MAX]
+    groom, bride = side("groom"), side("bride")
+    loc = order([p for p in ps if p["cat"] == "location"])
+    L, its = _montage(loc + interleave(groom, bride, max_run=6), 0.55, 0.8, 2.0)
+    layout.append(("Getting ready", L, its))
+    # 2. vornic + first look: the long morning selections of his camera (+ the 2nd camera by the sound), then the
+    #    short morning Iris as a montage
+    long_main = [p for p in morning if (p["cat"] in ("groom", "bride", "vornic") and p["b"] - p["a"] > VORNIC)
+                 or (p["cat"] in ("party", "couple") and p["b"] - p["a"] > LONG)]
+    others = []
+    for tr in trs[1:]:
+        k = tr[0]["train"]
+        b, c, a = split_day(tr)
+        pool = b if c else tr                       # a camera with no church: every long Iris is a candidate
+        others += [p for p in pool if p["cat"] in ("party", "vornic") and p["b"] - p["a"] > LONG]
+    L1, its1 = vornic_cut(long_main, others, progress, cancel)
+    short_iris = [p for p in morning if p["cat"] == "party" and p["b"] - p["a"] <= LONG]
+    L2, its2 = _montage(short_iris, 0.5, 0.8, 2.5)
+    layout.append(("Vornic and first look", L1 + L2, its1 + [(tr_, t + L1, p, a, b) for tr_, t, p, a, b in its2]))
+    # 3. church: his order; short selections whole, a few shots of the long ones
+    items, t = [], 0.0
+    for p in order([p for p in ps if p["cat"] == "church"]):
+        for a, b in ([(p["a"], p["b"])] if p["b"] - p["a"] <= LONG else _pieces_of(p)):
+            items.append((1, t, p, a, b))
+            t += b - a
+    layout.append(("Church", t, items))
+    # 4. couple and venue: drone, venue, drone, couple with a drone every 7 shots (the first ones of every block)
+    rest = [p for k in after for p in after[k]]
+    venue = spread(first_block([p for p in rest if p["cat"] == "venue"]), 18)      # the FIRST venue block
+    couple = spread(first_block([p for p in rest if p["cat"] == "couple"]), 26)    # spread over the first couple block
+    drones = sorted([p for p in ps if p["cat"] == "drone"], key=lambda p: (file_number(p), p["a"]))
+    dq = spread(drones, 6)
+    seq = []
+    if dq:
+        seq.append(dq.pop(0))
+    seq += venue
+    if dq:
+        seq.append(dq.pop(0))
+    for k, p in enumerate(couple):
+        seq.append(p)
+        if k % 7 == 6 and dq:
+            seq.append(dq.pop(0))
+    L, its = _montage(seq, 0.65, 0.8, 2.0)
+    layout.append(("Couple and venue", L, its))
+    return trs, layout

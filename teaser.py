@@ -23,14 +23,15 @@ import sync
 import xmlimport
 
 CATS = {"Rose": "bride", "Blue": "groom", "Purple": "couple", "Brown": "church", "Yellow": "venue", "Caribbean": "venue",
-        "Iris": "party", "Violet": "drone", "Mango": "vornic"}      # Mango: the vornic, if marked by hand (Long Film)
+        "Iris": "party", "Violet": "drone", "Mango": "vornic",      # Mango: the vornic, if marked by hand (Long Film)
+        "Teal": "location"}         # Teal: shots of the getting-ready location (Long Film puts them with the getting ready)
 IGNORE = {"Tan", "Forest", "Lavender"}
 CAT_COLOR = {"bride": "#f472b6", "groom": "#3b82f6", "couple": "#a855f7", "church": "#a16207", "venue": "#eab308",
-             "party": "#7dd3fc", "drone": "#8b5cf6", "vornic": "#f59e0b"}
+             "party": "#7dd3fc", "drone": "#8b5cf6", "vornic": "#f59e0b", "location": "#14b8a6"}
 CAT_NAME = {"bride": "Bride", "groom": "Groom", "couple": "Couple", "church": "Church", "venue": "Venue", "party": "Party",
-            "drone": "Drone", "vornic": "Vornic"}
+            "drone": "Drone", "vornic": "Vornic", "location": "Location"}
 LABEL_OF = {"bride": "Rose", "groom": "Blue", "couple": "Purple", "church": "Brown", "venue": "Yellow", "party": "Iris",
-            "drone": "Violet", "vornic": "Mango"}
+            "drone": "Violet", "vornic": "Mango", "location": "Teal"}
 PARTS = ["Teaser", "Getting ready", "Church", "Couple", "Venue", "Party"]
 # target length of a shot (seconds), from his films: ~40-47 cuts/min in the teaser and getting ready, a bit calmer later
 TARGET = {"teaser_pre": 1.2, "teaser_post": 0.9, "pregatiri": 1.3, "biserica": 1.4, "cuplu": 1.5, "sala": 1.0,
