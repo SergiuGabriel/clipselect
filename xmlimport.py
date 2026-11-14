@@ -136,3 +136,38 @@ def build(xml_path, progress=None, cancel=None):
     if progress:
         progress("XML imported", 1.0)
     return dict(files=files, infos=infos, masters=masters, results=results, cams=cams, missing=missing)
+
+
+def footage(xml_path):
+    """Footage Selection > Import XML: the video files of a timeline (his selects, a sequence with all the clips, the
+    Create Project XML) in the order they appear on it (earlier first; at the same moment the lower track first), each
+    file once. Returns (paths on this computer, paths not found)."""
+    root = ET.parse(xml_path).getroot()
+    files = {}
+    for f in root.iter("file"):
+        if f.get("id") and f.findtext("pathurl"):
+            files[f.get("id")] = _path(f.findtext("pathurl"))
+    seqs = list(root.iter("sequence"))
+    if not seqs:
+        raise ValueError("No sequence found in this XML.")
+    seq = max(seqs, key=lambda s: sum(1 for _ in s.iter("clipitem")))
+    fps = _rate(seq, 25.0)
+    video = seq.find("media/video")
+    found = []
+    num = lambda v, d: int(round(float(v))) if v not in (None, "") else d
+    for t, tr in enumerate(video.findall("track") if video is not None else []):
+        for ci in tr.findall("clipitem"):
+            f = ci.find("file")
+            path = files.get(f.get("id")) if f is not None else None
+            if not path or Path(path).suffix.lower() not in core.VIDEO_EXT:
+                continue                       # adjustment layers, titles, pictures, nests, sound
+            cfps = _rate(ci, fps)
+            st, en = num(ci.findtext("start"), -1), num(ci.findtext("end"), -1)
+            if st < 0 and en >= 0:              # next to a transition
+                st = en - round((num(ci.findtext("out"), 0) - num(ci.findtext("in"), 0)) / cfps * fps)
+            found.append((max(st, 0), t, path))
+    if not found:
+        raise ValueError("No video clips found in this XML.")
+    order = list(dict.fromkeys(p for _, _, p in sorted(found)))
+    missing = [p for p in order if not Path(p).exists()]
+    return [p for p in order if p not in missing], missing

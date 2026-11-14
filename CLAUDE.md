@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.6.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.7.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -402,6 +402,22 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   blueprint.export_xml; long empty stretches of his film (> 60 s, the party nests) get a "Party (the Multicam edit)"
   marker; Tan = "Interview here". In Blueprint the vornic is refilled cut by cut (not synced): Auto for the synced vornic.
   Tested: Madalina & Radu - The Movie refilled from the 4 July selects: 496 shots, 20 interview places, 9 groom holes.
+
+## v3.7.0: Create Project + Import XML in Footage Selection
+- Create Project (projectsetup.py + CreateProjectPage, sidebar after Card Offload, NEW badge): the wedding folder -> ONE
+  25 fps xmeml laid out like HIS selects (measured on 4 July and Madalina & Radu): cameras one after the other on V1 in
+  his order (projectsetup.ORDER fx6, fx3, a74, osmo...; unknown folders next; drone folders drona / mavic / dji after
+  them; "trash" / "gunoi" last), 10 s empty between cameras, every camera's clips WHOLE in filming order (the camera's
+  own creation_time when every clip has one, else the file date; natural file name on ties, so C9999 -> C0001 is
+  right), sound channel k of every clip on Ak (FX6 MXF 4 mono channels A1-A4, MP4 cameras A1-A2, drone none), linked.
+  Sound-only folders (recorder, lavaliere) are listed and left out (his selects have none). Proxies (SUB/*S03,
+  PROXY folders, .LRF) and sidecars never go in. Camera order editable by drag, untick to leave out. The XML is saved
+  in the wedding folder (" (2)" if it exists), prefilled with the last Card Offload wedding; Show in Finder (open -R).
+  The app cannot press buttons in Premiere: he drags the XML into the Project panel (DaVinci: File > Import > Timeline).
+  A zero-click import would need a Premiere UXP panel (not done; only if he asks).
+- Footage Selection > Import XML (xmlimport.footage): the video files of a timeline in timeline order (earlier first, at
+  the same moment the lower track first), each once; missing files skipped with a red notification; the analysis and
+  the export keep that order. Buttons "Add Folder" and "Import XML" on their own row (Romanian did not fit).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

@@ -68,6 +68,9 @@ folosite în montajul automat. Le verifici în tab-ul Clips și le corectezi cu 
 <h2>Footage Selection: ce face „Analyze Footage”</h2>
 <p><b>Ecranul de analiză:</b> sus clipurile analizate chiar acum, la mijloc progresul (Pause / Cancel), jos cele terminate.
 Analiza merge și în fundal: revii din <b>Analysis Queue &gt; Open</b> sau din proiect cu <b>View analysis</b>.</p>
+<p><b>Import XML</b> (lângă Add Folder): clipurile unui timeline din Premiere / DaVinci (de exemplu XML-ul din
+<b>Creează proiectul</b>) intră în proiect <b>în ordinea de pe timeline</b>; analiza și exportul păstrează ordinea asta.
+Clipurile care nu sunt pe acest calculator sunt sărite (îți spune câte).</p>
 <p>„Analyze Footage” se uită la fiecare clip și dă o notă fiecărei porțiuni.</p>
 <h3>Ce face, pas cu pas</h3>
 <ol>
@@ -295,6 +298,21 @@ apare EȘUATĂ, în roșu.</li>
 <li><b>Raportul</b> (_offload_report.txt) stă lângă filmări: fiecare fișier, mărimea, suma de control și starea.</li>
 <li>Datele fișierelor rămân cele de pe card (aplicația citește din ele ordinea zilei).</li>
 </ul>
+<h2>Creează proiectul (Premiere / DaVinci)</h2>
+<p>După descărcarea cardurilor: toate filmările nunții pe un singur timeline, <b>cum le așezi tu pentru selecție</b>.</p>
+<ol>
+<li><b>Alege folderul</b> nunții (după Descărcare carduri e deja ales). Fiecare folder cu video e o cameră.</li>
+<li><b>Camerele</b> apar în ordinea ta: fx6, fx3, a74, osmo, alte foldere, apoi drona (folderele „trash” la final).
+Tragi o cameră ca să schimbi ordinea sau o debifezi. Recorderul și lavalierele (doar sunet) rămân afară, ca în selecțiile tale.</li>
+<li><b>Creează XML-ul</b>: o cameră după alta pe V1 (cu 10 secunde liber între camere), clipurile fiecărei camere
+<b>în ordinea în care au fost filmate</b> (după ceasul camerei; numerotarea care o ia de la capăt, C9999 → C0001, nu încurcă),
+întregi, fiecare cu tot sunetul lui (FX6: 4 canale pe A1-A4, celelalte camere A1-A2), sequence 25 fps.
+Proxy-urile și fișierele XML de lângă clipuri nu intră.</li>
+<li>XML-ul se salvează în folderul nunții. <b>Premiere Pro:</b> cu proiectul deschis, tragi XML-ul în panoul Project (sau
+File &gt; Import): apare un sequence nou cu toate clipurile. <b>DaVinci Resolve:</b> File &gt; Import &gt; Timeline.
+<b>Arată în Finder</b> îți deschide folderul cu XML-ul selectat.</li>
+</ol>
+<p>Aplicația nu poate apăsa singură butoane în Premiere: importul e un singur drag.</p>
 <h2>Transcriere</h2>
 <p>Interviurile, discursurile, vornicul sau predica devin text, <b>pe acest calculator</b>, gratuit (Whisper, de la OpenAI;
 nu se urcă nimic).</p>
@@ -407,6 +425,9 @@ auto edit. Check them in the Clips tab and fix them by double-clicking Start.</p
 <p><b>The analysis screen:</b> on top the clips being analysed right now, in the middle the progress (Pause / Cancel), at the
 bottom the finished ones. It also runs in the background: come back from <b>Analysis Queue &gt; Open</b> or from the project
 with <b>View analysis</b>.</p>
+<p><b>Import XML</b> (next to Add Folder): the clips of a Premiere / DaVinci timeline (for example the XML from
+<b>Create Project</b>) come into the project <b>in the timeline's order</b>; the analysis and the export keep that order.
+Clips that are not on this computer are skipped (it tells you how many).</p>
 <p>"Analyze Footage" looks at every clip and gives every part of it a score.</p>
 <h3>Step by step</h3>
 <ol>
@@ -631,6 +652,21 @@ FAILED, in red.</li>
 <li><b>The report</b> (_offload_report.txt) sits next to the footage: every file, its size, checksum and state.</li>
 <li>The files keep the card's dates (the app reads the order of the day from them).</li>
 </ul>
+<h2>Create Project (Premiere / DaVinci)</h2>
+<p>After the card offload: all the wedding's footage on one timeline, <b>the way you lay it out for the selection</b>.</p>
+<ol>
+<li><b>Choose the wedding folder</b> (after Card Offload it is already chosen). Every folder with video is a camera.</li>
+<li>The <b>cameras</b> come in your order: fx6, fx3, a74, osmo, other folders, then the drone ("trash" folders at the end).
+Drag a camera to change the order or untick it. The recorder and the lavaliers (sound only) stay out, like in your selects.</li>
+<li><b>Create the XML</b>: one camera after the other on V1 (10 seconds empty between cameras), every camera's clips
+<b>in the order they were filmed</b> (by the camera's clock; numbering that starts again, C9999 → C0001, does not mix them up),
+whole, each with all its sound (FX6: 4 channels on A1-A4, the other cameras A1-A2), 25 fps sequence.
+Proxies and the XML files next to the clips are left out.</li>
+<li>The XML is saved in the wedding folder. <b>Premiere Pro:</b> with your project open, drag the XML into the Project panel
+(or File &gt; Import): a new sequence with every clip appears. <b>DaVinci Resolve:</b> File &gt; Import &gt; Timeline.
+<b>Show in Finder</b> opens the folder with the XML selected.</li>
+</ol>
+<p>The app cannot press buttons inside Premiere by itself: the import is one drag.</p>
 <h2>Transcribe</h2>
 <p>Interviews, speeches, the vornic or the sermon become text, <b>on this computer</b>, for free (Whisper, by OpenAI; nothing is
 uploaded).</p>

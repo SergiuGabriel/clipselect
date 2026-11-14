@@ -38,9 +38,10 @@ import offload
 import transcribe
 import ai
 import xmlimport
+import projectsetup
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.6.0"
+APP, VER = "MoneyMakingMachine", "v3.7.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
 
@@ -998,8 +999,14 @@ class ProjectPage(QWidget):
         lh = QHBoxLayout()
         lh.addWidget(lbl("SOURCE VIDEOS", "section"))
         lh.addStretch()
-        lh.addWidget(btn("Add Folder", slot=self.pick_dir))
         lv.addLayout(lh)
+        lb = QHBoxLayout()                      # own row: both buttons fit in Romanian too
+        lb.setSpacing(8)
+        lb.addWidget(btn("Add Folder", slot=self.pick_dir))
+        lb.addWidget(btn("Import XML", slot=self.import_xml))
+        lb.addStretch()
+        lv.addLayout(lb)
+        lv.addSpacing(4)
         self.big = DropZone()
         self.big.dropped.connect(self.add)
         self.big.clicked.connect(self.pick_files)
@@ -1222,6 +1229,36 @@ class ProjectPage(QWidget):
         d = QFileDialog.getExistingDirectory(self, "Choose a folder")
         if d:
             self.add([d])
+
+    def import_xml(self):
+        """The clips of a Premiere / DaVinci timeline (FCP7 XML), in the order they sit on it: the analysis and the
+        export keep that order (cameras and filming order as he laid them out)."""
+        path, _ = QFileDialog.getOpenFileName(self, "Import XML", "", "XML (*.xml)")
+        if not path:
+            return
+        try:
+            found, missing = xmlimport.footage(path)
+        except Exception as ex:
+            logging.exception("footage xml import")
+            notify(i18n.T("Import XML failed: {}").format(i18n.T(str(ex))), error=True)
+            return
+        if not found:
+            notify(i18n.T("None of the clips in this XML were found on this computer (e.g. {}). Is the footage disk connected?")
+                   .format(missing[0] if missing else "?"), error=True)
+            return
+        have = set(self.p["videos"])
+        new = [f for f in found if f not in have]
+        if not new:
+            notify(i18n.T("Every clip of this XML is already in the project."))
+            return
+        self.p["videos"] += new
+        self.store.save()
+        self.refresh_videos()
+        if missing:
+            notify(i18n.T("{} clips added from the XML, in its order. {} clips are not on this computer and were skipped.")
+                   .format(len(new), len(missing)), error=True, ms=9000)
+        else:
+            notify(i18n.T("{} clips added from the XML, in its order.").format(len(new)))
 
     def _list_key(self, e):
         if e.key() in (Qt.Key_Delete, Qt.Key_Backspace):
@@ -4567,6 +4604,241 @@ class LongFilmPage(QWidget):
 
 # ---------------------------------------------------------------- Card offload
 
+class _ProbeWorker(QThread):
+    done = Signal(object)
+    failed = Signal(str)
+    progress = Signal(str, float)
+
+    def __init__(self, cams, stop):
+        super().__init__()
+        self.cams, self.stop = cams, stop
+
+    def run(self):
+        try:
+            self.done.emit(projectsetup.read_all(self.cams, lambda t, f: self.progress.emit(t, f), self.stop))
+        except Exception as e:
+            if not isinstance(e, InterruptedError):
+                logging.exception("create project failed")
+            self.failed.emit(str(e))
+
+
+class CreateProjectPage(QWidget):
+    """The wedding folder -> one timeline the way he lays out the footage for the selection (see projectsetup.py)."""
+
+    def __init__(self, store):
+        super().__init__()
+        self.store = store
+        self.cfg = store.app.setdefault("create_project", dict(folder="", name=""))
+        self.worker, self._stop, self.cams = None, False, []
+        v = QVBoxLayout(self)
+        v.setContentsMargins(28, 22, 28, 22)
+        v.setSpacing(10)
+        top = QHBoxLayout()
+        top.addWidget(lbl("Create Project", "h1"))
+        top.addStretch()
+        self.b_go = btn("Create the XML", "primary", self.start)
+        top.addWidget(self.b_go)
+        v.addLayout(top)
+        v.addWidget(lbl("Choose the wedding folder: every camera goes on one timeline, the way you lay them out for the "
+                        "selection: fx6, fx3, a74, osmo, then the drone, one camera after the other, every camera's clips "
+                        "in the order they were filmed, whole and with their sound. The XML goes into the project you "
+                        "have open in Premiere Pro or DaVinci Resolve.", "muted", True))
+        v.addSpacing(10)
+        body = QHBoxLayout()
+        body.setSpacing(24)
+        v.addLayout(body, 1)
+        left = QVBoxLayout()
+        left.setSpacing(8)
+        left.addWidget(lbl("WEDDING FOLDER", "section"))
+        fr = QHBoxLayout()
+        self.folder = QLineEdit()
+        self.folder.setReadOnly(True)
+        self.folder.setPlaceholderText(i18n.T("No folder chosen"))
+        fr.addWidget(self.folder, 1)
+        fr.addWidget(btn("Choose folder", slot=self.pick))
+        left.addLayout(fr)
+        left.addSpacing(6)
+        left.addWidget(lbl("CAMERAS", "section"))
+        left.addWidget(lbl("Drag a camera to change the order; untick one to leave it out.", "muted", True))
+        self.list = QListWidget()
+        self.list.setDragDropMode(QAbstractItemView.InternalMove)
+        self.list.setDefaultDropAction(Qt.MoveAction)
+        box = (f"background:#181818;border:1px solid {C['BORDER']};border-radius:6px;padding:6px;")
+        self.list.setStyleSheet(f"QListWidget{{{box}}} QListWidget::item{{padding:7px 4px}}"
+                                f"QListWidget::indicator{{width:16px;height:16px;border:1px solid #6a6a6a;border-radius:4px;background:#232323}}"
+                                f"QListWidget::indicator:checked{{background:{C['HOT']};border-color:{C['HOT']};image:url({_check_png()})}}")
+        left.addWidget(self.list, 1)
+        self.sound = lbl("", "muted", True)
+        left.addWidget(self.sound)
+        left.addSpacing(6)
+        left.addWidget(lbl("SEQUENCE NAME", "section"))
+        self.name = QLineEdit(self.cfg.get("name") or ("selectie" if i18n.LANG == "ro" else "selects"))
+        self.name.textChanged.connect(lambda t: (self.cfg.update(name=t), self.store.save_app()))
+        left.addWidget(self.name)
+        body.addLayout(left, 1)
+        right = QVBoxLayout()
+        right.setSpacing(8)
+        right.addWidget(lbl("PUT IT IN YOUR PROJECT", "section"))
+        how = QLabel()
+        how.setWordWrap(True)
+        how.setTextFormat(Qt.RichText)
+        how.setStyleSheet(f"background:#181818;border:1px solid {C['BORDER']};border-radius:6px;padding:12px;line-height:140%")
+        how.setText("<b>Premiere Pro:</b> with your project open, drag the XML into the Project panel (or File &gt; Import). "
+                    "A new sequence with every clip in order appears, with the clips in a bin."
+                    "<br><br><b>DaVinci Resolve:</b> File &gt; Import &gt; Timeline and choose the XML."
+                    "<br><br>The XML is saved in the wedding folder; <b>Show in Finder</b> opens it there, ready to drag.")
+        right.addWidget(how)
+        right.addSpacing(6)
+        self.result = lbl("", "", True)
+        self.result.setTextFormat(Qt.RichText)
+        right.addWidget(self.result)
+        rb = QHBoxLayout()
+        self.b_show = btn("Show in Finder", slot=self.show_file)
+        self.b_show.hide()
+        rb.addWidget(self.b_show)
+        rb.addStretch()
+        right.addLayout(rb)
+        self.pp = ProgressPanel()
+        self.pp.allow_cancel(self.cancel)
+        right.addWidget(self.pp)
+        right.addStretch()
+        body.addLayout(right, 1)
+        self.out = None
+        start = self.cfg.get("folder", "")
+        oc = store.app.get("offload", {})
+        guess = Path(oc.get("dest", "") or ".") / oc.get("wedding", "") if oc.get("dest") and oc.get("wedding") else None
+        if guess and guess.is_dir() and (not start or not Path(start).is_dir()):
+            start = str(guess)                        # the wedding Card Offload copied last
+        if start and Path(start).is_dir():
+            self.load(start)
+        self._ui()
+
+    def _busy(self):
+        return bool(self.worker and self.worker.isRunning())
+
+    def _ui(self):
+        busy = self._busy()
+        self.b_go.setEnabled(not busy and bool(self.cams))
+        self.list.setEnabled(not busy)
+
+    def pick(self):
+        d = QFileDialog.getExistingDirectory(self, "Choose the wedding folder", self.cfg.get("folder", ""))
+        if d:
+            self.load(d)
+
+    def load(self, folder):
+        self.cfg["folder"] = folder
+        self.store.save_app()
+        self.folder.setText(folder)
+        self.result.setText("")
+        self.b_show.hide()
+        self.cams = projectsetup.find_cameras(folder)
+        self.list.clear()
+        for c in self.cams:
+            n = len(c["files"])
+            it = QListWidgetItem(i18n.T("{}  ·  {} clips").format(c["name"], n) if n != 1 else i18n.T("{}  ·  1 clip").format(c["name"]))
+            it.setToolTip(c["folder"])
+            it.setData(Qt.UserRole, c["folder"])
+            it.setFlags((it.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsDragEnabled) & ~Qt.ItemIsDropEnabled)
+            it.setCheckState(Qt.Checked)
+            self.list.addItem(it)
+        snd = projectsetup.sound_folders(folder)
+        self.sound.setText(i18n.T("Sound only, left out like in your selects: {}").format(", ".join(snd)) if snd else "")
+        if not self.cams:
+            notify(i18n.T("No video found in this folder."), error=True)
+        self._ui()
+
+    def chosen(self):
+        by = {c["folder"]: c for c in self.cams}
+        out = []
+        for i in range(self.list.count()):
+            it = self.list.item(i)
+            if it.checkState() == Qt.Checked and it.data(Qt.UserRole) in by:
+                out.append(by[it.data(Qt.UserRole)])
+        return out
+
+    def start(self):
+        cams = self.chosen()
+        if not cams or self._busy():
+            if not cams:
+                notify(i18n.T("Tick at least one camera."), error=True)
+            return
+        self._stop = False
+        self.result.setText("")
+        self.b_show.hide()
+        self.pp.start(i18n.T("Reading the clips…"))
+        self.worker = _ProbeWorker(cams, lambda: self._stop)
+        self.worker.progress.connect(lambda t, f: self.pp.set(i18n.T(t), f))
+        self.worker.done.connect(lambda infos, cams=cams: self._done(cams, infos))
+        self.worker.failed.connect(self._failed)
+        self.worker.start()
+        self._ui()
+
+    def cancel(self):
+        self._stop = True
+
+    def _failed(self, why):
+        self.pp.hide()
+        self._ui()
+        if why == "Cancelled":
+            notify(i18n.T("Cancelled"), error=True)
+        else:
+            notify(i18n.T("Create Project failed: {}").format(i18n.T(why)), error=True)
+
+    def _done(self, cams, infos):
+        self.pp.hide()
+        self._ui()
+        name = self.name.text().strip() or ("selectie" if i18n.LANG == "ro" else "selects")
+        lay, bad = projectsetup.layout(cams, infos)
+        if not lay:
+            notify(i18n.T("None of the clips could be read."), error=True)
+            return
+        base = Path(self.cfg["folder"])
+        safe = re.sub(r'[\\/:*?"<>|]+', "-", f"{base.name} - {name}").strip() or "project"
+        out = projectsetup.free_path(base / f"{safe}.xml")
+        try:
+            r = projectsetup.export_xml(lay, infos, out, name)
+        except OSError:
+            alt, _ = QFileDialog.getSaveFileName(self, "Save the XML", str(Path.home() / out.name), "XML (*.xml)")
+            if not alt:
+                return
+            out = Path(alt)
+            try:
+                r = projectsetup.export_xml(lay, infos, out, name)
+            except Exception as e:
+                logging.exception("create project export")
+                notify(i18n.T("Create Project failed: {}").format(i18n.T(str(e))), error=True)
+                return
+        except Exception as e:
+            logging.exception("create project export")
+            notify(i18n.T("Create Project failed: {}").format(i18n.T(str(e))), error=True)
+            return
+        self.out = str(out)
+        cams_txt = ", ".join(f"{c} {n}" for c, n in r["cameras"])
+        txt = (i18n.T("{} clips on the timeline ({}), {} of footage.").format(r["clips"], cams_txt, hms(r["seconds"])) +
+               "<br>" + i18n.T("Saved: {}").format(escape(out.name)))
+        if bad:
+            txt += f'<br><span style="color:{C["POOR"]}">' + i18n.T("{} files could not be read and were left out: {}").format(
+                len(bad), escape(", ".join(Path(b).name for b in bad[:6]) + (" …" if len(bad) > 6 else ""))) + "</span>"
+        self.result.setText(txt)
+        self.b_show.show()
+        notify(i18n.T("XML ready: {} clips in your order. Drag it into Premiere's Project panel.").format(r["clips"]))
+        logging.info("create project %s: %s clips, %s unreadable", out, r["clips"], len(bad))
+
+    def show_file(self):
+        if not self.out:
+            return
+        try:
+            if sys.platform == "darwin":
+                subprocess.Popen(["open", "-R", self.out])
+            elif os.name == "nt":
+                subprocess.Popen(["explorer", "/select,", self.out])
+            else:
+                QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(self.out).parent)))
+        except Exception:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(self.out).parent)))
+
+
 class _OffloadWorker(QThread):
     """One card in its own thread (every card at once): copied, or only checked against its twin's copy."""
     moved = Signal(int, float, float)          # card index, done bytes, total bytes
@@ -5491,6 +5763,7 @@ class Main(QMainWindow):
         sv.addLayout(top)
         sv.addSpacing(14)
         self.nav = {"offload": btn("Card Offload", "nav", lambda: self.go("offload")),
+                    "project": btn("Create Project", "nav", lambda: self.go("project")),
                     "dash": btn("Selection && Multicam", "nav", lambda: self.go("dash")),
                     "teaser": btn("Teaser Studio", "nav", lambda: self.go("teaser")),
                     "long": btn("Long Film", "nav", lambda: self.go("long")),
@@ -5500,7 +5773,7 @@ class Main(QMainWindow):
                     "info": btn("Info / How to use", "nav", lambda: self.go("info"))}
         for b in self.nav.values():
             sv.addWidget(b)
-        for key in ("offload", "teaser", "long", "transcribe"):
+        for key in ("offload", "project", "teaser", "long", "transcribe"):
             nb = QHBoxLayout(self.nav[key])
             nb.setContentsMargins(0, 0, 8, 0)
             nb.addStretch()
@@ -5529,6 +5802,7 @@ class Main(QMainWindow):
                                     lambda p: [name_of(p.get("footage")), f"{i18n.T('Updated')} {nice_date(p.get('when', ''))}"])
         self.offload = OffloadPage(self.store)
         self.transcribe = TranscribePage(self.store)
+        self.cproject = CreateProjectPage(self.store)
         self.long_hub = StudioHub(self.store, self.long, "Long Film", "long", "LONG FILM", "#2e9e6a",
                                   lambda p: [name_of(p.get("footage")),
                                              (i18n.T("with vornic") + " · " if p.get("vornic") else "") +
@@ -5538,7 +5812,7 @@ class Main(QMainWindow):
         _NOTIFY = lambda text, error=False, ms=None: self.toast.show_msg(text, ms, error)
         self.res.export_done = lambda name: (self.toast.show_msg(f"XML saved: {name}"), logging.info("footage export %s", name))
         self.teaser.notify.connect(self.toast.show_msg)
-        for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser_hub, self.long_hub, self.offload, self.transcribe):
+        for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser_hub, self.long_hub, self.offload, self.transcribe, self.cproject):
             self.stack.addWidget(w)
         self.dash.new_project.connect(self.new_project)
         self.dash.open_project.connect(self.open_project)
@@ -5587,6 +5861,9 @@ class Main(QMainWindow):
         if self.transcribe._busy():
             self.transcribe._stop = True
             self.transcribe.worker.wait(10000)
+        if self.cproject._busy():
+            self.cproject._stop = True
+            self.cproject.worker.wait(10000)
         if self.offload._busy():                       # copies stop cleanly (no half file is left)
             self.offload._stop = True
             for w_ in self.offload.workers:
@@ -5611,7 +5888,8 @@ class Main(QMainWindow):
         for k, b in self.nav.items():
             b.setProperty("active", (k == "dash" and w in (self.dash, self.proj, self.res, self.mc)) or (k == "queue" and w in (self.queue, self.anl))
                           or (k == "settings" and w is self.settings) or (k == "info" and w is self.info) or (k == "teaser" and w is self.teaser_hub) or (k == "long" and w is self.long_hub)
-                          or (k == "offload" and w is self.offload) or (k == "transcribe" and w is self.transcribe))
+                          or (k == "offload" and w is self.offload) or (k == "transcribe" and w is self.transcribe)
+                          or (k == "project" and w is self.cproject))
             repolish(b)
 
     def go(self, where):
@@ -5624,6 +5902,8 @@ class Main(QMainWindow):
             self.show_page(self.info)
         elif where == "transcribe":
             self.show_page(self.transcribe)
+        elif where == "project":
+            self.show_page(self.cproject)
         elif where == "offload":
             self.offload.refresh()
             self.show_page(self.offload)
@@ -5746,6 +6026,21 @@ def _arrow_png():
         p.setRenderHint(QPainter.Antialiasing)
         p.setPen(QPen(QColor("#b8b8b8"), 2.2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         p.drawPolyline([QPoint(3, 3), QPoint(10, 9), QPoint(17, 3)])
+        p.end()
+        pm.save(str(path))
+    return str(path).replace("\\", "/")
+
+
+def _check_png():
+    """The tick inside a ticked list row (Create Project cameras)."""
+    path = Path(QStandardPaths.writableLocation(QStandardPaths.TempLocation)) / "mmm_check.png"
+    if not path.exists():
+        pm = QPixmap(16, 16)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(QPen(QColor("white"), 2.2, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        p.drawPolyline([QPoint(4, 8), QPoint(7, 11), QPoint(12, 5)])
         p.end()
         pm.save(str(path))
     return str(path).replace("\\", "/")
