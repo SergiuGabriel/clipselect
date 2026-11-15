@@ -43,7 +43,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.8.2"
+APP, VER = "MoneyMakingMachine", "v3.8.3"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -3107,20 +3107,36 @@ class SettingsPage(QWidget):
             for k in ("total", "others", "free", "me"):
                 self.cards[k].setText("n/a")
             return
-        vm = psutil.virtual_memory()
-        me = psutil.Process()
-        mine = me.memory_info().rss + sum(c.memory_info().rss for c in me.children(recursive=True) if c.is_running())
+        def rss(p):
+            try:
+                return p.memory_info().rss
+            except Exception:                 # gone, zombie or not allowed: counts as 0
+                return 0
+        try:
+            vm = psutil.virtual_memory()
+            me = psutil.Process()
+            try:
+                kids = me.children(recursive=True)
+            except Exception:
+                kids = []
+            mine = rss(me) + sum(rss(c) for c in kids)
+        except Exception:
+            logging.warning("memory panel: could not read memory", exc_info=True)
+            return
         self.cards["total"].setText(gb(vm.total))
         self.cards["others"].setText(gb(max(0, vm.total - vm.available - mine)))
         self.cards["free"].setText(gb(vm.available))
         self.cards["me"].setText(gb(mine))
         procs = {}
-        for p in psutil.process_iter(["name", "memory_info"]):
-            try:
-                n = p.info["name"] or "?"
-                procs[n] = procs.get(n, 0) + p.info["memory_info"].rss
-            except Exception:
-                pass
+        try:
+            for p in psutil.process_iter(["name", "memory_info"]):
+                try:
+                    n = p.info["name"] or "?"
+                    procs[n] = procs.get(n, 0) + p.info["memory_info"].rss
+                except Exception:
+                    pass
+        except Exception:
+            logging.warning("memory panel: could not list the apps", exc_info=True)
         top = sorted(procs.items(), key=lambda kv: -kv[1])[:10]
         self.top.setRowCount(len(top))
         for r, (n, b) in enumerate(top):
@@ -3400,7 +3416,11 @@ class AITestDialog(QDialog):
 
     def _sleep_again(self):
         if self._awake is not None:
-            self._awake.terminate()
+            try:
+                self._awake.terminate()
+                self._awake.wait(timeout=3)           # reaped: no zombie process left behind
+            except Exception:
+                pass
             self._awake = None
 
     def _cancel(self):
@@ -5029,9 +5049,9 @@ class CreateProjectPage(QWidget):
             return
         try:
             if sys.platform == "darwin":
-                subprocess.Popen(["open", "-R", self.out])
+                updater.launch(["open", "-R", self.out])
             elif os.name == "nt":
-                subprocess.Popen(["explorer", "/select,", self.out])
+                updater.launch(["explorer", "/select,", self.out])
             else:
                 QDesktopServices.openUrl(QUrl.fromLocalFile(str(Path(self.out).parent)))
         except Exception:
@@ -6360,13 +6380,24 @@ def setup_logging(folder):
     root.addHandler(h)
     logging.info("---- %s %s started on %s", APP, VER, platform.platform())
 
+    shown = {"open": False, "last": {}}
+
     def hook(t, v, tb):
         logging.error("unexpected error", exc_info=(t, v, tb))
+        key = f"{t.__name__}: {v}"[:200]
+        now = time.time()
+        # a repeating error (e.g. from a timer) must never stack dialogs: one at a time, the same one once a minute
+        if shown["open"] or now - shown["last"].get(key, 0) < 60:
+            return
+        shown["last"][key] = now
+        shown["open"] = True
         try:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(None, APP, f"Something went wrong: {v}\n\nSettings > Save error report, then send it to Claude.")
         except Exception:
             pass
+        finally:
+            shown["open"] = False
     sys.excepthook = hook
 
 

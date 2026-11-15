@@ -125,10 +125,19 @@ def download(url, tag, progress=None, cancel=None):
         raise
 
 
+def launch(cmd):
+    """Starts a short helper (open, explorer) and waits for it in the background, so it never stays behind as a
+    zombie process (v3.8.1: the 'open' of the DMG did, and the memory panel then raised an error every second)."""
+    import threading
+    p = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    threading.Thread(target=p.wait, daemon=True).start()
+    return p
+
+
 def open_installer(path):
     if sys.platform == "darwin":
-        subprocess.Popen(["open", path])                       # mounts the DMG and shows its window
+        launch(["open", path])                                 # mounts the DMG and shows its window
     elif os.name == "nt":
-        subprocess.Popen(["explorer", "/select,", path])
+        launch(["explorer", "/select,", path])
     else:
-        subprocess.Popen(["xdg-open", str(Path(path).parent)])
+        launch(["xdg-open", str(Path(path).parent)])
