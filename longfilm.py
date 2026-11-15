@@ -567,6 +567,30 @@ def drop_copies(pieces):
     return out
 
 
+def last_drone(pieces):
+    """The drone selection that ends last on his timeline (everything after its end counts as a copy)."""
+    drones = [p for p in pieces if p["cat"] == "drone"]
+    return max(drones, key=lambda p: p["order"] + p["b"] - p["a"]) if drones else None
+
+
+def lost_after_drone(pieces):
+    """Selections that drop_copies leaves out ONLY because they sit after the drone block, although they repeat nothing
+    earlier (= not copies). Many of them = the drone is not at the end of his selects (another layout): warn him."""
+    drones = [p for p in pieces if p["cat"] == "drone"]
+    end = max((p["order"] + p["b"] - p["a"] for p in drones), default=None)
+    if end is None:
+        return []
+    seen, lost = {}, []
+    for p in sorted(pieces, key=lambda p: p["order"]):
+        prev = seen.setdefault(p["path"], [])
+        ln = p["b"] - p["a"]
+        rep = any(min(b, p["b"]) - max(a, p["a"]) > 0.3 * min(b - a, ln) for a, b in prev)
+        prev.append((p["a"], p["b"]))
+        if not rep and p["cat"] != "drone" and p["order"] >= end - 1.0:
+            lost.append(p)
+    return lost
+
+
 def _mid(p, share, lo, hi):
     """The middle part of a selection: `share` of it, between lo and hi seconds."""
     ln = p["b"] - p["a"]

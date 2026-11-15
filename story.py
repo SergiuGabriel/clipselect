@@ -1,0 +1,202 @@
+"""The story of the interviews, written by Claude through the owner's own subscription (no API key, no cost).
+
+1. prompt(): the transcripts with a code on every sentence (A1, A2... for the first interview, B1... for the second),
+   who speaks, the length he wants, and the rules (whole sentences exactly as said, the two of them telling ONE story
+   together, answer between STORY_START / STORY_END). The app copies it and opens a new Claude chat; he pastes it.
+2. parse(): Claude's answer (copied back) -> the pieces in film order, each = a run of sentences of one interview.
+3. export_xml(): the pieces back to back on a 25 fps timeline, picture + all sound channels linked, a marker on every
+   piece with its text. Imported into Premiere like every other XML of the app.
+"""
+import re
+from pathlib import Path
+from xml.sax.saxutils import escape
+
+import core
+
+SEQ_FPS = 25.0
+LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+PAD_IN, PAD_OUT = 0.15, 0.30          # breath before / after a piece (never into the next sentence)
+WHO_RO = {"bride": "mireasa", "groom": "mirele", "both": "mirii împreună", "other": "altcineva", "": "nu știu cine"}
+WHO_EN = {"bride": "the bride", "groom": "the groom", "both": "the couple together", "other": "someone else", "": "unknown"}
+
+
+def _mmss(t):
+    return f"{int(t // 60)}:{int(t % 60):02d}"
+
+
+def prompt(files, minutes, lang="ro"):
+    """files = [dict(path, segs=[[start, end, text]], who)] in the order of the list. Returns the text for Claude."""
+    ro = lang == "ro"
+    who = WHO_RO if ro else WHO_EN
+    head = []
+    body = []
+    for k, f in enumerate(files):
+        L = LETTERS[k]
+        head.append(f"- {'Interviul' if ro else 'Interview'} {L}: {who.get(f.get('who') or '', who[''])} "
+                    f"({Path(f['path']).name})")
+        body.append(f"\n=== {'INTERVIUL' if ro else 'INTERVIEW'} {L} ===")
+        for i, (a, b, t) in enumerate(f["segs"], 1):
+            body.append(f"{L}{i} ({b - a:.1f} s) {t}")
+    if ro:
+        intro = (
+            "Ești editorul unui film de nuntă. Mai jos sunt interviurile transcrise, fiecare frază are un cod "
+            "(A1, A2… pentru primul interviu, B1, B2… pentru al doilea) și durata ei în secunde.\n\n"
+            + "\n".join(head) + "\n\n"
+            "Ce vreau:\n"
+            "1. Găsește povestea lor: ce îi leagă, cum s-au cunoscut, momentele importante, ce simt unul pentru altul.\n"
+            "2. Construiește O SINGURĂ POVESTE în care povestesc ÎMPREUNĂ: frazele lor se împletesc, unul continuă ideea "
+            "celuilalt, ca și cum ar vorbi împreună, iar la final povestea e un întreg, cu început, mijloc și un final "
+            "emoționant.\n"
+            f"3. Durata totală: aproximativ {minutes} minute (adună duratele din paranteze).\n"
+            "4. Folosește DOAR fraze care există, întregi, exact cum sunt. Nu inventa, nu rescrie, nu tăia o frază la "
+            "jumătate. Poți lua mai multe fraze la rând (de ex. A12-A14). Evită ezitările, repetițiile, frazele "
+            "neterminate și ce nu se înțelege fără întrebarea reporterului.\n\n"
+            "Răspunsul tău: întâi 1-2 propoziții cu povestea pe scurt, apoi lista, exact între rândurile STORY_START și "
+            "STORY_END, un rând pe bucată, în ordinea din film: codul (A12) sau codurile la rând (A12-A14), apoi \" | \" și "
+            "începutul textului. Exemplu:\n"
+            "STORY_START\nB3 | Prima dată când am văzut-o…\nA7-A8 | Eu nu credeam că…\nSTORY_END\n"
+        )
+    else:
+        intro = (
+            "You are the editor of a wedding film. Below are the transcribed interviews; every sentence has a code "
+            "(A1, A2… for the first interview, B1, B2… for the second) and its length in seconds.\n\n"
+            + "\n".join(head) + "\n\n"
+            "What I want:\n"
+            "1. Find their story: what binds them, how they met, the important moments, what they feel for each other.\n"
+            "2. Build ONE STORY that they tell TOGETHER: their sentences weave into each other, one continues the other's "
+            "thought as if they were talking together, and in the end the story is a whole, with a beginning, a middle "
+            "and an emotional ending.\n"
+            f"3. Total length: about {minutes} minutes (add up the lengths in brackets).\n"
+            "4. Use ONLY sentences that exist, whole, exactly as they are. Do not invent, rewrite or cut a sentence in "
+            "half. You may take several sentences in a row (e.g. A12-A14). Avoid hesitations, repetitions, unfinished "
+            "sentences and anything that needs the interviewer's question to make sense.\n\n"
+            "Your answer: first 1-2 sentences with the story in short, then the list, exactly between the lines "
+            "STORY_START and STORY_END, one line per piece, in film order: the code (A12) or the codes in a row (A12-A14), "
+            "then \" | \" and the beginning of the text. Example:\n"
+            "STORY_START\nB3 | The first time I saw her…\nA7-A8 | I never thought…\nSTORY_END\n"
+        )
+    return intro + "\n".join(body) + "\n"
+
+
+_LINE = re.compile(r"^\W*([A-Z])\s*(\d+)(?:\s*[-–—]\s*([A-Z])?\s*(\d+))?\b")
+
+
+def parse(answer, files):
+    """Claude's answer -> ([(file index, first sentence, last sentence)] in order (0-based, inclusive), [bad lines])."""
+    text = answer.replace("\r", "")
+    m = re.search(r"STORY_START(.*?)(STORY_END|$)", text, re.S)
+    block = m.group(1) if m else text
+    pieces, bad = [], []
+    for line in block.split("\n"):
+        s = line.strip().strip("`*")
+        if not s:
+            continue
+        mm = _LINE.match(s)
+        if not mm:
+            if m:                                     # inside the block every line should be a piece
+                bad.append(s[:60])
+            continue
+        L, a, L2, b = mm.group(1), int(mm.group(2)), mm.group(3), mm.group(4)
+        fi = LETTERS.find(L)
+        b = int(b) if b else a
+        if (L2 and L2 != L) or fi < 0 or fi >= len(files) or not (1 <= a <= b <= len(files[fi]["segs"])):
+            bad.append(s[:60])
+            continue
+        pieces.append((fi, a - 1, b - 1))
+    return pieces, bad
+
+
+def ranges(pieces, files, durs):
+    """Pieces -> [(file index, t0, t1, text)]: from the first sentence's start to the last one's end, with a breath on
+    both sides that never reaches into the sentence before / after."""
+    out = []
+    for fi, a, b in pieces:
+        segs = files[fi]["segs"]
+        t0, t1 = float(segs[a][0]), float(segs[b][1])
+        lo = float(segs[a - 1][1]) if a > 0 else 0.0
+        hi = float(segs[b + 1][0]) if b + 1 < len(segs) else durs[fi]
+        t0 = max(lo, 0.0, t0 - PAD_IN)
+        t1 = min(hi, durs[fi], t1 + PAD_OUT)
+        if t1 - t0 >= 0.2:
+            out.append((fi, t0, t1, " ".join(str(s[2]) for s in segs[a:b + 1])))
+    return out
+
+
+def export_xml(cuts, files, infos, out_path, name, labels=None):
+    """cuts = ranges(); infos = projectsetup.probe() per file path. One 25 fps sequence: the pieces back to back on V1
+    (video files) with every sound channel on A1..An (source channel k on Ak), linked; a marker per piece."""
+    rate_xml, sf = core._rate(SEQ_FPS)
+    clips, pos = [], 0
+    for fi, t0, t1, text in cuts:
+        f = files[fi]["path"]
+        i0, i1 = int(round(t0 * sf)), int(round(t1 * sf))
+        if i1 <= i0:
+            continue
+        clips.append(dict(f=f, st=pos, n=i1 - i0, src=i0, text=text, fi=fi))
+        pos += i1 - i0
+    if not clips:
+        raise ValueError("No pieces to put on the timeline.")
+    vid = lambda c: infos[c["f"]].get("video")
+    ach = lambda c: infos[c["f"]].get("ach", 0)
+    nach = max(ach(c) for c in clips)
+    n = 0
+    vpos = 0
+    for c in clips:
+        if vid(c):
+            n += 1
+            vpos += 1
+            c["v"] = (f"clipitem-{n}", 1, vpos)
+    for k in range(1, nach + 1):
+        p = 0
+        for c in clips:
+            if ach(c) >= k:
+                n += 1
+                p += 1
+                c[f"a{k}"] = (f"clipitem-{n}", k, p)
+    fids = {}
+
+    def file_xml(f):
+        if f in fids:
+            return f'<file id="{fids[f]}"/>'
+        fids[f] = f"file-{len(fids) + 1}"
+        i = infos[f]
+        frate, ffps = core._rate(i.get("fps", 25.0))
+        v = f'<video>{core._sc(frate, i["w"], i["h"], "none")}</video>' if i.get("video") else ""
+        a = (f'<audio><samplecharacteristics><depth>16</depth><samplerate>{i.get("arate", 48000)}</samplerate>'
+             f'</samplecharacteristics><channelcount>{i["ach"]}</channelcount></audio>') if i.get("ach") else ""
+        return (f'<file id="{fids[f]}"><name>{escape(Path(f).name)}</name><pathurl>{escape(core._url(f))}</pathurl>'
+                f'{frate}<duration>{int(i["dur"] * ffps)}</duration><media>{v}{a}</media></file>')
+
+    def links(c):
+        refs = ([("video", c["v"])] if "v" in c else []) + [("audio", c[f"a{k}"]) for k in range(1, ach(c) + 1)]
+        if len(refs) < 2:
+            return ""
+        return "".join(f'<link><linkclipref>{r[0]}</linkclipref><mediatype>{mt}</mediatype><trackindex>{r[1]}</trackindex>'
+                       f'<clipindex>{r[2]}</clipindex>' + ("<groupindex>1</groupindex>" if mt == "audio" else "") + "</link>"
+                       for mt, r in refs)
+
+    def item(c, ref, extra=""):
+        return (f'<clipitem id="{ref[0]}"><name>{escape(Path(c["f"]).name)}</name><duration>{c["n"]}</duration>{rate_xml}'
+                f'<start>{c["st"]}</start><end>{c["st"] + c["n"]}</end><in>{c["src"]}</in><out>{c["src"] + c["n"]}</out>'
+                f'{file_xml(c["f"])}{extra}{links(c)}</clipitem>')
+
+    trk = lambda its: f'<track>{"".join(its)}<enabled>TRUE</enabled><locked>FALSE</locked></track>'
+    vitems = [item(c, c["v"]) for c in clips if "v" in c]
+    aitems = [[item(c, c[f"a{k}"], f'<sourcetrack><mediatype>audio</mediatype><trackindex>{k}</trackindex></sourcetrack>')
+               for c in clips if ach(c) >= k] for k in range(1, nach + 1)]
+    vf = next((infos[c["f"]] for c in clips if vid(c)), None)
+    fmt = f'<format>{core._sc(rate_xml, vf["w"], vf["h"], "none")}</format>' if vf else \
+        f'<format>{core._sc(rate_xml, 1920, 1080, "none")}</format>'
+    labels = labels or {}
+    mk = "".join(f'<marker><name>{escape((labels.get(c["fi"], "") + ": " if labels.get(c["fi"]) else "") + c["text"][:50])}'
+                 f'</name><comment>{escape(c["text"])}</comment><in>{c["st"]}</in><out>{c["st"] + c["n"]}</out></marker>'
+                 for c in clips)
+    arate = next((infos[c["f"]].get("arate", 48000) for c in clips if ach(c)), 48000)
+    xml = (f'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4"><sequence id="sequence-1">'
+           f'<name>{escape(name)}</name><duration>{pos}</duration>{rate_xml}{mk}'
+           f'<media><video>{fmt}{trk(vitems) if vitems else ""}</video>'
+           f'<audio><numOutputChannels>2</numOutputChannels><format><samplecharacteristics><depth>16</depth>'
+           f'<samplerate>{arate}</samplerate></samplecharacteristics></format>{"".join(trk(a) for a in aitems)}</audio>'
+           f'</media></sequence></xmeml>')
+    Path(out_path).write_text(xml, encoding="utf-8")
+    return dict(pieces=len(clips), seconds=pos / sf)

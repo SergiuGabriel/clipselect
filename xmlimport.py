@@ -138,6 +138,37 @@ def build(xml_path, progress=None, cancel=None):
     return dict(files=files, infos=infos, masters=masters, results=results, cams=cams, missing=missing)
 
 
+AUDIO_EXT = {".wav", ".bwf", ".mp3", ".m4a", ".aif", ".aiff", ".flac", ".aac"}
+
+
+def media(xml_path):
+    """Transcribe > Import XML: the video files of the timeline in its order; a timeline with only sound (recorder,
+    lavaliers) gives its sound files. Returns (paths on this computer, paths not found)."""
+    try:
+        return footage(xml_path)
+    except ValueError as e:
+        if "No video clips" not in str(e):
+            raise
+    root = ET.parse(xml_path).getroot()
+    files = {f.get("id"): _path(f.findtext("pathurl")) for f in root.iter("file") if f.get("id") and f.findtext("pathurl")}
+    seq = max(root.iter("sequence"), key=lambda s: sum(1 for _ in s.iter("clipitem")))
+    found = []
+    audio = seq.find("media/audio")
+    for t, tr in enumerate(audio.findall("track") if audio is not None else []):
+        for ci in tr.findall("clipitem"):
+            f = ci.find("file")
+            path = files.get(f.get("id")) if f is not None else None
+            if not path or Path(path).suffix.lower() not in AUDIO_EXT:
+                continue
+            st = ci.findtext("start")
+            found.append((max(int(round(float(st))) if st else 0, 0), t, path))
+    if not found:
+        raise ValueError("No video or sound clips found in this XML.")
+    order = list(dict.fromkeys(p for _, _, p in sorted(found)))
+    missing = [p for p in order if not Path(p).exists()]
+    return [p for p in order if p not in missing], missing
+
+
 def footage(xml_path):
     """Footage Selection > Import XML: the video files of a timeline (his selects, a sequence with all the clips, the
     Create Project XML) in the order they appear on it (earlier first; at the same moment the lower track first), each

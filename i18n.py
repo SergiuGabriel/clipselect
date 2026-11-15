@@ -57,6 +57,86 @@ TEMPLATES.update({
     "{} clips added from the XML, in its order.": "{} clipuri adăugate din XML, în ordinea lui.",
 })
 
+# v3.8.0: Transcribe > Import XML + the story of the interviews (with Claude) + "what your selects need"
+EXACT.update({
+    "Interviews, speeches, the vornic, the sermon: the speech becomes text, on this computer (nothing is uploaded). Next to every file you get a .txt with the times and a .srt (subtitles); an XML with a marker on every sentence shows in Premiere where each thing is said. From the bride's and the groom's interviews Claude can make ONE story they tell together (below). The first time the speech model is downloaded once (1.5-3 GB).":
+        "Interviuri, discursuri, vornicul, predica: vorbirea devine text, pe acest calculator (nu se urcă nimic). Lângă fiecare fișier primești un .txt cu orele și un .srt (subtitrare); un XML cu un marker pe fiecare frază îți arată în Premiere unde se spune fiecare lucru. Din interviurile mirelui și ale miresei, Claude poate face O SINGURĂ poveste spusă de amândoi (mai jos). Prima dată modelul de vorbire se descarcă o singură dată (1,5-3 GB).",
+    "Who is speaking": "Cine vorbește",
+    "Not set": "Nesetat",
+    "The bride": "Mireasa",
+    "The groom": "Mirele",
+    "The bride and the groom": "Mireasa și mirele",
+    "Someone else": "Altcineva",
+    "Bride and groom": "Mirii",
+    "THE STORY OF THE INTERVIEWS (WITH CLAUDE)": "POVESTEA DIN INTERVIURI (CU CLAUDE)",
+    "Tick the interviews in the list and set who is speaking. 1: the app copies the transcripts and opens a new Claude chat: paste (Cmd+V) and send. 2: copy Claude's whole answer (the copy button under it) and press Paste Claude's answer: you get an XML with the story, the pieces one after the other, with a marker on each.":
+        "Bifează interviurile din listă și alege cine vorbește. 1: aplicația copiază transcrierile și deschide un chat nou în Claude: lipești (Cmd+V) și trimiți. 2: copiezi tot răspunsul lui Claude (butonul de copiere de sub el) și apeși Lipește răspunsul lui Claude: primești un XML cu povestea, bucățile una după alta, cu un marker pe fiecare.",
+    "Length": "Durata",
+    "1. Copy for Claude": "1. Copiază pentru Claude",
+    "2. Paste Claude's answer": "2. Lipește răspunsul lui Claude",
+    "Ticked = goes into the story": "Bifat = intră în poveste",
+    "Transcribe and tick at least one interview first.": "Transcrie și bifează întâi cel puțin un interviu.",
+    "Copied. In the new Claude chat paste it (Cmd+V) and send; then copy the whole answer and press Paste Claude's answer.":
+        "Copiat. În chatul nou din Claude lipește (Cmd+V) și trimite; apoi copiază tot răspunsul și apasă Lipește răspunsul lui Claude.",
+    "The interviews sent to Claude are no longer in the list: press Copy for Claude again.":
+        "Interviurile trimise lui Claude nu mai sunt în listă: apasă din nou Copiază pentru Claude.",
+    "No story found in the copied text. Copy Claude's whole answer (the copy button under it) and press again.":
+        "Nu am găsit povestea în textul copiat. Copiază tot răspunsul lui Claude (butonul de copiere de sub el) și apasă din nou.",
+    "The clipboard still holds the text for Claude. Send it in Claude, then copy Claude's answer.":
+        "În clipboard e încă textul pentru Claude. Trimite-l în Claude, apoi copiază răspunsul lui.",
+    "An interview file cannot be read any more. Is the disk connected?": "Un fișier cu interviu nu mai poate fi citit. E conectat discul?",
+    "Interview story": "Povestea interviurilor",
+    "Every clip of this XML is already in the list.": "Toate clipurile din acest XML sunt deja în listă.",
+    "No pieces to put on the timeline.": "Nu sunt bucăți de pus pe timeline.",
+    "No video or sound clips found in this XML.": "Nu am găsit clipuri video sau audio în acest XML.",
+})
+TEMPLATES.update({
+    "Too many interviews ticked (at most {}).": "Prea multe interviuri bifate (cel mult {}).",
+    "The story ({} pieces, {}):": "Povestea ({} bucăți, {}):",
+    "Story XML saved: {} pieces, {} long.": "XML-ul cu povestea e salvat: {} bucăți, {} durată.",
+    "{} lines of the answer were not understood and were skipped.": "{} rânduri din răspuns nu au fost înțelese și au fost sărite.",
+})
+
+EXACT.update({
+    "A blueprint is one of your finished films: its cuts, music, sound effects and pacing stay, and every cut is refilled with a shot of the same colour from this wedding. Both need your colours: the film's clips and this wedding's selects (in any order).":
+        "Un blueprint e unul din filmele tale terminate: tăieturile, muzica, efectele sonore și ritmul rămân, iar fiecare tăietură e umplută cu un cadru de aceeași culoare din nunta asta. Amândouă au nevoie de culorile tale: clipurile filmului și selecțiile nunții (în orice ordine).",
+    "Export from Premiere an XML of the sequence with your selects. Only the COLOURS matter: Rose bride, Blue groom, Purple couple, Brown church, Yellow or Caribbean venue, Iris party, Violet drone (Teal getting-ready location, Mango vornic). Clips without a colour are not used. The order and the tracks do not matter: the order of the day comes from the recording time.":
+        "Exportă din Premiere un XML al sequence-ului cu selecțiile tale. Contează doar CULORILE: Rose mireasa, Blue mirele, Purple cuplul, Brown biserica, Yellow sau Caribbean sala, Iris petrecerea, Violet drona (Teal locația de la pregătiri, Mango vornicul). Clipurile fără culoare nu sunt folosite. Ordinea și pistele nu contează: ordinea zilei vine din ora filmării.",
+    "The XML of your selects sequence. What it needs:": "XML-ul sequence-ului cu selecțiile tale. De ce are nevoie:",
+    "• a COLOUR on every selection: Rose bride, Blue groom, Purple couple, Brown church, Iris first look and party, Teal getting-ready location, Yellow or Caribbean venue, Violet drone (Tan interviews and clips without a colour are not used);":
+        "• o CULOARE pe fiecare selecție: Rose mireasa, Blue mirele, Purple cuplul, Brown biserica, Iris first look și petrecerea, Teal locația de la pregătiri, Yellow sau Caribbean sala, Violet drona (Tan interviurile și clipurile fără culoare nu sunt folosite);",
+    "• the church (Brown) in the order you want it in the film;": "• biserica (Brown) în ordinea în care o vrei în film;",
+    "• the drone block AFTER everything else: only copies for the short film may come after it (they are left out).":
+        "• blocul cu drona DUPĂ tot restul: după el pot fi doar copiile pentru shortmovie (sunt lăsate afară).",
+    "Everything else can be in any order, on any tracks: the cameras are recognised by their files and every camera's day is read from its file numbers.":
+        "Restul poate fi în orice ordine, pe orice piste: camerele sunt recunoscute după fișiere, iar ziua fiecărei camere după numerele fișierelor.",
+})
+TEMPLATES.update({
+    "{} selections come after the drone shots and are treated as copies for the short film (left out). Put the drone block at the end of your selects (only the copies after it).":
+        "{} selecții sunt după cadrele cu drona și sunt luate drept copii pentru shortmovie (lăsate afară). Pune blocul cu drona la finalul selecțiilor (după el doar copiile).",
+})
+
+EXACT.update({
+    "groom": "mirele", "bride": "mireasa", "couple": "cuplul", "church": "biserica", "first look / party": "first look / petrecere",
+    "getting-ready location": "locația de la pregătiri", "venue": "sala", "vornic": "vornicul", "other": "altele",
+    "(Times from the start of your sequence.)": "(Orele sunt de la începutul sequence-ului tău.)",
+})
+TEMPLATES.update({
+    "{} selections will be left out.": "{} selecții vor fi lăsate afară.",
+    "The last drone shot on your sequence is {} (it ends at {}): everything after it counts as copies for the short film. After it there are: {}. The first one is {} at {}.":
+        "Ultimul cadru cu drona din sequence-ul tău este {} (se termină la {}): tot ce e după el e luat drept copie pentru shortmovie. După el sunt: {}. Primul este {} la {}.",
+    "Fix: move {} (and the other drone shots) after all the selections you want in the film, or delete it if it is a copy.":
+        "Rezolvare: mută {} (și celelalte cadre cu drona) după toate selecțiile pe care le vrei în film, sau șterge-l dacă e o copie.",
+})
+
+EXACT.update({
+    "Location": "Locația", "First look / party": "First look / petrecere", "Left out": "Lăsate afară", "Camera 3": "Camera 3",
+    "Copies": "Copii", "Camera 1 (main, e.g. fx6)": "Camera 1 (principala, ex. fx6)", "Camera 2 (e.g. fx3)": "Camera 2 (ex. fx3)",
+    "HOW YOUR SELECTS SEQUENCE SHOULD LOOK": "CUM TREBUIE SĂ ARATE SEQUENCE-UL CU SELECȚII",
+    "Every camera one after the other, each in the order of the day (getting ready alternating groom / bride as you like). The drone block comes last; after it only copies for the short film. Clips without a colour are not used.":
+        "Camerele una după alta, fiecare în ordinea zilei (la pregătiri alternezi mire / mireasă cum vrei). Blocul cu drona vine la final; după el doar copiile pentru shortmovie. Clipurile fără culoare nu sunt folosite.",
+})
+
 _PATS = []
 
 

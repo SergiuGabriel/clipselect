@@ -313,17 +313,57 @@ File &gt; Import): apare un sequence nou cu toate clipurile. <b>DaVinci Resolve:
 <b>Arată în Finder</b> îți deschide folderul cu XML-ul selectat.</li>
 </ol>
 <p>Aplicația nu poate apăsa singură butoane în Premiere: importul e un singur drag.</p>
+<h2>Cum trebuie să arate selecția</h2>
+<p>Ce trebuie să aibă XML-ul pe care îl dai fiecărei funcții. Culorile sunt etichetele (labels) din Premiere: Rose mireasa,
+Blue mirele, Purple cuplul, Brown biserica, Iris first look / petrecerea, Teal locația de la pregătiri, Mango vornicul,
+Yellow sau Caribbean sala, Violet drona. Tan (interviuri), Forest (nesturi) și Lavender (adjustment layer) sunt ignorate.</p>
+<ul>
+<li><b>Descărcare carduri, Creează proiectul</b>: nu ai nevoie de nicio selecție.</li>
+<li><b>Footage Selection</b>: clipuri brute, în orice ordine (Adaugă folder sau Import XML; exportul păstrează ordinea din listă).</li>
+<li><b>Multicam</b>: bagi tot, în orice ordine; camerele se sincronizează după sunet. Import XML: un timeline deja sincronizat
+(fiecare pistă video = o cameră).</li>
+<li><b>Teaser Studio (Auto)</b>: contează <b>doar culorile</b>. Ordinea și pistele nu contează (ordinea zilei vine din ora filmării).
+Clipurile fără culoare nu sunt folosite. Plus muzica ta.</li>
+<li><b>Long Film (Auto)</b>: <b>nu merge random</b>. Trebuie:
+<ul><li>o culoare pe fiecare selecție (fără culoare = nefolosit);</li>
+<li>biserica (Brown) în ordinea în care o vrei în film;</li>
+<li>blocul cu drona după tot restul: după el pot fi doar copiile pentru shortmovie (sunt lăsate afară). Dacă multe selecții
+sunt după dronă, aplicația îți spune cu roșu exact ce e greșit: care e ultimul cadru cu drona și la ce oră e în sequence,
+câte selecții de fiecare culoare se pierd după el și care e prima.</li></ul>
+<p>Pagina Long Film are jos un desen cu ordinea: trenulețe de culori, cu numele fiecăruia deasupra și camerele dedesubt.</p>
+Restul poate fi în orice ordine și pe orice piste: camerele sunt recunoscute după fișiere, iar ziua fiecărei camere după numerele
+fișierelor (ordinea în care a filmat). Vornicul = selecțiile lungi de dimineață ale camerei principale.</li>
+<li><b>Blueprint</b> (Teaser Studio și Long Film): filmul tău terminat cu culorile pe clipuri (ca să știe ce arată fiecare tăietură)
+și selecțiile nunții noi cu aceleași culori, în orice ordine.</li>
+<li><b>Transcriere</b>: orice fișier cu sunet; Import XML ia clipurile în ordinea de pe timeline.</li>
+</ul>
 <h2>Transcriere</h2>
 <p>Interviurile, discursurile, vornicul sau predica devin text, <b>pe acest calculator</b>, gratuit (Whisper, de la OpenAI;
 nu se urcă nimic).</p>
 <ol>
 <li><b>+ Adaugă fișiere</b>: sunet (lavaliere, recorder) sau video.</li>
+<li><b>Import XML</b> (lângă + Adaugă fișiere): clipurile unui timeline din Premiere (de ex. sequence-ul cu interviurile) intră
+în listă în ordinea de pe timeline.</li>
 <li>Alege <b>limba</b> (română, engleză sau detectează singur) și <b>precizia</b>: <b>Rapid</b> (large-v3-turbo, de câteva ori mai
 rapid, aproape la fel de bun) sau <b>Cel mai precis</b> (large-v3, mai lent). Prima dată modelul se descarcă o singură dată (1,5-3 GB).</li>
 <li><b>Transcriere</b>. Lângă fiecare fișier apar un <b>.txt</b> (textul cu orele) și un <b>.srt</b> (subtitrare).</li>
 <li><b>Export XML cu markere</b>: clipul, cu un marker pe fiecare frază (textul frazei e în marker). În Premiere vezi unde se spune
 fiecare lucru și alegi repede bucățile bune pentru poveste.</li>
 </ol>
+<h3>Povestea din interviuri (cu Claude)</h3>
+<p>Claude citește interviurile mirilor, găsește povestea lor și le împletește într-<b>o singură poveste spusă de amândoi</b>:
+unul continuă ideea celuilalt, cu început, mijloc și final. Folosește doar fraze întregi, exact cum le-au spus; nu inventează
+nimic. Merge prin <b>abonamentul tău Claude</b> (fără cheie, fără costuri în plus).</p>
+<ol>
+<li>Transcrie interviurile, <b>bifează</b> în listă ce intră în poveste și alege la fiecare <b>Cine vorbește</b> (mireasa / mirele).</li>
+<li>Alege <b>Durata</b> poveștii (1-5 minute) și apasă <b>1. Copiază pentru Claude</b>: aplicația copiază transcrierile cu o cerere
+gata scrisă și deschide un <b>chat nou</b> în Claude. Lipești (Cmd+V) și trimiți.</li>
+<li>Când Claude a răspuns, copiezi tot răspunsul (butonul de copiere de sub el) și apeși <b>2. Lipește răspunsul lui Claude</b>.
+Primești un XML: bucățile una după alta (imagine + tot sunetul), cu un marker pe fiecare (cine vorbește și ce spune), iar textul
+poveștii apare în aplicație.</li>
+</ol>
+<p>Dacă Claude îți spune că ai atins limita, încerci mai târziu, la ora pe care ți-o arată Claude: aplicația ține minte ce ai
+trimis, deci apeși doar pasul 2 când ai răspunsul (sau pasul 1 din nou, într-un chat nou).</p>
 <h2>Update-uri și probleme</h2>
 <ul>
 <li>Aplicația verifică singură la pornire dacă există o versiune nouă și te anunță. În <b>Settings &gt; Check for updates</b>
@@ -667,17 +707,58 @@ Proxies and the XML files next to the clips are left out.</li>
 <b>Show in Finder</b> opens the folder with the XML selected.</li>
 </ol>
 <p>The app cannot press buttons inside Premiere by itself: the import is one drag.</p>
+<h2>What your selects need</h2>
+<p>What the XML you give each feature must have. The colours are your Premiere labels: Rose bride, Blue groom, Purple couple,
+Brown church, Iris first look / party, Teal getting-ready location, Mango vornic, Yellow or Caribbean venue, Violet drone.
+Tan (interviews), Forest (nests) and Lavender (adjustment layers) are ignored.</p>
+<ul>
+<li><b>Card Offload, Create Project</b>: no selects needed.</li>
+<li><b>Footage Selection</b>: raw clips, any order (Add Folder or Import XML; the export keeps the list's order).</li>
+<li><b>Multicam</b>: dump everything, any order; the cameras are synced by sound. Import XML: an already synced timeline (every
+video track = a camera).</li>
+<li><b>Teaser Studio (Auto)</b>: <b>only the colours</b> matter. Order and tracks do not (the day's order comes from the recording
+time). Clips without a colour are not used. Plus your music.</li>
+<li><b>Long Film (Auto)</b>: <b>random does not work</b>. It needs:
+<ul><li>a colour on every selection (no colour = not used);</li>
+<li>the church (Brown) in the order you want it in the film;</li>
+<li>the drone block after everything else: only copies for the short film may come after it (they are left out). If many
+selections are after the drone, the app tells you in red exactly what is wrong: which is the last drone shot and where it
+is on the sequence, how many selections of each colour are lost after it and which is the first.</li></ul>
+<p>The Long Film page has a drawing of the order at the bottom: trains of colours, the name of each above it and the cameras
+under it.</p>
+Everything else can be in any order and on any tracks: the cameras are recognised by their files and every camera's day by its
+file numbers (the order it filmed). The vornic = the main camera's long morning selections.</li>
+<li><b>Blueprint</b> (Teaser Studio and Long Film): your finished film with the colours on its clips (so it knows what every cut
+shows) and the new wedding's selects with the same colours, in any order.</li>
+<li><b>Transcribe</b>: any file with sound; Import XML takes the clips in the timeline's order.</li>
+</ul>
 <h2>Transcribe</h2>
 <p>Interviews, speeches, the vornic or the sermon become text, <b>on this computer</b>, for free (Whisper, by OpenAI; nothing is
 uploaded).</p>
 <ol>
 <li><b>+ Add files</b>: sound (lavaliers, recorder) or video.</li>
+<li><b>Import XML</b> (next to + Add files): the clips of a Premiere timeline (e.g. the sequence with the interviews) come into the
+list in the timeline's order.</li>
 <li>Choose the <b>language</b> (Romanian, English or detect it) and the <b>precision</b>: <b>Fast</b> (large-v3-turbo, several times
 faster, almost as good) or <b>The most precise</b> (large-v3, slower). The first time the model is downloaded once (1.5-3 GB).</li>
 <li><b>Transcribe</b>. Next to every file you get a <b>.txt</b> (the text with the times) and a <b>.srt</b> (subtitles).</li>
 <li><b>Export XML with markers</b>: the clip with a marker on every sentence (the sentence is in the marker). In Premiere you see
 where each thing is said and pick the good pieces for the story quickly.</li>
 </ol>
+<h3>The story of the interviews (with Claude)</h3>
+<p>Claude reads the couple's interviews, finds their story and weaves them into <b>one story told by both</b>: one continues the
+other's thought, with a beginning, a middle and an ending. It uses only whole sentences, exactly as they said them; it invents
+nothing. It works through <b>your Claude subscription</b> (no key, no extra cost).</p>
+<ol>
+<li>Transcribe the interviews, <b>tick</b> in the list what goes into the story and set <b>Who is speaking</b> on each (bride / groom).</li>
+<li>Choose the story's <b>Length</b> (1-5 minutes) and press <b>1. Copy for Claude</b>: the app copies the transcripts with a request
+already written and opens a <b>new chat</b> in Claude. Paste (Cmd+V) and send.</li>
+<li>When Claude has answered, copy the whole answer (the copy button under it) and press <b>2. Paste Claude's answer</b>. You get an
+XML: the pieces one after the other (picture + all the sound), a marker on each (who speaks and what), and the story's text shows
+in the app.</li>
+</ol>
+<p>If Claude says you reached your limit, try again at the time Claude shows: the app remembers what you sent, so you only press
+step 2 when you have the answer (or step 1 again, in a new chat).</p>
 <h2>Updates and problems</h2>
 <ul>
 <li>At start the app checks by itself for a new version and tells you. <b>Settings &gt; Check for updates</b> checks any time,

@@ -39,9 +39,10 @@ import transcribe
 import ai
 import xmlimport
 import projectsetup
+import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.7.0"
+APP, VER = "MoneyMakingMachine", "v3.8.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
 
@@ -3471,7 +3472,8 @@ class BlueprintBox(QWidget):
         v.setSpacing(10)
         v.addWidget(lbl(i18n.T(auto_text) + " " + i18n.T("A blueprint is one of your finished films: its cuts, music, sound "
                                                          "effects and pacing stay, and every cut is refilled with a shot of "
-                                                         "the same colour from this wedding."), "muted", True))
+                                                         "the same colour from this wedding. Both need your colours: the "
+                                                         "film's clips and this wedding's selects (in any order)."), "muted", True))
         seg = QHBoxLayout()
         seg.setSpacing(0)
         self.b_auto = btn("Auto", "seg", lambda: self.set_mode("auto"))
@@ -3684,8 +3686,10 @@ class TeaserPage(QWidget):
             left.addWidget(f)
             return l
         l1 = card(1, "Footage (your colour labels)")
-        l1.addWidget(lbl("Export from Premiere an XML of a sequence with your labelled clips (selects). Rose bride, Blue "
-                         "groom, Purple couple, Brown church, Yellow venue, Iris party, Violet drone.", "muted", True))
+        l1.addWidget(lbl("Export from Premiere an XML of the sequence with your selects. Only the COLOURS matter: Rose bride, "
+                         "Blue groom, Purple couple, Brown church, Yellow or Caribbean venue, Iris party, Violet drone "
+                         "(Teal getting-ready location, Mango vornic). Clips without a colour are not used. The order and the "
+                         "tracks do not matter: the order of the day comes from the recording time.", "muted", True))
         l1.addWidget(btn("Import labelled XML", slot=self.pick_footage))
         self.foot_lbl = QLabel("")
         self.foot_lbl.setWordWrap(True)
@@ -4205,6 +4209,121 @@ class TeaserPage(QWidget):
 
 # ---------------------------------------------------------------- Long Film
 
+# Premiere label colours (approximately as Premiere shows them)
+PR_LABEL = {"Blue": "#3f63e0", "Rose": "#f08ccb", "Teal": "#1f9e96", "Iris": "#6d78d6", "Brown": "#9a6233",
+            "Yellow": "#e3cf3e", "Purple": "#9b4fc2", "Violet": "#b29de6", "Caribbean": "#22b8a5", "Mango": "#f39c2c"}
+
+
+class SelectsMap(QWidget):
+    """How his selects sequence should look (Long Film): trains of colours, the name of each train above it, the
+    cameras under it. Measured on his own selects (4 July, Madalina & Radu)."""
+    GROUPS = [
+        ("Camera 1 (main, e.g. fx6)", [(7, "Blue", "Groom"), (5, "Rose", "Bride"), (2, "Teal", "Location"),
+                                       (3, "Iris", "First look"), (7, "Brown", "Church"), (3, "Yellow", "Venue"),
+                                       (3, "Purple", "Couple"), (5, "Iris", "Party")]),
+        ("Camera 2 (e.g. fx3)", [(4, "Iris", "First look / party"), (3, "Brown", "Church"), (3, "Iris", "Party")]),
+        ("Camera 3", [(4, "Iris", "Party")]),
+        ("Drone", [(4, "Violet", "Drone")]),
+        ("Copies", [(4, None, "Left out")]),
+    ]
+    ROW, BAR, GAP = 15, 26, 12
+
+    def __init__(self):
+        super().__init__()
+        self.setMinimumWidth(300)
+        self._h = 0
+        self.setFixedHeight(120)
+
+    @staticmethod
+    def _place(items, W, maxrows=6):
+        """items = [(centre x, width)] -> [(left x, row)]: each label in the lowest row where it does not touch another."""
+        rows, out = [[] for _ in range(maxrows)], []
+        for cx, tw in items:
+            lx = min(max(1, cx - tw / 2), W - tw - 1)
+            r = next((k for k in range(maxrows) if all(lx > b + 6 or lx + tw < a - 6 for a, b in rows[k])), maxrows - 1)
+            rows[r].append((lx, lx + tw))
+            out.append((lx, r))
+        return out
+
+    def _layout(self, fm):
+        W = self.width() - 2
+        total = sum(w for _, segs in self.GROUPS for w, _, _ in segs)
+        px = (W - self.GAP * (len(self.GROUPS) - 1)) / total
+        segs_xy, groups_xy, x = [], [], 1.0
+        for gname, segs in self.GROUPS:
+            g0 = x
+            for w, col, name in segs:
+                segs_xy.append((x, w * px, col, i18n.T(name)))
+                x += w * px
+            groups_xy.append((g0, x, i18n.T(gname)))
+            x += self.GAP
+        top = self._place([(sx + sw / 2, fm.horizontalAdvance(n)) for sx, sw, _, n in segs_xy], W)
+        bot = self._place([((g0 + g1) / 2, fm.horizontalAdvance(n)) for g0, g1, n in groups_xy], W)
+        ntop = 1 + max(r for _, r in top)
+        nbot = 1 + max(r for _, r in bot)
+        h = 2 + ntop * self.ROW + 6 + self.BAR + 8 + nbot * self.ROW + 4
+        return segs_xy, groups_xy, top, bot, ntop, nbot, h
+
+    def resizeEvent(self, e):
+        f = self.font()
+        f.setPixelSize(11)
+        from PySide6.QtGui import QFontMetrics
+        h = self._layout(QFontMetrics(f))[-1]
+        if h != self.height():
+            self.setFixedHeight(h)
+        super().resizeEvent(e)
+
+    def paintEvent(self, e):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        f = p.font()
+        f.setPixelSize(11)
+        p.setFont(f)
+        fm = p.fontMetrics()
+        segs_xy, groups_xy, top, bot, ntop, nbot, _ = self._layout(fm)
+        bar_y = 2 + ntop * self.ROW + 6
+        for (sx, sw, col, name), (lx, row) in zip(segs_xy, top):
+            y = 2 + (ntop - 1 - row) * self.ROW                # row 0 sits right on the bar
+            p.setPen(QColor("#d6d6d6") if col else QColor(C["MUTED"]))
+            p.drawText(QRectF(lx, y, fm.horizontalAdvance(name) + 2, self.ROW), Qt.AlignLeft | Qt.AlignVCenter, name)
+            if row > 0:
+                p.setPen(QPen(QColor("#5a5a5a"), 1))
+                p.drawLine(QPointF(sx + sw / 2, y + self.ROW - 1), QPointF(sx + sw / 2, bar_y - 1))
+        import random
+        rnd = random.Random(7)
+        for sx, sw, col, name in segs_xy:
+            r = QRectF(sx + 0.5, bar_y, max(1.0, sw - 1), self.BAR)
+            if col:
+                p.fillRect(r, QColor(PR_LABEL[col]))
+                p.setPen(QPen(QColor(0, 0, 0, 90), 1))
+                t = sx + rnd.uniform(4, 9)
+                while t < sx + sw - 3:                       # clip boundaries, like a real timeline
+                    p.drawLine(QPointF(t, bar_y + 1), QPointF(t, bar_y + self.BAR - 1))
+                    t += rnd.uniform(4, 11)
+            else:
+                p.fillRect(r, QColor("#3a3a3a"))
+                p.save()
+                p.setClipRect(r)
+                p.setPen(QPen(QColor("#5c5c5c"), 1))
+                k = sx - self.BAR
+                while k < sx + sw:                           # hatched = left out
+                    p.drawLine(QPointF(k, bar_y + self.BAR), QPointF(k + self.BAR, bar_y))
+                    k += 6
+                p.restore()
+        y2 = bar_y + self.BAR + 6
+        for (g0, g1, gname), (lx, row) in zip(groups_xy, bot):
+            p.setPen(QPen(QColor("#6a6a6a"), 1))
+            p.drawLine(QPointF(g0 + 1, y2), QPointF(g1 - 1, y2))
+            p.drawLine(QPointF(g0 + 1, y2 - 3), QPointF(g0 + 1, y2))
+            p.drawLine(QPointF(g1 - 1, y2 - 3), QPointF(g1 - 1, y2))
+            ty = y2 + 2 + row * self.ROW
+            if row > 0:
+                p.drawLine(QPointF((g0 + g1) / 2, y2), QPointF((g0 + g1) / 2, ty + 2))
+            p.setPen(QColor(C["MUTED"]))
+            p.drawText(QRectF(lx, ty, fm.horizontalAdvance(gname) + 2, self.ROW), Qt.AlignLeft | Qt.AlignVCenter, gname)
+        p.end()
+
+
 class LongFilmPage(QWidget):
     """The long film pre-cut from his labelled selections (see longfilm.py). Own projects, like Teaser Studio."""
     back = Signal()
@@ -4281,10 +4400,15 @@ class LongFilmPage(QWidget):
             left.addWidget(f)
             return l
         l1 = card(1, "Footage (your colour labels)")
-        l1.addWidget(lbl("The XML of your selects sequence, laid out as you like (one or more tracks, gaps, any order). Same "
-                         "colours as Teaser Studio. The cameras are recognised by their files and every camera's day is read "
-                         "from its file numbers (the order it filmed); the church block on each camera separates the morning "
-                         "from the rest. The church goes in exactly as you laid it out.", "muted", True))
+        l1.addWidget(lbl("The XML of your selects sequence. What it needs:<br>"
+                         "• a COLOUR on every selection: Rose bride, Blue groom, Purple couple, Brown church, Iris first look "
+                         "and party, Teal getting-ready location, Yellow or Caribbean venue, Violet drone (Tan interviews and "
+                         "clips without a colour are not used);<br>"
+                         "• the church (Brown) in the order you want it in the film;<br>"
+                         "• the drone block AFTER everything else: only copies for the short film may come after it (they "
+                         "are left out).<br>"
+                         "Everything else can be in any order, on any tracks: the cameras are recognised by their files and "
+                         "every camera's day is read from its file numbers.", "muted", True))
         l1.addWidget(btn("Import labelled XML", slot=self.pick_footage))
         self.foot_lbl = QLabel("")
         self.foot_lbl.setWordWrap(True)
@@ -4331,6 +4455,12 @@ class LongFilmPage(QWidget):
         self.pp = ProgressPanel()
         right.addWidget(self.pp)
         right.addStretch()
+        right.addWidget(lbl("HOW YOUR SELECTS SEQUENCE SHOULD LOOK", "section"))
+        right.addWidget(lbl("Every camera one after the other, each in the order of the day (getting ready alternating groom / "
+                            "bride as you like). The drone block comes last; after it only copies for the short film. "
+                            "Clips without a colour are not used.", "muted", True))
+        self.smap = SelectsMap()
+        right.addWidget(self.smap)
         body.addLayout(right, 1)
         self.layout_ = None
 
@@ -4493,9 +4623,33 @@ class LongFilmPage(QWidget):
             rows.append(f'<span style="color:{C["POOR"]}">' + i18n.T("{} clips not found on this computer: connect the disk with the footage.").format(missing) + "</span>")
         if len(kept) < len(self.pieces):
             rows.append(f'<span style="color:{C["MUTED"]}">' + i18n.T("{} copies at the end of your selects left out (they are for the short film).").format(len(self.pieces) - len(kept)) + "</span>")
+        lost = longfilm.lost_after_drone(self.pieces)
+        if len(lost) >= max(10, len(self.pieces) // 5):
+            rows.append(f'<span style="color:{C["POOR"]}">' + self._drone_problem(lost) + "</span>")
         self.foot_lbl.setText("<br>".join(rows))
         self.parts_lbl.setText(i18n.T("Press Build."))
         notify(f"Footage loaded: {len(self.pieces)} selections")
+
+    def _drone_problem(self, lost):
+        """Exactly what is wrong: which drone clip ends last and where, what is lost after it (by colour), the first
+        lost selection, and what to move."""
+        names = {"Blue": "groom", "Rose": "bride", "Purple": "couple", "Brown": "church", "Iris": "first look / party",
+                 "Teal": "getting-ready location", "Yellow": "venue", "Caribbean": "venue", "Mango": "vornic"}
+        tc = lambda t: f"{int(t // 3600)}:{int(t % 3600 // 60):02d}:{int(t % 60):02d}"
+        d = longfilm.last_drone(self.pieces)
+        dend = d["order"] + d["b"] - d["a"]
+        cnt = {}
+        for p in lost:
+            cnt[p.get("label", "")] = cnt.get(p.get("label", ""), 0) + 1
+        what = ", ".join(f"{n} {lab} ({i18n.T(names.get(lab, 'other'))})" for lab, n in sorted(cnt.items(), key=lambda x: -x[1]))
+        first = min(lost, key=lambda p: p["order"])
+        return ("<b>" + i18n.T("{} selections will be left out.").format(len(lost)) + "</b> " +
+                i18n.T("The last drone shot on your sequence is {} (it ends at {}): everything after it counts as copies for "
+                       "the short film. After it there are: {}. The first one is {} at {}.").format(
+                    escape(Path(d["path"]).name), tc(dend), what, escape(Path(first["path"]).name), tc(first["order"])) +
+                " " + i18n.T("Fix: move {} (and the other drone shots) after all the selections you want in the film, or delete it "
+                             "if it is a copy.").format(escape(Path(d["path"]).name)) +
+                " " + i18n.T("(Times from the start of your sequence.)"))
 
     def pick_photo(self):
         f, _ = QFileDialog.getOpenFileName(self, "Photo of the vornic", "", "Images (*.jpg *.jpeg *.png *.JPG *.PNG)")
@@ -5419,8 +5573,9 @@ class TranscribePage(QWidget):
         v.addLayout(top)
         v.addWidget(lbl("Interviews, speeches, the vornic, the sermon: the speech becomes text, on this computer (nothing is "
                         "uploaded). Next to every file you get a .txt with the times and a .srt (subtitles); an XML with a "
-                        "marker on every sentence shows in Premiere where each thing is said. The first time the speech "
-                        "model is downloaded once (1.5-3 GB).", "muted", True))
+                        "marker on every sentence shows in Premiere where each thing is said. From the bride's and the "
+                        "groom's interviews Claude can make ONE story they tell together (below). The first time the "
+                        "speech model is downloaded once (1.5-3 GB).", "muted", True))
         v.addSpacing(10)
         self.why = lbl("", "muted", True)
         v.addWidget(self.why)
@@ -5434,12 +5589,27 @@ class TranscribePage(QWidget):
         box = (f"background:#181818;border:1px solid {C['BORDER']};border-radius:6px;padding:6px;")
         self.list.setStyleSheet(f"QListWidget{{{box}}} QListWidget::item{{padding:6px 4px}}")
         self.list.currentRowChanged.connect(self._show)
+        self.list.itemChanged.connect(self._ticked)
+        self.list.setStyleSheet(self.list.styleSheet() +
+                                "QListWidget::indicator{width:16px;height:16px;border:1px solid #6a6a6a;border-radius:4px;background:#232323}"
+                                f"QListWidget::indicator:checked{{background:{C['HOT']};border-color:{C['HOT']};image:url({_check_png()})}}")
         left.addWidget(self.list, 1)
         fr = QHBoxLayout()
         fr.addWidget(btn("+  Add files", slot=self.add))
+        fr.addWidget(btn("Import XML", slot=self.import_xml))
         fr.addWidget(btn("Remove", "link", self.remove))
         fr.addStretch()
         left.addLayout(fr)
+        wr = QHBoxLayout()
+        wr.addWidget(lbl("Who is speaking", "muted"))
+        self.c_who = QComboBox()
+        self.c_who.setProperty("i18n", True)
+        self.c_who.addItems(["Not set", "The bride", "The groom", "The bride and the groom", "Someone else"])
+        self.c_who.setMinimumWidth(220)
+        self.c_who.currentIndexChanged.connect(self._who)
+        wr.addWidget(self.c_who)
+        wr.addStretch()
+        left.addLayout(wr)
         opt = QHBoxLayout()
         opt.addWidget(lbl("Language", "muted"))
         self.c_lang = QComboBox()
@@ -5471,6 +5641,28 @@ class TranscribePage(QWidget):
         rb.addWidget(self.b_xml)
         rb.addStretch()
         right.addLayout(rb)
+        right.addSpacing(8)
+        right.addWidget(lbl("THE STORY OF THE INTERVIEWS (WITH CLAUDE)", "section"))
+        right.addWidget(lbl("Tick the interviews in the list and set who is speaking. 1: the app copies the transcripts and "
+                            "opens a new Claude chat: paste (Cmd+V) and send. 2: copy Claude's whole answer (the copy button "
+                            "under it) and press Paste Claude's answer: you get an XML with the story, the pieces one after "
+                            "the other, with a marker on each.", "muted", True))
+        sr = QHBoxLayout()
+        sr.addWidget(lbl("Length", "muted"))
+        self.c_len = QComboBox()
+        self.c_len.addItems([f"{m} min" for m in (1, 2, 3, 4, 5)])
+        self.c_len.setCurrentIndex(max(0, min(4, int(self.cfg.get("story_min", 2)) - 1)))
+        self.c_len.currentIndexChanged.connect(lambda i: (self.cfg.update(story_min=i + 1), self.store.save_app()))
+        sr.addWidget(self.c_len)
+        sr.addStretch()
+        right.addLayout(sr)
+        sb = QHBoxLayout()                       # own row: both buttons fit in Romanian too
+        self.b_ask = btn("1. Copy for Claude", "primary", self.ask_claude)
+        self.b_answer = btn("2. Paste Claude's answer", slot=self.claude_answer)
+        sb.addWidget(self.b_ask)
+        sb.addWidget(self.b_answer)
+        sb.addStretch()
+        right.addLayout(sb)
         self.pp = ProgressPanel()
         right.addWidget(self.pp)
         body.addLayout(right, 2)
@@ -5485,9 +5677,15 @@ class TranscribePage(QWidget):
     def _fill(self, select=None):
         self.list.blockSignals(True)
         self.list.clear()
+        names = {"bride": "The bride", "groom": "The groom", "both": "The bride and the groom", "other": "Someone else"}
         for f in self._files():
             mark = "✓" if f.get("segs") is not None else ("✕" if f.get("error") else "·")
-            self.list.addItem(f"{mark}  {Path(f['path']).name}")
+            who = f"  ·  {i18n.T(names[f['who']])}" if f.get("who") in names else ""
+            it = QListWidgetItem(f"{mark}  {Path(f['path']).name}{who}")
+            it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
+            it.setCheckState(Qt.Checked if f.get("story", True) else Qt.Unchecked)
+            it.setToolTip(i18n.T("Ticked = goes into the story"))
+            self.list.addItem(it)
         self.list.blockSignals(False)
         if self._files():
             self.list.setCurrentRow(select if select is not None else 0)
@@ -5503,6 +5701,12 @@ class TranscribePage(QWidget):
                              any(x.get("segs") is None for x in self._files()))
         self.b_copy.setEnabled(bool(f and f.get("segs")))
         self.b_xml.setEnabled(bool(f and f.get("segs")))
+        self.b_ask.setEnabled(not self._busy() and bool(self._story_files()))
+        self.b_answer.setEnabled(not self._busy() and bool(self.cfg.get("story_paths")))
+        self.c_who.blockSignals(True)
+        self.c_who.setEnabled(f is not None)
+        self.c_who.setCurrentIndex(["", "bride", "groom", "both", "other"].index(f.get("who") or "") if f else 0)
+        self.c_who.blockSignals(False)
 
     def _cur(self):
         r = self.list.currentRow()
@@ -5524,6 +5728,118 @@ class TranscribePage(QWidget):
             del self._files()[r]
             self.store.save_app()
             self._fill()
+
+    def import_xml(self):
+        """The interviews of a Premiere / DaVinci timeline (FCP7 XML), in the timeline's order."""
+        path, _ = QFileDialog.getOpenFileName(self, "Import XML", "", "XML (*.xml)")
+        if not path:
+            return
+        try:
+            found, missing = xmlimport.media(path)
+        except Exception as ex:
+            logging.exception("transcribe xml import")
+            notify(i18n.T("Import XML failed: {}").format(i18n.T(str(ex))), error=True)
+            return
+        have = {f["path"] for f in self._files()}
+        new = [p for p in found if p not in have]
+        for p in new:
+            self._files().append(dict(path=p, segs=None))
+        self.store.save_app()
+        self._fill(select=len(self._files()) - 1 if new else None)
+        if not found:
+            notify(i18n.T("None of the clips in this XML were found on this computer (e.g. {}). Is the footage disk connected?")
+                   .format(missing[0] if missing else "?"), error=True)
+        elif missing:
+            notify(i18n.T("{} clips added from the XML, in its order. {} clips are not on this computer and were skipped.")
+                   .format(len(new), len(missing)), error=True, ms=9000)
+        elif not new:
+            notify(i18n.T("Every clip of this XML is already in the list."))
+        else:
+            notify(i18n.T("{} clips added from the XML, in its order.").format(len(new)))
+
+    def _ticked(self, it):
+        r = self.list.row(it)
+        if 0 <= r < len(self._files()):
+            self._files()[r]["story"] = it.checkState() == Qt.Checked
+            self.store.save_app()
+            self._buttons()
+
+    def _who(self, i):
+        f = self._cur()
+        if f is not None:
+            f["who"] = ["", "bride", "groom", "both", "other"][i]
+            self.store.save_app()
+            self._fill(select=self.list.currentRow())
+
+    def _story_files(self):
+        return [f for f in self._files() if f.get("story", True) and f.get("segs")]
+
+    def ask_claude(self):
+        fs = self._story_files()
+        if not fs:
+            notify(i18n.T("Transcribe and tick at least one interview first."), error=True)
+            return
+        if len(fs) > len(story.LETTERS):
+            notify(i18n.T("Too many interviews ticked (at most {}).").format(len(story.LETTERS)), error=True)
+            return
+        text = story.prompt(fs, int(self.cfg.get("story_min", 2)), i18n.LANG)
+        self.cfg["story_paths"] = [f["path"] for f in fs]      # the codes A, B... belong to these files
+        self.store.save_app()
+        QApplication.clipboard().setText(text)
+        QDesktopServices.openUrl(QUrl("https://claude.ai/new"))
+        notify(i18n.T("Copied. In the new Claude chat paste it (Cmd+V) and send; then copy the whole answer and press "
+                      "Paste Claude's answer."), ms=12000)
+        self._buttons()
+
+    def claude_answer(self):
+        by = {f["path"]: f for f in self._files()}
+        fs = [by.get(p) for p in self.cfg.get("story_paths", [])]
+        if not fs or any(f is None or not f.get("segs") for f in fs):
+            notify(i18n.T("The interviews sent to Claude are no longer in the list: press Copy for Claude again."), error=True)
+            return
+        ans = QApplication.clipboard().text()
+        if "=== INTERVI" in ans:                      # still the text for Claude, not its answer
+            notify(i18n.T("The clipboard still holds the text for Claude. Send it in Claude, then copy Claude's answer."),
+                   error=True, ms=10000)
+            return
+        pieces, bad = story.parse(ans, fs)
+        if not pieces:
+            notify(i18n.T("No story found in the copied text. Copy Claude's whole answer (the copy button under it) and "
+                          "press again."), error=True, ms=10000)
+            return
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            infos = {f["path"]: projectsetup.probe(f["path"]) for f in fs}
+        finally:
+            QApplication.restoreOverrideCursor()
+        if any(infos[f["path"]].get("dur", 0) <= 0 for f in fs):
+            notify(i18n.T("An interview file cannot be read any more. Is the disk connected?"), error=True)
+            return
+        cuts = story.ranges(pieces, fs, [infos[f["path"]]["dur"] for f in fs])
+        names = {"bride": "Bride", "groom": "Groom", "both": "Bride and groom", "other": "Someone else"}
+        labels = {k: i18n.T(names[f["who"]]) for k, f in enumerate(fs) if f.get("who") in names}
+        first = Path(fs[0]["path"])
+        start = str(projectsetup.free_path(first.with_name(i18n.T("Interview story") + ".xml")))
+        out, _ = QFileDialog.getSaveFileName(self, "Save XML", start, "XML (*.xml)")
+        if not out:
+            return
+        try:
+            r = story.export_xml(cuts, fs, infos, out, i18n.T("Interview story"), labels)
+        except Exception as e:
+            logging.exception("story export failed")
+            notify(i18n.T("Export failed: {}").format(i18n.T(str(e))), error=True)
+            return
+        pos, lines = 0.0, []
+        for fi, t0, t1, txt in cuts:
+            who = labels.get(fi) or f"{story.LETTERS[fi]}"
+            lines.append(f"[{story._mmss(pos)}] {who}: {txt}")
+            pos += t1 - t0
+        self.text.setPlainText(i18n.T("The story ({} pieces, {}):").format(r["pieces"], story._mmss(r["seconds"])) +
+                               "\n\n" + "\n\n".join(lines))
+        msg = i18n.T("Story XML saved: {} pieces, {} long.").format(r["pieces"], story._mmss(r["seconds"]))
+        if bad:
+            msg += " " + i18n.T("{} lines of the answer were not understood and were skipped.").format(len(bad))
+        notify(msg, error=bool(bad), ms=9000)
 
     def _show(self, r):
         f = self._files()[r] if 0 <= r < len(self._files()) else None
