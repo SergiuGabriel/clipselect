@@ -137,6 +137,40 @@ EXACT.update({
         "Camerele una după alta, fiecare în ordinea zilei (la pregătiri alternezi mire / mireasă cum vrei). Blocul cu drona vine la final; după el doar copiile pentru shortmovie. Clipurile fără culoare nu sunt folosite.",
 })
 
+EXACT.update({
+    "Cameras 3, 4, 5…": "Camerele 3, 4, 5…", "The same way": "La fel",
+    "Every camera one after the other (with 3, 4 or 5 cameras the same way), each in the order of the day; couple shots can sit in the middle of the party. The drone block comes last; after it only copies for the short film. Clips without a colour are not used.":
+        "Camerele una după alta (cu 3, 4 sau 5 camere la fel), fiecare în ordinea zilei; cadrele cu cuplul pot sta la mijlocul petrecerii. Blocul cu drona vine la final; după el doar copiile pentru shortmovie. Clipurile fără culoare nu sunt folosite.",
+    "Add a file and select it in the list first.": "Adaugă întâi un fișier și selectează-l în listă.",
+})
+
+EXACT.update({
+    "Download and install": "Descarcă și instalează",
+    "no version has been published yet": "încă nu a fost publicată nicio versiune",
+    "the update server refused the check for now (too many checks), try again later":
+        "serverul de update-uri a refuzat verificarea deocamdată (prea multe verificări), încearcă mai târziu",
+    "the secure connection could not be checked (certificates), send the error report to Claude":
+        "conexiunea securizată nu a putut fi verificată (certificate), trimite raportul de erori lui Claude",
+    "no internet connection": "nu există conexiune la internet",
+    "Downloaded to Downloads and opened: drag MoneyMakingMachine into Applications (Replace), then close this app and open it again.":
+        "Descărcat în Downloads și deschis: trage MoneyMakingMachine în Applications (Replace), apoi închide aplicația și deschide-o din nou.",
+    "Downloaded to Downloads: unzip it and replace the old MoneyMakingMachine folder, then open it again.":
+        "Descărcat în Downloads: dezarhivează-l și înlocuiește vechiul folder MoneyMakingMachine, apoi deschide-l din nou.",
+    "could not write the file (is the disk full?)": "nu am putut scrie fișierul (e plin discul?)",
+    "the download was cut off": "descărcarea s-a întrerupt",
+    "no connection": "fără conexiune",
+    "certificate": "certificat",
+})
+TEMPLATES.update({
+    "You have {}. Could not check for updates: {}.": "Ai {}. Nu am putut verifica update-urile: {}.",
+    "the update server did not answer ({})": "serverul de update-uri nu a răspuns ({})",
+    "Downloading {}…": "Se descarcă {}…",
+    "Downloading {}: {} %": "Se descarcă {}: {} %",
+    "Downloading {}: {} MB": "Se descarcă {}: {} MB",
+    "The download failed ({}). Try again.": "Descărcarea a eșuat ({}). Încearcă din nou.",
+    "New version {} available: Settings > Download and install": "Versiune nouă {} disponibilă: Setări > Descarcă și instalează",
+})
+
 _PATS = []
 
 

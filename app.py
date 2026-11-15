@@ -35,6 +35,7 @@ import teaser
 import longfilm
 import blueprint
 import offload
+import updater
 import transcribe
 import ai
 import xmlimport
@@ -42,9 +43,9 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.8.0"
+APP, VER = "MoneyMakingMachine", "v3.8.1"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
-REPO = "SergiuGabriel/clipselect"          # GitHub releases are checked for updates (the repo must be public)
+# updates: updater.py (the address is never shown to the user)
 
 
 def _ver(v):
@@ -54,20 +55,6 @@ def _ver(v):
         return (0,)
 
 
-def latest_release():
-    """(tag, page url) of the newest published version, or None."""
-    import ssl
-    import urllib.request
-    try:                                  # the packed app has no system certificates: bring our own (certifi)
-        import certifi
-        ctx = ssl.create_default_context(cafile=certifi.where())
-    except Exception:
-        ctx = ssl.create_default_context()
-    req = urllib.request.Request(f"https://api.github.com/repos/{REPO}/releases/latest",
-                                 headers={"User-Agent": "MoneyMakingMachine", "Accept": "application/vnd.github+json"})
-    with urllib.request.urlopen(req, timeout=10, context=ctx) as r:
-        d = json.loads(r.read().decode("utf-8"))
-    return d.get("tag_name", ""), d.get("html_url", "")
 C = dict(BG="#1d1d1d", PANEL="#232323", CARD="#2a2a2a", BORDER="#3a3a3a", TEXT="#d6d6d6", MUTED="#8f8f8f",
          BLUE="#1473e6", HOT="#4b9cf5", GOOD="#4cc38a", FAIR="#e6b93a", POOR="#e5534b")   # Premiere Pro look
 LV_COL = [C["POOR"], C["FAIR"], C["GOOD"]]
@@ -134,6 +121,8 @@ QComboBox::down-arrow{image:url(@ARROW);width:10px;height:6px}
 QComboBox QAbstractItemView::item{min-height:24px;padding:2px 8px}
 QComboBox:hover{border-color:#6a6a6a}
 QComboBox QAbstractItemView{background:#2a2a2a;border:1px solid #4a4a4a;selection-background-color:@BLUE}
+QComboBox:disabled{color:#5e5e5e;background:#1e1e1e;border-color:#353535}
+QLineEdit:disabled{color:#5e5e5e;background:#1e1e1e;border-color:#353535}
 QSlider::groove:horizontal{height:2px;background:#4a4a4a;border-radius:1px}
 QSlider::sub-page:horizontal{background:#c8c8c8;border-radius:1px}
 QSlider::handle:horizontal{background:@PANEL;border:2px solid #c8c8c8;width:10px;height:10px;margin:-6px 0;border-radius:7px}
@@ -2964,7 +2953,7 @@ class SettingsPage(QWidget):
         right.addWidget(lbl("Updates and problems", "h2"))
         ur = QHBoxLayout()
         ur.addWidget(btn("Check for updates", slot=lambda: self.check_updates(False)))
-        self.b_dl = btn("Download", "primary", self.open_release)
+        self.b_dl = btn("Download and install", "primary", self.open_release)
         self.b_dl.hide()
         ur.addWidget(self.b_dl)
         ur.addStretch()
@@ -3004,7 +2993,7 @@ class SettingsPage(QWidget):
     def check_updates(self, silent=True):
         self._silent = silent
         self.upd.setText("Checking…")
-        self._uw = _Runner(lambda: latest_release())
+        self._uw = _UpdWorker("check")
         self._uw.done.connect(lambda r: self._update_result(r, silent))
         self._uw.failed.connect(self._update_failed)
         self._uw.start()
@@ -3013,24 +3002,26 @@ class SettingsPage(QWidget):
         logging.warning("update check failed: %s", m)
         if not getattr(self, "_silent", True):
             notify("Could not check for updates", error=True)
-        if "404" in m:
-            why = "no version has been published on GitHub yet (the first one appears after the next build)"
+        if "no version" in m:
+            why = "no version has been published yet"
         elif "403" in m or "429" in m:
-            why = "GitHub refused the check for now (too many checks), try again later"
-        elif "CERTIFICATE" in m.upper() or "SSL" in m.upper():
+            why = "the update server refused the check for now (too many checks), try again later"
+        elif "certificate" in m:
             why = "the secure connection could not be checked (certificates), send the error report to Claude"
+        elif "no connection" in m:
+            why = "no internet connection"
         else:
-            why = f"no internet connection or GitHub did not answer ({m[:60]})"
-        self.upd.setText(f"You have {VER}. Could not check for updates: {why}.")
+            why = f"the update server did not answer ({m[:40]})"
+        self.upd.setText(i18n.T("You have {}. Could not check for updates: {}.").format(VER, i18n.T(why)))
 
     def _update_result(self, r, silent):
-        tag, url = r or ("", "")
-        self._release_url = url
-        if tag and _ver(tag) > _ver(VER):
-            self.upd.setText(f"New version available: {tag} (you have {VER}).")
+        self._release = r
+        if r and _ver(r["tag"]) > _ver(VER):
+            self.upd.setText(f"New version available: {r['tag']} (you have {VER}).")
             self.b_dl.show()
-            logging.info("update available: %s", tag)
-            self.update_found.emit(tag)
+            self.b_dl.setEnabled(True)
+            logging.info("update available: %s", r["tag"])
+            self.update_found.emit(r["tag"])
         else:
             self.upd.setText(f"You have the latest version ({VER}).")
             if not silent:
@@ -3038,8 +3029,41 @@ class SettingsPage(QWidget):
             self.b_dl.hide()
 
     def open_release(self):
-        if getattr(self, "_release_url", ""):
-            QDesktopServices.openUrl(QUrl(self._release_url))
+        """Downloads the new version for this computer inside the app and opens it (no browser, no address)."""
+        r = getattr(self, "_release", None)
+        if not r or (getattr(self, "_dw", None) and self._dw.isRunning()):
+            return
+        self.b_dl.setEnabled(False)
+        self.upd.setText(i18n.T("Downloading {}…").format(r["tag"]))
+        self._dw = _UpdWorker("download", r)
+        self._dw.progress.connect(lambda got, tot: self.upd.setText(
+            i18n.T("Downloading {}: {} %").format(r["tag"], int(got * 100 / tot)) if tot else
+            i18n.T("Downloading {}: {} MB").format(r["tag"], got >> 20)))
+        self._dw.done.connect(self._downloaded)
+        self._dw.failed.connect(self._download_failed)
+        self._dw.start()
+
+    def _downloaded(self, path):
+        self.b_dl.setEnabled(True)
+        try:
+            updater.open_installer(path)
+        except Exception:
+            logging.exception("open installer")
+        if sys.platform == "darwin":
+            msg = i18n.T("Downloaded to Downloads and opened: drag MoneyMakingMachine into Applications (Replace), then "
+                         "close this app and open it again.")
+        else:
+            msg = i18n.T("Downloaded to Downloads: unzip it and replace the old MoneyMakingMachine folder, then open it "
+                         "again.")
+        self.upd.setText(msg)
+        notify(msg, ms=12000)
+        logging.info("update downloaded: %s", path)
+
+    def _download_failed(self, m):
+        self.b_dl.setEnabled(True)
+        logging.warning("update download failed: %s", m)
+        self.upd.setText(i18n.T("The download failed ({}). Try again.").format(i18n.T(m[:60])))
+        notify(i18n.T("The download failed ({}). Try again.").format(i18n.T(m[:60])), error=True)
 
     def save_report(self):
         out, _ = QFileDialog.getSaveFileName(self, "Save error report", str(Path.home() / "MoneyMakingMachine report.txt"),
@@ -4218,11 +4242,11 @@ class SelectsMap(QWidget):
     """How his selects sequence should look (Long Film): trains of colours, the name of each train above it, the
     cameras under it. Measured on his own selects (4 July, Madalina & Radu)."""
     GROUPS = [
-        ("Camera 1 (main, e.g. fx6)", [(7, "Blue", "Groom"), (5, "Rose", "Bride"), (2, "Teal", "Location"),
-                                       (3, "Iris", "First look"), (7, "Brown", "Church"), (3, "Yellow", "Venue"),
-                                       (3, "Purple", "Couple"), (5, "Iris", "Party")]),
+        ("Camera 1 (main, e.g. fx6)", [(7, "Blue", "Groom"), (5, "Rose", "Bride"), (3, "Iris", "First look"),
+                                       (7, "Brown", "Church"), (3, "Yellow", "Venue"), (4, "Iris", "Party"),
+                                       (3, "Purple", "Couple"), (4, "Iris", "Party")]),
         ("Camera 2 (e.g. fx3)", [(4, "Iris", "First look / party"), (3, "Brown", "Church"), (3, "Iris", "Party")]),
-        ("Camera 3", [(4, "Iris", "Party")]),
+        ("Cameras 3, 4, 5…", [(5, "Iris", "Party")]),
         ("Drone", [(4, "Violet", "Drone")]),
         ("Copies", [(4, None, "Left out")]),
     ]
@@ -4456,9 +4480,9 @@ class LongFilmPage(QWidget):
         right.addWidget(self.pp)
         right.addStretch()
         right.addWidget(lbl("HOW YOUR SELECTS SEQUENCE SHOULD LOOK", "section"))
-        right.addWidget(lbl("Every camera one after the other, each in the order of the day (getting ready alternating groom / "
-                            "bride as you like). The drone block comes last; after it only copies for the short film. "
-                            "Clips without a colour are not used.", "muted", True))
+        right.addWidget(lbl("Every camera one after the other (with 3, 4 or 5 cameras the same way), each in the order of the "
+                            "day; couple shots can sit in the middle of the party. The drone block comes last; after it only "
+                            "copies for the short film. Clips without a colour are not used.", "muted", True))
         self.smap = SelectsMap()
         right.addWidget(self.smap)
         body.addLayout(right, 1)
@@ -4757,6 +4781,27 @@ class LongFilmPage(QWidget):
 
 
 # ---------------------------------------------------------------- Card offload
+
+class _UpdWorker(QThread):
+    """Update check / download off the UI thread (updater.py)."""
+    done = Signal(object)
+    failed = Signal(str)
+    progress = Signal(object, object)
+
+    def __init__(self, what, release=None):
+        super().__init__()
+        self.what, self.release = what, release
+
+    def run(self):
+        try:
+            if self.what == "check":
+                self.done.emit(updater.latest())
+            else:
+                self.done.emit(updater.download(self.release["url"], self.release["tag"],
+                                                lambda g, t: self.progress.emit(g, t)))
+        except Exception as e:
+            self.failed.emit(str(e))
+
 
 class _ProbeWorker(QThread):
     done = Signal(object)
@@ -5601,7 +5646,8 @@ class TranscribePage(QWidget):
         fr.addStretch()
         left.addLayout(fr)
         wr = QHBoxLayout()
-        wr.addWidget(lbl("Who is speaking", "muted"))
+        self.l_who = lbl("Who is speaking", "muted")
+        wr.addWidget(self.l_who)
         self.c_who = QComboBox()
         self.c_who.setProperty("i18n", True)
         self.c_who.addItems(["Not set", "The bride", "The groom", "The bride and the groom", "Someone else"])
@@ -5647,15 +5693,6 @@ class TranscribePage(QWidget):
                             "opens a new Claude chat: paste (Cmd+V) and send. 2: copy Claude's whole answer (the copy button "
                             "under it) and press Paste Claude's answer: you get an XML with the story, the pieces one after "
                             "the other, with a marker on each.", "muted", True))
-        sr = QHBoxLayout()
-        sr.addWidget(lbl("Length", "muted"))
-        self.c_len = QComboBox()
-        self.c_len.addItems([f"{m} min" for m in (1, 2, 3, 4, 5)])
-        self.c_len.setCurrentIndex(max(0, min(4, int(self.cfg.get("story_min", 2)) - 1)))
-        self.c_len.currentIndexChanged.connect(lambda i: (self.cfg.update(story_min=i + 1), self.store.save_app()))
-        sr.addWidget(self.c_len)
-        sr.addStretch()
-        right.addLayout(sr)
         sb = QHBoxLayout()                       # own row: both buttons fit in Romanian too
         self.b_ask = btn("1. Copy for Claude", "primary", self.ask_claude)
         self.b_answer = btn("2. Paste Claude's answer", slot=self.claude_answer)
@@ -5705,6 +5742,8 @@ class TranscribePage(QWidget):
         self.b_answer.setEnabled(not self._busy() and bool(self.cfg.get("story_paths")))
         self.c_who.blockSignals(True)
         self.c_who.setEnabled(f is not None)
+        self.l_who.setStyleSheet("" if f is not None else "color:#5e5e5e")
+        self.c_who.setToolTip("" if f is not None else i18n.T("Add a file and select it in the list first."))
         self.c_who.setCurrentIndex(["", "bride", "groom", "both", "other"].index(f.get("who") or "") if f else 0)
         self.c_who.blockSignals(False)
 
@@ -5782,7 +5821,7 @@ class TranscribePage(QWidget):
         if len(fs) > len(story.LETTERS):
             notify(i18n.T("Too many interviews ticked (at most {}).").format(len(story.LETTERS)), error=True)
             return
-        text = story.prompt(fs, int(self.cfg.get("story_min", 2)), i18n.LANG)
+        text = story.prompt(fs, i18n.LANG)
         self.cfg["story_paths"] = [f["path"] for f in fs]      # the codes A, B... belong to these files
         self.store.save_app()
         QApplication.clipboard().setText(text)
@@ -6373,7 +6412,7 @@ def main():
     w = Main()
     setup_logging(w.store.dir)
     w.show()
-    w.settings.update_found.connect(lambda tag: w.toast.show_msg(f"New version {tag} available: Settings > Download", 6000))
+    w.settings.update_found.connect(lambda tag: w.toast.show_msg(i18n.T("New version {} available: Settings > Download and install").format(tag), 6000))
     QTimer.singleShot(5000, lambda: w.settings.check_updates(True))
     sys.exit(app.exec())
 

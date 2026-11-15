@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.8.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.8.1), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -424,8 +424,8 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 - Transcribe: Import XML (xmlimport.media: the timeline's video files in order, a sound-only timeline gives its sound
   files); every list row has a tick (f["story"], default on) and "Who is speaking" (f["who"]: bride / groom / both /
   other). "THE STORY OF THE INTERVIEWS (WITH CLAUDE)" (story.py), through HIS Claude subscription (his choice; no API
-  key, no local LLM): 1. Copy for Claude = story.prompt (transcripts with a code per sentence A1.., B1.., the length he
-  picks 1-5 min, rules: whole sentences exactly as said, the two tell ONE story together, answer between STORY_START /
+  key, no local LLM): 1. Copy for Claude = story.prompt (transcripts with a code per sentence A1.., B1.., NO length choice (as long as the story needs, never shortened by force,
+  owner), rules: whole sentences exactly as said, the two tell ONE story together, answer between STORY_START /
   STORY_END) copied to the clipboard + https://claude.ai/new opened (a new chat every time); cfg["story_paths"] keeps
   which file is A, B... (survives a restart, e.g. after Claude's usage limit). 2. Paste Claude's answer = story.parse
   (ranges A12-A14, markdown stars tolerated, wrong codes skipped and counted; the copied prompt itself is refused) ->
@@ -435,12 +435,22 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 - Long Film footage card spells out what the selects need (colours, church in his order, drone block LAST: everything
   after the last drone selection counts as a copy). longfilm.lost_after_drone warns in red when >= max(10, 20 %) of the
   selections are lost only because they sit after the drone (his two weddings: 0 and 7, no warning). Teaser Studio and
-  Blueprint texts say only the colours matter (any order). The red warning says EXACTLY what is wrong (owner's wish):
+  Blueprint texts say only the colours matter (any order). Disabled drop-downs / fields are greyed (global style). The red warning says EXACTLY what is wrong (owner's wish):
   the last drone clip (longfilm.last_drone) and where it ends on his sequence, the lost selections per colour, the first
   lost one, and what to move. Long Film's right column ends with SelectsMap (QPainter drawing of his layout: camera 1
-  groom, bride, location, first look, church, venue, couple, party; camera 2; camera 3; drone; copies hatched; train names
+  groom, bride, first look, church, venue, party, couple (in the middle of the party), party; camera 2; cameras 3, 4,
+  5... the same way; drone; NO location train (owner: never there); copies hatched; train names
   above in as many rows as needed, cameras under; texts through i18n.T, Premiere colours in PR_LABEL). Info has a new page "What your selects need" (RO + EN)
   covering every menu item, and the story workflow under Transcribe.
+
+## v3.8.1 updates (the repo already had a v3.8.0 release from the first v3.8.0 zip)
+- Updates (owner: people must NEVER see where the app comes from): updater.py. The repo address is stored encoded
+  (updater._S, base64 of the reversed "owner/repo"), never shown; messages say "the update server", never GitHub.
+  Check = releases API, fallback = the public releases/latest redirect (tag from the final URL). "Download and install"
+  downloads the file for THIS computer (Apple Silicon / Intel by sysctl hw.optional.arm64, Windows zip) into Downloads
+  (.part -> rename, progress in Settings) and opens it (the DMG mounts); no browser. The repo must stay public for this.
+  A programmer could still decode the address: full protection = private code repo + a releases-only public repo
+  (NEXT 3), and then only updater._S changes.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

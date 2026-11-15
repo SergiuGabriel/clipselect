@@ -330,7 +330,8 @@ Clipurile fără culoare nu sunt folosite. Plus muzica ta.</li>
 <li>blocul cu drona după tot restul: după el pot fi doar copiile pentru shortmovie (sunt lăsate afară). Dacă multe selecții
 sunt după dronă, aplicația îți spune cu roșu exact ce e greșit: care e ultimul cadru cu drona și la ce oră e în sequence,
 câte selecții de fiecare culoare se pierd după el și care e prima.</li></ul>
-<p>Pagina Long Film are jos un desen cu ordinea: trenulețe de culori, cu numele fiecăruia deasupra și camerele dedesubt.</p>
+<p>Pagina Long Film are jos un desen cu ordinea: trenulețe de culori, cu numele fiecăruia deasupra și camerele dedesubt.
+Cu 3, 4 sau 5 camere se continuă la fel, una după alta; cadrele cu cuplul pot sta la mijlocul petrecerii; drona rămâne ultima.</p>
 Restul poate fi în orice ordine și pe orice piste: camerele sunt recunoscute după fișiere, iar ziua fiecărei camere după numerele
 fișierelor (ordinea în care a filmat). Vornicul = selecțiile lungi de dimineață ale camerei principale.</li>
 <li><b>Blueprint</b> (Teaser Studio și Long Film): filmul tău terminat cu culorile pe clipuri (ca să știe ce arată fiecare tăietură)
@@ -352,11 +353,11 @@ fiecare lucru și alegi repede bucățile bune pentru poveste.</li>
 </ol>
 <h3>Povestea din interviuri (cu Claude)</h3>
 <p>Claude citește interviurile mirilor, găsește povestea lor și le împletește într-<b>o singură poveste spusă de amândoi</b>:
-unul continuă ideea celuilalt, cu început, mijloc și final. Folosește doar fraze întregi, exact cum le-au spus; nu inventează
+unul continuă ideea celuilalt, cu început, mijloc și final. Povestea are cât are nevoie: nu e scurtată forțat. Folosește doar fraze întregi, exact cum le-au spus; nu inventează
 nimic. Merge prin <b>abonamentul tău Claude</b> (fără cheie, fără costuri în plus).</p>
 <ol>
 <li>Transcrie interviurile, <b>bifează</b> în listă ce intră în poveste și alege la fiecare <b>Cine vorbește</b> (mireasa / mirele).</li>
-<li>Alege <b>Durata</b> poveștii (1-5 minute) și apasă <b>1. Copiază pentru Claude</b>: aplicația copiază transcrierile cu o cerere
+<li>Apasă <b>1. Copiază pentru Claude</b>: aplicația copiază transcrierile cu o cerere
 gata scrisă și deschide un <b>chat nou</b> în Claude. Lipești (Cmd+V) și trimiți.</li>
 <li>Când Claude a răspuns, copiezi tot răspunsul (butonul de copiere de sub el) și apeși <b>2. Lipește răspunsul lui Claude</b>.
 Primești un XML: bucățile una după alta (imagine + tot sunetul), cu un marker pe fiecare (cine vorbește și ce spune), iar textul
@@ -725,7 +726,8 @@ time). Clips without a colour are not used. Plus your music.</li>
 selections are after the drone, the app tells you in red exactly what is wrong: which is the last drone shot and where it
 is on the sequence, how many selections of each colour are lost after it and which is the first.</li></ul>
 <p>The Long Film page has a drawing of the order at the bottom: trains of colours, the name of each above it and the cameras
-under it.</p>
+under it. With 3, 4 or 5 cameras it continues the same way, one after the other; couple shots can sit in the middle of the
+party; the drone stays last.</p>
 Everything else can be in any order and on any tracks: the cameras are recognised by their files and every camera's day by its
 file numbers (the order it filmed). The vornic = the main camera's long morning selections.</li>
 <li><b>Blueprint</b> (Teaser Studio and Long Film): your finished film with the colours on its clips (so it knows what every cut
@@ -747,11 +749,11 @@ where each thing is said and pick the good pieces for the story quickly.</li>
 </ol>
 <h3>The story of the interviews (with Claude)</h3>
 <p>Claude reads the couple's interviews, finds their story and weaves them into <b>one story told by both</b>: one continues the
-other's thought, with a beginning, a middle and an ending. It uses only whole sentences, exactly as they said them; it invents
+other's thought, with a beginning, a middle and an ending. The story is as long as it needs to be: it is not shortened by force. It uses only whole sentences, exactly as they said them; it invents
 nothing. It works through <b>your Claude subscription</b> (no key, no extra cost).</p>
 <ol>
 <li>Transcribe the interviews, <b>tick</b> in the list what goes into the story and set <b>Who is speaking</b> on each (bride / groom).</li>
-<li>Choose the story's <b>Length</b> (1-5 minutes) and press <b>1. Copy for Claude</b>: the app copies the transcripts with a request
+<li>Press <b>1. Copy for Claude</b>: the app copies the transcripts with a request
 already written and opens a <b>new chat</b> in Claude. Paste (Cmd+V) and send.</li>
 <li>When Claude has answered, copy the whole answer (the copy button under it) and press <b>2. Paste Claude's answer</b>. You get an
 XML: the pieces one after the other (picture + all the sound), a marker on each (who speaks and what), and the story's text shows

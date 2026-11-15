@@ -1,7 +1,8 @@
 """The story of the interviews, written by Claude through the owner's own subscription (no API key, no cost).
 
 1. prompt(): the transcripts with a code on every sentence (A1, A2... for the first interview, B1... for the second),
-   who speaks, the length he wants, and the rules (whole sentences exactly as said, the two of them telling ONE story
+   who speaks, no length limit (as long as the story needs: the owner does not want it shortened by force), and the
+   rules (whole sentences exactly as said, the two of them telling ONE story
    together, answer between STORY_START / STORY_END). The app copies it and opens a new Claude chat; he pastes it.
 2. parse(): Claude's answer (copied back) -> the pieces in film order, each = a run of sentences of one interview.
 3. export_xml(): the pieces back to back on a 25 fps timeline, picture + all sound channels linked, a marker on every
@@ -24,7 +25,7 @@ def _mmss(t):
     return f"{int(t // 60)}:{int(t % 60):02d}"
 
 
-def prompt(files, minutes, lang="ro"):
+def prompt(files, lang="ro"):
     """files = [dict(path, segs=[[start, end, text]], who)] in the order of the list. Returns the text for Claude."""
     ro = lang == "ro"
     who = WHO_RO if ro else WHO_EN
@@ -47,7 +48,8 @@ def prompt(files, minutes, lang="ro"):
             "2. Construiește O SINGURĂ POVESTE în care povestesc ÎMPREUNĂ: frazele lor se împletesc, unul continuă ideea "
             "celuilalt, ca și cum ar vorbi împreună, iar la final povestea e un întreg, cu început, mijloc și un final "
             "emoționant.\n"
-            f"3. Durata totală: aproximativ {minutes} minute (adună duratele din paranteze).\n"
+            "3. Durata: cât are nevoie povestea. Nu o scurta forțat și nu o lungi: păstrează tot ce e bun și spune "
+            "povestea, lasă afară ce nu adaugă nimic.\n"
             "4. Folosește DOAR fraze care există, întregi, exact cum sunt. Nu inventa, nu rescrie, nu tăia o frază la "
             "jumătate. Poți lua mai multe fraze la rând (de ex. A12-A14). Evită ezitările, repetițiile, frazele "
             "neterminate și ce nu se înțelege fără întrebarea reporterului.\n\n"
@@ -66,7 +68,8 @@ def prompt(files, minutes, lang="ro"):
             "2. Build ONE STORY that they tell TOGETHER: their sentences weave into each other, one continues the other's "
             "thought as if they were talking together, and in the end the story is a whole, with a beginning, a middle "
             "and an emotional ending.\n"
-            f"3. Total length: about {minutes} minutes (add up the lengths in brackets).\n"
+            "3. Length: as long as the story needs. Do not shorten it by force and do not stretch it: keep everything "
+            "that is good and tells the story, leave out what adds nothing.\n"
             "4. Use ONLY sentences that exist, whole, exactly as they are. Do not invent, rewrite or cut a sentence in "
             "half. You may take several sentences in a row (e.g. A12-A14). Avoid hesitations, repetitions, unfinished "
             "sentences and anything that needs the interviewer's question to make sense.\n\n"
