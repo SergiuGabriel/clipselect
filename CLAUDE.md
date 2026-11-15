@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.8.1), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.8.2), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -451,6 +451,10 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   (.part -> rename, progress in Settings) and opens it (the DMG mounts); no browser. The repo must stay public for this.
   A programmer could still decode the address: full protection = private code repo + a releases-only public repo
   (NEXT 3), and then only updater._S changes.
+
+## v3.8.2
+- Test release only (no code change): the owner installs v3.8.1, then this one is published to test Check for updates
+  and Download and install.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower
