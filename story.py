@@ -83,14 +83,18 @@ def prompt(files, lang="ro"):
             "4. Folosește DOAR fraze care există, întregi, exact cum sunt. Nu inventa, nu rescrie, nu tăia o frază la "
             "jumătate. Poți lua mai multe fraze la rând (de ex. A12-A14). Evită ezitările, repetițiile, frazele "
             "neterminate și ce nu se înțelege fără întrebarea mea.\n"
-            "5. Scoate înjurăturile și glumele vulgare, chiar dacă sunt amuzante.\n"
+            "5. Glumele rămân întregi: dacă folosești începutul unei glume, pune poanta imediat după el, sau lasă-le pe "
+            "amândouă afară (înjurăturile pot rămâne, le scot eu la montaj).\n"
             "6. Taie des între ei: o bucată are ideal una-trei fraze. Când ea spune o parte dintr-o poveste și el partea "
             "următoare, alternează.\n"
             "7. Caută ecouri: o frază a lui care răspunde unei fraze a ei (de ex. ea: „învățăm să ne punem pe noi pe primul "
             "loc”, el: „să încerce să se pună și pe ea pe primul loc”). Pune-le una lângă alta.\n"
             "8. Lasă afară tot ce e doar un răspuns scurt la întrebarea mea și nu are sens singur (de ex. „Pe Instagram, "
-            "prima dată.”).\n"
-            "9. Deschide puternic (ziua, emoția) și încheie emoționant, eventual cu un zâmbet.\n\n"
+            "prima dată.”), și nu începe o bucată cu un răspuns care are sens doar cu întrebarea (de ex. „Plină de emoție, "
+            "dificultăți…”).\n"
+            "9. Nu repeta aceeași informație din două voci la rând dacă nu adaugă nimic (de ex. data nunții spusă de "
+            "amândoi): păstrează varianta mai puternică.\n"
+            "10. Deschide puternic (ziua, emoția) și încheie emoționant, eventual cu un zâmbet.\n\n"
             "Transcrierea automată mai pocește cuvinte: înțelege-le din context.\n\n"
             "Răspunsul tău: întâi un rând WHO cu cine e în fiecare interviu (de ex. WHO: A=MIRE, B=MIREASA), apoi 1-2 "
             "propoziții cu povestea pe scurt, apoi lista, exact între rândurile STORY_START și "
@@ -130,14 +134,18 @@ def prompt(files, lang="ro"):
             "4. Use ONLY sentences that exist, whole, exactly as they are. Do not invent, rewrite or cut a sentence in "
             "half. You may take several sentences in a row (e.g. A12-A14). Avoid hesitations, repetitions, unfinished "
             "sentences and anything that needs my question to make sense.\n"
-            "5. Leave out swearing and vulgar jokes, even when they are funny.\n"
+            "5. Keep jokes whole: if you use the setup, include the punchline right after it, or leave both out (swearing "
+            "may stay, I remove it when editing).\n"
             "6. Cut often between them: a piece is ideally one to three sentences. When she tells part of a story and he "
             "tells the next part, alternate.\n"
             "7. Look for echoes: a sentence of his that answers a sentence of hers (e.g. she: \"we are learning to put "
             "ourselves first\", he: \"she should try to put herself first too\"). Put them next to each other.\n"
             "8. Leave out anything that is only a short answer to my question and makes no sense alone (e.g. \"On "
-            "Instagram, the first time.\").\n"
-            "9. Open strong (the day, the emotion) and end emotionally, maybe with a smile.\n\n"
+            "Instagram, the first time.\"), and do not start a piece with an answer that only makes sense with the "
+            "question (e.g. \"Plină de emoție, dificultăți…\").\n"
+            "9. Do not repeat the same information from both voices in a row when it adds nothing (e.g. the wedding date "
+            "said by both): keep the stronger version.\n"
+            "10. Open strong (the day, the emotion) and end emotionally, maybe with a smile.\n\n"
             "The automatic transcript misspells some words: understand them from the context.\n\n"
             "Your answer: first a WHO line with who is in each interview (e.g. WHO: A=GROOM, B=BRIDE), then 1-2 sentences "
             "with the story in short, then the list, exactly between the lines "
@@ -207,19 +215,34 @@ def parse(answer, files):
     return pieces, bad
 
 
+def bounds(segs, dur):
+    """In / out of every sentence of one file: in = start - 0.12 s (never before the previous sentence's end), out =
+    end + 0.2 s but NEVER past the next sentence's in. Every piece of the story uses these, so two pieces of the same file
+    can never share a frame (owner: #10 ended at 82.80 s and #12 began at 82.64 s, 4 frames heard twice)."""
+    n = len(segs)
+    ins, outs = [0.0] * n, [0.0] * n
+    for k in range(n):
+        a = float(segs[k][0])
+        prev_end = float(segs[k - 1][1]) if k else 0.0
+        ins[k] = max(0.0, a - PAD_IN, min(prev_end, a))
+    for k in range(n):
+        b = float(segs[k][1])
+        nxt = ins[k + 1] if k + 1 < n else dur
+        outs[k] = max(ins[k] + 0.04, min(b + PAD_OUT, nxt, dur))
+    return ins, outs
+
+
 def ranges(pieces, files, durs):
-    """Pieces -> [(file index, t0, t1, text)]: from the first sentence's start to the last one's end, with a breath on
-    both sides that never reaches into the sentence before / after."""
-    out = []
+    """Pieces -> [(file index, t0, t1, text)] from the sentences' bounds (no overlap between pieces of one file)."""
+    cache, out = {}, []
     for p in pieces:
         fi, a, b = p[:3]
         fixed = p[3] if len(p) > 3 else None
         segs = files[fi]["segs"]
-        t0, t1 = float(segs[a][0]), float(segs[b][1])
-        lo = float(segs[a - 1][1]) if a > 0 else 0.0
-        hi = float(segs[b + 1][0]) if b + 1 < len(segs) else durs[fi]
-        t0 = max(lo, 0.0, t0 - PAD_IN)
-        t1 = min(hi, durs[fi], t1 + PAD_OUT)
+        if fi not in cache:
+            cache[fi] = bounds(segs, durs[fi])
+        ins, outs = cache[fi]
+        t0, t1 = ins[a], outs[b]
         if t1 - t0 >= 0.2:
             out.append((fi, t0, t1, fixed or " ".join(str(s[2]) for s in segs[a:b + 1])))
     return out

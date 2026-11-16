@@ -49,7 +49,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.8.8"
+APP, VER = "MoneyMakingMachine", "v3.8.9"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -3020,19 +3020,6 @@ class SettingsPage(QWidget):
                              "muted", True)
         right.addWidget(self.lang_note)
         right.addSpacing(18)
-        right.addWidget(lbl("Claude (optional)", "h2"))
-        kr = QHBoxLayout()
-        self.e_key = QLineEdit(store.app.get("claude_key", ""))
-        self.e_key.setEchoMode(QLineEdit.Password)
-        self.e_key.setPlaceholderText("sk-ant-…")
-        kr.addWidget(self.e_key, 1)
-        kr.addWidget(btn("Save", slot=self._save_key))
-        right.addLayout(kr)
-        right.addWidget(lbl("A Claude API key (from console.anthropic.com, paid per use: a few cents for a wedding's interviews) "
-                            "makes the interview story automatic in Transcribe, without copy / paste. Without a key the story "
-                            "is made through your Claude subscription with copy / paste. The key stays on this computer.",
-                            "muted", True))
-        right.addSpacing(18)
         right.addWidget(lbl("Updates and problems", "h2"))
         ur = QHBoxLayout()
         ur.addWidget(btn("Check for updates", slot=lambda: self.check_updates(False)))
@@ -3147,19 +3134,6 @@ class SettingsPage(QWidget):
         logging.warning("update download failed: %s", m)
         self.upd.setText(i18n.T("The download failed ({}). Try again.").format(i18n.T(m[:60])))
         notify(i18n.T("The download failed ({}). Try again.").format(i18n.T(m[:60])), error=True)
-
-    def _save_key(self):
-        k = self.e_key.text().strip()
-        if k and not k.startswith("sk-"):
-            notify(i18n.T("That does not look like a Claude API key (it starts with sk-ant-)."), error=True)
-            return
-        self.store.app["claude_key"] = k
-        self.store.save_app()
-        notify(i18n.T("Claude API key saved: the interview story is automatic now.") if k else
-               i18n.T("Claude API key removed: the story uses copy / paste."))
-        w = self.window()
-        if hasattr(w, "transcribe"):
-            w.transcribe._buttons()
 
     def save_report(self):
         out, _ = QFileDialog.getSaveFileName(self, "Save error report", str(Path.home() / "MoneyMakingMachine report.txt"),
@@ -5926,7 +5900,8 @@ class TranscribePage(QWidget):
         self.list.clear()
         names = {"bride": "The bride", "groom": "The groom", "both": "The bride and the groom", "other": "Someone else"}
         for f in self._files():
-            mark = "✓" if f.get("segs") is not None else ("✕" if f.get("error") else "·")
+            mark = (("✓" if f.get("tv", 0) >= transcribe.VERSION else "↻") if f.get("segs") is not None
+                    else ("✕" if f.get("error") else "·"))
             who = f"  ·  {i18n.T(names[f['who']])}" if f.get("who") in names else ""
             it = QListWidgetItem(f"{mark}  {Path(f['path']).name}{who}")
             it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
@@ -5944,8 +5919,7 @@ class TranscribePage(QWidget):
 
     def _buttons(self):
         f = self._cur()
-        self.b_go.setEnabled(not self._busy() and not transcribe.available() and
-                             any(x.get("segs") is None for x in self._files()))
+        self.b_go.setEnabled(not self._busy() and not transcribe.available() and bool(self._todo()))
         self.b_copy.setEnabled(bool(f and f.get("segs")))
         self.b_xml.setEnabled(bool(f and f.get("segs")))
         self.b_ask.setEnabled(not self._busy() and bool(self._story_files()))
@@ -5957,11 +5931,15 @@ class TranscribePage(QWidget):
         self.story_help.setText(i18n.T(
             "Automatic (your Claude API key, Settings): tick the interviews, set who is speaking and press Make the story "
             "with Claude. Claude weaves them theme by theme and the XML is saved next to the first interview.") if auto else i18n.T(
-            "Tick the interviews in the list and set who is speaking. 1: the app copies the transcripts and opens a new Claude "
-            "chat: paste (Cmd+V) and send. 2: copy Claude's whole answer and press Paste Claude's answer: you get an XML with "
-            "the story. To skip the copy / paste, put a Claude API key in Settings."))
+            "Tick the interviews in the list (who is speaking is optional: Claude finds the groom and the bride). 1: the app "
+            "copies the transcripts and opens a new Claude chat: paste (Cmd+V) and send. 2: copy Claude's whole answer and "
+            "press Paste Claude's answer: you get an XML with the story."))
+        old = [f for f in self._files() if f.get("segs") and f.get("tv", 0) < transcribe.VERSION]
         if self._busy():
             st = i18n.T("Wait: the app is working.")
+        elif old:
+            st = i18n.T("{} files were transcribed by an older version (long pieces, marked ↻): press Transcribe to redo "
+                        "them in short sentences, so they can be interleaved.").format(len(old))
         elif auto and n:
             st = i18n.T("Ready: {} interviews ticked. Press Make the story with Claude.").format(n)
         elif not n:
@@ -6063,10 +6041,11 @@ class TranscribePage(QWidget):
             self._fill(select=self.list.currentRow())
 
     def _story_files(self):
-        return [f for f in self._files() if f.get("story", True) and f.get("segs")]
+        """Ticked and transcribed by this version (sentence pieces: an older transcript cannot be interleaved)."""
+        return [f for f in self._files() if f.get("story", True) and f.get("segs") and f.get("tv", 0) >= transcribe.VERSION]
 
     def _key(self):
-        return (self.store.app.get("claude_key") or "").strip()
+        return ""        # owner: no Claude API key (the story goes through his Claude subscription, copy / paste)
 
     def ask_claude(self):
         if self._key():
@@ -6232,8 +6211,12 @@ class TranscribePage(QWidget):
             self.text.setPlainText(i18n.T("Not transcribed yet: press Transcribe."))
         self._buttons()
 
+    def _todo(self):
+        """Not transcribed yet, or transcribed by an older version (long pieces, before the sentence split)."""
+        return [f["path"] for f in self._files() if f.get("segs") is None or f.get("tv", 0) < transcribe.VERSION]
+
     def start(self):
-        todo = [f["path"] for f in self._files() if f.get("segs") is None]
+        todo = self._todo()
         if not todo or self._busy():
             return
         self._stop = False
@@ -6253,6 +6236,8 @@ class TranscribePage(QWidget):
         if f is not None:
             f["segs"] = [list(s) for s in segs] if segs is not None else None
             f["error"] = err or None
+            if segs is not None:
+                f["tv"] = transcribe.VERSION
             self.store.save_app()
         self._fill(select=self.list.currentRow())
 
@@ -6469,7 +6454,7 @@ class Main(QMainWindow):
                     "info": btn("Info / How to use", "nav", lambda: self.go("info"))}
         for b in self.nav.values():
             sv.addWidget(b)
-        for key in ("project", "teaser", "long", "transcribe"):     # owner: no NEW on Card Offload any more
+        for key in ("project", "teaser", "long"):     # owner: no NEW on Card Offload / Transcribe any more
             nb = QHBoxLayout(self.nav[key])
             nb.setContentsMargins(0, 0, 8, 0)
             nb.addStretch()

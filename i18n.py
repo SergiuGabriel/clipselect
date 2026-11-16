@@ -224,6 +224,15 @@ EXACT.update({
         "Pentru pistele tale exacte de sunet (microfon și lavalieră), importă sequence-ul din Premiere cu Import XML (sau trage-l în listă).",
 })
 
+EXACT.update({
+    "Tick the interviews in the list (who is speaking is optional: Claude finds the groom and the bride). 1: the app copies the transcripts and opens a new Claude chat: paste (Cmd+V) and send. 2: copy Claude's whole answer and press Paste Claude's answer: you get an XML with the story.":
+        "Bifezi interviurile din listă (cine vorbește e opțional: Claude îi găsește singur pe mire și pe mireasă). 1: aplicația copiază transcrierile și deschide un chat nou în Claude: lipești (Cmd+V) și trimiți. 2: copiezi tot răspunsul lui Claude și apeși Lipește răspunsul lui Claude: primești un XML cu povestea.",
+})
+TEMPLATES.update({
+    "{} files were transcribed by an older version (long pieces, marked ↻): press Transcribe to redo them in short sentences, so they can be interleaved.":
+        "{} fișiere au fost transcrise de o versiune mai veche (bucăți lungi, marcate ↻): apasă Transcriere ca să le refaci pe fraze scurte, ca să poată fi intercalate.",
+})
+
 _PATS = []
 
 

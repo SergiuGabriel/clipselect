@@ -512,17 +512,13 @@ ea, ce vă doriți, un mesaj pentru celălalt), deci pe fiecare temă există ve
 aceeași temă, des, în bucăți scurte, ca și cum unul ar continua ideea celuilalt (el spune ce iubește la ea, apoi ea ce iubește la el).
 Ordinea: cum s-au cunoscut, cum se văd unul pe altul, ce îi leagă, viitorul, iar la final mesajele lor (finalul emoționant).
 Rezultatul e un XML cu bucățile deja tăiate și puse în ordine: îl imporți în Premiere și ai povestea montată.</p>
-<p><b>Automat, cu o cheie Claude API</b> (opțional, Setări &gt; Claude): butonul devine <b>Fă povestea cu Claude</b> și totul se face
-dintr-o apăsare, fără copy / paste: Claude scrie povestea (de obicei 1–3 minute), iar XML-ul se salvează lângă primul interviu
-(„Povestea interviurilor.xml”). Cheia se ia de pe console.anthropic.com și se plătește la folosire (câțiva cenți pentru interviurile
-unei nunți); rămâne doar pe acest calculator și nu apare în raportul de erori. Fără cheie se folosește varianta cu abonamentul (pașii
-de mai jos).</p>
 <p><b>Întrebările tale nu intră în poveste.</b> Interviurile sunt de tipul „tu întrebi, mirii răspund”: frazele care se termină cu
 „?” sunt marcate ca întrebări și nu sunt folosite niciodată (nici în mijlocul unei bucăți), iar Claude primește regula să lase afară
 și replicile tale scurte („Perfect!”, „Bravo!”, „Mulțumesc!”) și glumele de la final. Cu un singur interviu, Claude face povestea
 lui (sau a ei) curgătoare, ca și cum ar fi spusă fără întrebări.</p>
 <ol>
-<li>Transcrie interviurile și <b>bifează</b> în listă ce intră în poveste. <b>Cine vorbește</b> e opțional: dacă nu-l alegi, Claude află
+<li>Transcrie interviurile și <b>bifează</b> în listă ce intră în poveste (cele marcate ↻ au fost transcrise de o versiune mai veche,
+cu bucăți lungi: Transcriere le reface pe fraze). <b>Cine vorbește</b> e opțional: dacă nu-l alegi, Claude află
 singur din ce spun care interviu e al mirelui și care al miresei (numele mirilor le ia din folderul nunții), iar lista se completează
 după răspuns.</li>
 <li><b>1. Copiază pentru Claude</b>: aplicația copiază transcrierile (fiecare frază cu un cod: A1, A2… pentru primul interviu, B1… pentru
@@ -530,9 +526,13 @@ al doilea) cu o cerere gata scrisă și deschide un <b>chat nou</b> în Claude. 
 <li>Când Claude a răspuns, copiezi tot răspunsul (butonul de copiere de sub el) și apeși <b>2. Lipește răspunsul lui Claude</b>: se
 deschide o fereastră în care lipești răspunsul (dacă e deja copiat, apare singur), apoi <b>Fă XML-ul cu povestea</b>. Sub butoane
 scrie mereu la ce pas ești.</li>
-<li>Primești un XML: bucățile una după alta (imagine + tot sunetul, cu o mică respirație înainte și după, fără să intre în fraza
-vecină), cu un marker pe fiecare (cine vorbește și ce spune); textul poveștii apare în aplicație.</li>
+<li>Primești un XML: bucățile una după alta (imagine + tot sunetul, cu 0,12 s înainte și 0,2 s după, fără să intre în fraza
+vecină), cu un marker pe fiecare (cine vorbește și ce spune, textul corectat de Claude); textul poveștii apare în aplicație. Două
+bucăți din același fișier nu se suprapun niciodată (nici măcar un cadru), oricum ar fi așezate în poveste.</li>
 </ol>
+<p>Regulile date lui Claude, pe scurt: doar răspunsurile mirilor, fraze întregi, tăieturi dese între ei pe aceleași teme, ecouri unul
+lângă altul, glumele întregi (cu poantă) sau deloc, fără aceeași informație spusă de amândoi la rând, fără bucăți care au sens doar
+cu întrebarea, deschidere puternică și final emoționant. Înjurăturile pot rămâne: le scoți tu la montaj.</p>
 <p>Dacă Claude îți spune că ai atins limita, încerci la ora pe care ți-o arată Claude: aplicația ține minte ce ai trimis (chiar după
 repornire), deci apeși doar pasul 2 când ai răspunsul, sau pasul 1 din nou într-un chat nou. Rândurile din răspuns pe care nu le
 înțelege sunt sărite și numărate.</p>
@@ -556,9 +556,6 @@ FFmpeg-ul inclus îl suportă; dacă un codec nu e suportat, aplicația trece si
 <h3>Limba</h3>
 <p>English sau Română: toată aplicația și aceste pagini. Se aplică la următoarea pornire. Termenii de montaj (Sync, Auto Edit, Export
 XML, Drop, Build-up) rămân în engleză, ca în Premiere.</p>
-<h3>Claude (opțional)</h3>
-<p>Locul pentru cheia Claude API (de pe console.anthropic.com). Cu ea, povestea din interviuri (Transcriere) se face automat, dintr-o
-apăsare. Fără ea, povestea se face prin abonamentul tău Claude, cu copy / paste. <b>Salvează</b> cu câmpul gol șterge cheia.</p>
 <h3>Update-uri</h3>
 <ul>
 <li>La pornire aplicația verifică singură dacă există o versiune nouă și te anunță. <b>Caută update-uri</b> verifică oricând.</li>
@@ -1094,17 +1091,13 @@ what you wish for, a message to the other), so every theme has her version and h
 theme, often, in short pieces, as if one continued the other's thought (he says what he loves about her, then she what she loves about
 him). The order: how they met, how they see each other, what binds them, the future, and at the end their messages (the emotional
 ending). The result is an XML with the pieces already cut and in order: import it into Premiere and the story is edited.</p>
-<p><b>Automatic, with a Claude API key</b> (optional, Settings &gt; Claude): the button becomes <b>Make the story with Claude</b> and
-everything happens in one press, without copy / paste: Claude writes the story (usually 1–3 minutes) and the XML is saved next to the
-first interview ("Interview story.xml"). The key comes from console.anthropic.com and is paid per use (a few cents for a wedding's
-interviews); it stays on this computer only and is never in the error report. Without a key the subscription way is used (the steps
-below).</p>
 <p><b>Your questions never go into the story.</b> The interviews go "you ask, the couple answers": sentences ending with "?" are
 marked as questions and never used (not even inside a piece), and Claude gets the rule to leave out your short lines too ("Perfect!",
 "Bravo!", "Thank you!") and the jokes at the end. With one interview, Claude makes that person's story flow as if told without
 questions.</p>
 <ol>
-<li>Transcribe the interviews and <b>tick</b> in the list what goes into the story. <b>Who is speaking</b> is optional: when you do not set
+<li>Transcribe the interviews and <b>tick</b> in the list what goes into the story (the ones marked ↻ were transcribed by an older
+version, in long pieces: Transcribe redoes them in sentences). <b>Who is speaking</b> is optional: when you do not set
 it, Claude finds out from what they say which interview is the groom's and which the bride's (the names come from the wedding folder),
 and the list is filled in after the answer.</li>
 <li><b>1. Copy for Claude</b>: the app copies the transcripts (every sentence with a code: A1, A2… for the first interview, B1… for the
@@ -1112,9 +1105,13 @@ second) with a request already written and opens a <b>new chat</b> in Claude. Pa
 <li>When Claude has answered, copy the whole answer (the copy button under it) and press <b>2. Paste Claude's answer</b>: a window
 opens where you paste the answer (if it is already copied, it is there by itself), then <b>Make the story XML</b>. Under the buttons
 it always says which step you are at.</li>
-<li>You get an XML: the pieces one after the other (picture + all the sound, with a short breath before and after, never into the
-neighbouring sentence), a marker on each (who speaks and what); the story's text shows in the app.</li>
+<li>You get an XML: the pieces one after the other (picture + all the sound, 0.12 s before and 0.2 s after, never into the
+neighbouring sentence), a marker on each (who speaks and what, the text corrected by Claude); the story's text shows in the app. Two
+pieces of the same file never overlap (not even one frame), however they are placed in the story.</li>
 </ol>
+<p>The rules given to Claude, in short: only the couple's answers, whole sentences, frequent cuts between them on the same themes,
+echoes next to each other, jokes whole (with the punchline) or not at all, no information said by both in a row, no piece that only
+makes sense with the question, a strong opening and an emotional ending. Swearing may stay: you remove it when editing.</p>
 <p>If Claude says you reached your limit, try again at the time Claude shows: the app remembers what you sent (even after a restart), so
 you only press step 2 when you have the answer, or step 1 again in a new chat. Lines of the answer it does not understand are skipped and
 counted.</p>
@@ -1138,9 +1135,6 @@ supports it; if a codec is not supported, the app falls back to the processor by
 <h3>Language</h3>
 <p>English or Română: the whole app and these pages. It applies at the next start. Editing terms (Sync, Auto Edit, Export XML, Drop,
 Build-up) stay in English, as in Premiere.</p>
-<h3>Claude (optional)</h3>
-<p>The place for a Claude API key (from console.anthropic.com). With it the interview story (Transcribe) is made automatically, in one
-press. Without it the story is made through your Claude subscription, with copy / paste. <b>Save</b> with an empty field removes the key.</p>
 <h3>Updates</h3>
 <ul>
 <li>At start the app checks by itself whether there is a new version and tells you. <b>Check for updates</b> checks any time.</li>

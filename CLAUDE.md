@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.8.8), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.8.9), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -491,7 +491,7 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   questions: how they met, what the other is like, what they love, the future, a message to the other): short cuts from
   one to the other on the same theme, theme order met -> how they see each other -> what binds them -> future -> messages
   (ending). The result XML is the edited story.
-- Optional Claude API key (Settings > Claude, store.app["claude_key"], local only, hidden in the error report as
+- (REMOVED in v3.8.9 by the owner) Optional Claude API key (Settings > Claude, store.app["claude_key"], local only, hidden in the error report as
   "(set, hidden)"): Transcribe's button becomes "Make the story with Claude" -> story.ask_claude (POST
   api.anthropic.com/v1/messages, MODELS claude-sonnet-5-5 then claude-opus-5-5 on 404, max_tokens 8000, clear messages
   for invalid key / no credit / 429 / overloaded / no internet) in _ClaudeWorker -> parse -> XML saved next to the first
@@ -534,6 +534,20 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   has _drop(paths)); the Card Offload destination area has its own handler.
 - Analysis Queue also shows Long Film, Card Offload, Create Project, Transcribe (+ the Claude story) and opens them.
 - Card Offload has no NEW badge any more.
+
+## v3.8.9 (his check of the v3.8.8 story XML: "the XML generation is right, change nothing there")
+- Pieces still too long (20.9 s, 15 s, 16 s): his transcripts were made before the sentence split. Transcripts now carry
+  "tv" = transcribe.VERSION (3); older ones are marked ↻, redone by Transcribe and kept out of the story (status line says
+  why). transcribe._split_long: every piece > 8 s is cut again at its best point (3 x pause + comma bonus, near the
+  middle, parts >= 1 s) until <= 8 s.
+- NO OVERLAP between pieces of one file (owner: #10 ended at 82.80 s, #12 began at 82.64 s): story.bounds gives every
+  sentence in = max(start - 0.12, previous sentence's end) and out = min(end + 0.2, NEXT sentence's in); ranges uses
+  them, so pieces share at most a boundary frame, wherever they sit in the story.
+- Prompt: swearing may stay (he removes it); jokes whole (setup + punchline) or not at all; no information repeated by
+  both voices in a row; no piece starting with an answer that needs the question.
+- Owner: NO Claude API key (Settings section removed, TranscribePage._key returns ""; story.ask_claude unused). The story
+  is made through his subscription (copy / paste). No NEW badge on Transcribe.
+- 4-track FX6 source: the copy keeps all 4 exploded tracks (tested); his last check used an older 2-track source.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

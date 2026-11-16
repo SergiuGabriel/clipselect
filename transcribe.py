@@ -163,27 +163,50 @@ def _norm(t):
     return re.sub(r"[^\w]+", " ", str(t).lower()).strip()
 
 
-def sentences(words):
-    """Words [(start, end, text)] -> sentences: a new piece after . ? ! … or a pause > 0.4 s; a piece longer than 8 s
-    is closed at the next comma (an enumeration like "Iubitor, muncitor, frumos." stays its own piece), never past 15 s.
-    Every piece keeps the exact time of its first and last word."""
-    out, cur = [], []
+VERSION = 3            # transcripts made before (no "tv" or lower) are long pieces: Transcribe redoes them
 
-    def flush():
-        if cur:
-            txt = "".join(w[2] for w in cur).strip()
-            if txt:
-                out.append((float(cur[0][0]), max(float(cur[-1][1]), float(cur[0][0]) + 0.1), txt))
-        cur.clear()
+
+def _split_long(ws):
+    """A piece longer than MAX_PIECE is cut at its best inner point (a comma first, else the longest pause between two
+    words), again and again, until every part is <= MAX_PIECE (parts never shorter than ~1 s when it can be helped)."""
+    if len(ws) < 2 or ws[-1][1] - ws[0][0] <= MAX_PIECE:
+        return [ws]
+    best, bk = None, None
+    for k in range(1, len(ws)):
+        left, right = ws[k - 1][1] - ws[0][0], ws[-1][1] - ws[k][0]
+        if min(left, right) < 1.0 and len(ws) > 2:
+            continue
+        gap = ws[k][0] - ws[k - 1][1]
+        comma = ws[k - 1][2].strip().endswith((",", ";", ":", "—", "-"))
+        score = 3.0 * gap + (0.5 if comma else 0.0) - 0.03 * abs(left - right)   # a real pause first, then a comma
+        if best is None or score > best:
+            best, bk = score, k
+    if bk is None:
+        bk = len(ws) // 2
+    return _split_long(ws[:bk]) + _split_long(ws[bk:])
+
+
+def sentences(words):
+    """Words [(start, end, text)] -> sentences: a new piece after . ? ! … or a pause > 0.4 s, then every piece longer
+    than 8 s is cut again at its comma / longest pause (owner: Claude can only cut between codes, so a long piece cannot
+    be interleaved). An enumeration like "Iubitor, muncitor, frumos." stays its own piece. Every piece keeps the exact
+    time of its first and last word."""
+    groups, cur = [], []
     for w in words:
         if cur:
             last = cur[-1][2].strip()
-            dur = cur[-1][1] - cur[0][0]
-            if (last.endswith((".", "?", "!", "…")) or w[0] - cur[-1][1] > PAUSE
-                    or (dur > MAX_PIECE and last.endswith((",", ";", ":"))) or dur > 15.0):
-                flush()
+            if last.endswith((".", "?", "!", "…")) or w[0] - cur[-1][1] > PAUSE:
+                groups.append(cur)
+                cur = []
         cur.append(w)
-    flush()
+    if cur:
+        groups.append(cur)
+    out = []
+    for g in groups:
+        for part in _split_long(g):
+            txt = "".join(w[2] for w in part).strip()
+            if txt:
+                out.append((float(part[0][0]), max(float(part[-1][1]), float(part[0][0]) + 0.1), txt))
     return out
 
 
