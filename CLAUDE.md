@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.9.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.9.2), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -570,6 +570,41 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   stored in f["name"], used in the prompt and the markers. Sequence name "<source xml name> - STORY".
 - i18n: the old template "{} core{}" matched any text containing " core" ("corectează" -> "nuclee"); replaced by
   "{} cores" / "{} core". Lazy templates ending in {} are dangerous: check T(T(x)) == T(x) for new strings.
+
+## v3.9.1 (his reading of the real TXT files: B2 = 20.8 s, questions glued to answers)
+- transcribe.VERSION = 5 (older transcripts are ↻ and redone).
+- Missing full stops: transcribe._cap_start = a capitalised word mid-line after a word without punctuation starts a new
+  sentence, unless it is in PROPER (Instagram, Dumnezeu, cities...), the couple's names (folder), "I" or an acronym.
+- _join_short never glues across a finished sentence (left piece ends . ? ! …) nor into / out of a question ("Cum este
+  Florin...? Iubitor," was glued). _complete requires a capital first letter ("frumos." alone is not a sentence).
+- Segments without word times (MLX and faster-whisper): _again transcribes that slice again with word times; if that fails
+  estimate_words gives letter-proportional times (4th tuple element True) and sentences() moves every estimated cut to
+  the nearest real pause (transcribe.pauses / snap: < -38 dB or p90-18, >= 0.15 s, +-0.6 s).
+- story.cut_times(..., audio={fi: samples}): in / out moved into a real pause when they are not in one (within the
+  allowed window). _make_story reads the audio of the used files (wait cursor).
+- The list shows "⚠ N pieces over 8 s" (tooltip lists them). TXT times with tenths [00:00:05.2].
+- His B2 "5 lines in the TXT but one 20.8 s code": both come from the same f["segs"]; the TXT he read and the transcript
+  his prompt was built from were from different runs. Not reproducible here; the over-8-s warning makes it visible.
+
+## v3.9.2 ("it must work on ANY wedding": no fixed lists, measured checks, a test set of weddings)
+- transcribe.VERSION = 6. The fixed PROPER list is GONE: transcribe.proper_nouns(words, names) = every word that never
+  appears with a small letter in THIS transcript (+ the couple from the folder + the first names typed in the list,
+  passed by _TranscribeWorker(names=...)). _cap_start uses that set. Nothing wedding-specific may be written in
+  transcribe.py / story.py (names, tracks, camera, language all come from the program / the source XML).
+- Pause threshold transcribe._thr: max(min(-38, p90-18), p15 + 0.3 * (p90-p15)) = relative to the recording (a windy
+  recording never goes under -38 dB). Used by pauses / snap / in_pause.
+- transcribe.quality(segs, x, letter) MEASURES: codes > 8 s, < 0.8 s, '?' inside, % of code borders in a real pause
+  (in_pause at the middle of the gap) + the list in speech. Worker emits qual(path, q) -> f["quality"]; write_files
+  writes <name>_raport.txt (translated through i18n.T). The page shows a green / red "Quality:" line under the text, a
+  "Quality report" button (codes shown as A.. / B.. when ticked) and "⚠ N questions glued" in the list.
+- _make_story measures every in / out with in_pause, writes <story>_raport.txt next to the XML, puts it under the story
+  text and warns when < 95 %.
+- qualitytest.py + "Test on several weddings…" (Transcribe page, runs as the Transcribe job in the queue): a folder with
+  one sub-folder per wedding (interviews from the source XML via xmlimport.interviews, else every media file);
+  transcribe + quality + a test story (every non-question code alternating the interviews) -> cut_times with audio ->
+  % cuts in a pause, overlaps, export_from_source / export_xml -> check_xml. rezultate.json keeps every version;
+  compare() lists what got worse than the previous version; table: red = misses the target (fails()), ▼ = worse.
+  Tested with synthetic weddings and a mock model that "hears" speech regions of the real audio (/home/claude/t5).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

@@ -194,7 +194,7 @@ def parse(answer, files):
     return pieces, errors + [w for w in warnings if w.startswith("Line ignored")]
 
 
-def cut_times(pieces, files, durs, fps=25.0):
+def cut_times(pieces, files, durs, fps=25.0, audio=None):
     """Owner's final spec, section 4: in = start of the first code - 0.12 s, never earlier than the end of the previous
     code of the INTERVIEW + 0.02 s; out = end of the last code + 0.20 s, never later than the start of the next code of
     the interview - 0.02 s; then, per media file, cuts sorted by in: when one's out passes the next one's in (even if
@@ -212,6 +212,17 @@ def cut_times(pieces, files, durs, fps=25.0):
             t1 = min(t1, float(segs[b + 1][0]) - 0.02)
         t0 = max(0.0, min(t0, float(segs[a][0])))      # never after the first word (words that touch)
         t1 = min(dur, t1)
+        x = (audio or {}).get(fi)
+        if x is not None:                                # point 4: the cut goes into a real pause when one is close
+            import transcribe
+            lo = float(segs[a - 1][1]) + 0.02 if a > 0 else 0.0
+            sp = transcribe.snap(x, t0, lo, float(segs[a][0]))
+            if sp and not sp[0] <= t0 <= sp[1]:
+                t0 = min(max(t0, sp[0] + 0.02), sp[1] - 0.02)
+            hi = float(segs[b + 1][0]) - 0.02 if b + 1 < len(segs) else dur
+            sp = transcribe.snap(x, t1, float(segs[b][1]), hi)
+            if sp and not sp[0] <= t1 <= sp[1]:
+                t1 = min(max(t1, sp[0] + 0.02), sp[1] - 0.02)
         cuts.append([fi, t0, t1, fixed or " ".join(str(x[2]) for x in segs[a:b + 1])])
     for fi in {c[0] for c in cuts}:
         mine = sorted((c for c in cuts if c[0] == fi), key=lambda c: c[1])

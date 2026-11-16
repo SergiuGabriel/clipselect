@@ -268,6 +268,44 @@ TEMPLATES.update({'{} cores': '{} nuclee', '{} core': '{} nucleu'})
 
 EXACT["Interviews, speeches, the vornic, the sermon: the speech becomes text, on this computer (nothing is uploaded). Next to every file you get a .txt with the times and a .srt (subtitles). From the bride's and the groom's interviews Claude can make ONE story they tell together (below). The first time the speech model is downloaded once (1.5-3 GB)."] = "Interviuri, discursuri, vornicul, predica: vorbirea devine text, pe acest calculator (nu se urcă nimic). Lângă fiecare fișier primești un .txt cu orele și un .srt (subtitrare). Din interviurile mirelui și ale miresei, Claude poate face O SINGURĂ poveste spusă de amândoi (mai jos). Prima dată modelul de vorbire se descarcă o singură dată (1,5-3 GB)."
 
+TEMPLATES.update({"⚠ {} pieces over 8 s": "⚠ {} bucăți peste 8 s", "Pieces over 8 s: {}": "Bucăți peste 8 s: {}"})
+
+EXACT.update({
+    "Quality report": "Raport de calitate", "Test on several weddings…": "Test pe mai multe nunți…",
+    "Test on several weddings": "Test pe mai multe nunți", "Quality": "Calitate", "Copy": "Copiază", "Wedding": "Nunta",
+    "failed": "eșuat", "Codes": "Coduri", "Over 8 s": "Peste 8 s", "Under 0.8 s": "Sub 0,8 s", "'?' inside": "'?' în interior",
+    "Borders in a pause %": "Granițe în pauză %", "Cuts in a pause %": "Tăieturi în pauză %", "Overlaps": "Suprapuneri",
+    "XML errors": "Erori XML",
+    "A folder with one sub-folder per wedding (the interviews + the source XML): every wedding is transcribed and measured, and compared with the previous version.":
+        "Un folder cu câte un subfolder pentru fiecare nuntă (interviurile + XML-ul sursă): fiecare nuntă e transcrisă și măsurată, apoi comparată cu versiunea anterioară.",
+    "The test folder (one sub-folder per wedding)": "Folderul de test (câte un subfolder pentru fiecare nuntă)",
+    "No wedding found: put one sub-folder per wedding (the interviews + the source XML) in it.":
+        "Nicio nuntă găsită: pune în el câte un subfolder pentru fiecare nuntă (interviurile + XML-ul sursă).",
+    "First run: the next version will be compared with these numbers.": "Prima rulare: versiunea următoare va fi comparată cu aceste cifre.",
+    "Borders in a real pause: not measured (no sound)": "Granițe în pauză reală: nemăsurat (fără sunet)",
+    "Cut points in a real pause: not measured (no sound)": "Tăieturi în pauză reală: nemăsurat (fără sunet)",
+    "XML: links, overlaps, ticks, complete file: OK": "XML: legături, suprapuneri, ticks, fișier complet: OK",
+    "first run (nothing to compare with)": "prima rulare (nimic de comparat)",
+})
+TEMPLATES.update({
+    "{} over 8 s · {} under 0.8 s · {} questions glued · {} of borders in a pause":
+        "{} peste 8 s · {} sub 0,8 s · {} întrebări lipite · {} din granițe în pauză",
+    "Quality report: {}": "Raport de calitate: {}", "Codes: {}": "Coduri: {}",
+    "Codes over 8 s (target 0): {}": "Coduri peste 8 s (țintă 0): {}", "Codes under 0.8 s: {}": "Coduri sub 0,8 s: {}",
+    "Codes with a '?' inside (a question glued to an answer): {}": "Coduri cu '?' în interior (întrebare lipită de răspuns): {}",
+    "Borders between codes in a real pause (target 95 % or more): {} % of {}": "Granițe între coduri în pauză reală (țintă cel puțin 95 %): {} % din {}",
+    "Borders that fall in speech: {}": "Granițe care cad în vorbire: {}",
+    "Saved next to the file: {}": "Salvat lângă fișier: {}", "Testing {} weddings…": "Testez {} nunți…",
+    "The test stopped: {}": "Testul s-a oprit: {}", "WORSE than {}:": "MAI RĂU decât {}:",
+    "Nothing got worse than {}.": "Nimic nu s-a înrăutățit față de {}.", "⚠ {} questions glued": "⚠ {} întrebări lipite",
+    "Story report: {}": "Raportul poveștii: {}", "Pieces: {}": "Bucăți: {}",
+    "Cut in / out points in a real pause (target 95 % or more): {} % of {}": "Tăieturi in / out în pauză reală (țintă cel puțin 95 %): {} % din {}",
+    "Cut points that fall in speech: {}": "Tăieturi care cad în vorbire: {}",
+    "Test story: {} cuts, in / out in a real pause: {}": "Poveste de test: {} tăieturi, in / out în pauză reală: {}",
+    "in speech: {}": "în vorbire: {}", "FAILED: {}": "EȘUAT: {}",
+    "Test on {} weddings · {} · {} s": "Test pe {} nunți · {} · {} s", "compared with {}": "comparat cu {}",
+})
+
 _PATS = []
 
 

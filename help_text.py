@@ -496,8 +496,24 @@ vin de la primul și ultimul cuvânt (tăieturi mai exacte). Textul e împărți
 0,6 s; o bucată are cel mult 8 s (una mai lungă e tăiată la cea mai bună pauză, virgulă sau cuvânt de legătură „și”, „dar”,
 „pentru că”…), ca să poată fi intercalată. Bucățile sub 0,8 s și cele doar cu „ăă”, „deci”, „așa” sunt lipite de vecina cea mai
 apropiată (cât timp rămân sub 8 s); o frază scurtă dar întreagă („Da, cu siguranță.”) rămâne singură. Replicile tale scurte
-(„Perfect”, „Bravo”, „Mulțumesc”) sunt marcate ca întrebări. Dacă Whisper
+(„Perfect”, „Bravo”, „Mulțumesc”) sunt marcate ca întrebări. Când Whisper uită punctul („din nou Mi-a dat”), un cuvânt cu literă
+mare în mijlocul rândului, după un cuvânt fără punctuație, începe o frază nouă (în afară de nume: un cuvânt care în tot interviul apare doar cu literă mare, ca „Mamaia”, „TikTok” sau numele nașului, e
+recunoscut singur ca nume; numele mirilor din folder și prenumele scrise în listă sunt mereu nume),
+deci o întrebare lipită de un răspuns ajunge separat. O bucată scurtă nu e lipită niciodată de o întrebare. Când Whisper nu dă timpul
+fiecărui cuvânt, porțiunea e transcrisă încă o dată singură; dacă nici atunci, timpii sunt estimați după litere și fiecare tăietură e
+mutată în cea mai apropiată pauză reală din sunet (±0,6 s). În listă, un interviu cu bucăți peste 8 s are ⚠. În .txt timpii au
+zecimi ([00:00:05.2]). Dacă Whisper
 intră în buclă și repetă aceeași frază, repetările sunt scoase.</li>
+<li><b>Calitate</b> (sub text) și <b>Raport de calitate</b>: după fiecare transcriere, aplicația se verifică singură, măsurând din
+sunet: câte coduri trec de 8 s (ținta e 0), câte sunt sub 0,8 s, câte au un „?” la mijloc (întrebare lipită de răspuns) și câte
+granițe între coduri cad într-o pauză reală (ținta: cel puțin 95 %), cu lista celor care cad în vorbire. Raportul se salvează lângă
+fișier (<i>nume</i>_raport.txt). Verde = toate țintele atinse, roșu = ceva de verificat. La poveste se măsoară la fel tăieturile in /
+out, iar raportul se salvează lângă XML.</li>
+<li><b>Test pe mai multe nunți…</b>: alegi un folder (de exemplu <i>teste</i>) cu câte un subfolder pentru fiecare nuntă (interviurile
++ XML-ul sursă din Premiere, dacă îl ai). Aplicația le transcrie pe toate, le măsoară ca mai sus, face din fiecare o poveste de test
+(toate codurile, alternând interviurile) și îi verifică tăieturile și XML-ul. Rezultatul e un tabel: roșu = sub țintă, ▼ = mai rău
+decât la versiunea anterioară (cifrele fiecărei versiuni rămân în rezultate.json, în folderul de test). Alege 3–4 nunți cât mai
+diferite: FX6 pe 4 piste, doar lavaliere, interviul cu amândoi odată, sunet prost (afară, vânt).</li>
 <li><b>Viteza</b>: pe Mac-urile M1–M4, transcrierea rulează pe placa video (Apple MLX), de câteva ori mai repede decât pe procesor; dacă
 nu merge, aplicația trece singură pe varianta de procesor. Pe Mac-urile Intel rulează pe procesor.</li>
 <li> Unele cuvinte tot pot ieși pocite: Claude le înțelege din context, iar în
@@ -532,7 +548,8 @@ scrie mereu la ce pas ești.</li>
 <li>Primești un XML: bucățile una după alta (imagine + tot sunetul, cu 0,12 s înainte și 0,2 s după, fără să intre în fraza
 vecină), cu un marker pe fiecare (cine vorbește și ce spune, textul corectat de Claude); textul poveștii apare în aplicație. Două
 bucăți din același fișier nu se suprapun niciodată (nici măcar un cadru), oricum ar fi așezate în poveste: dacă s-ar atinge,
-tăietura se mută la mijlocul pauzei dintre ele. Sequence-ul se numește ca al tău, cu „ - STORY” la final.</li>
+tăietura se mută la mijlocul pauzei dintre ele. Începutul și finalul fiecărei bucăți cad într-o pauză reală din
+sunet, când există una aproape. Sequence-ul se numește ca al tău, cu „ - STORY” la final.</li>
 </ol>
 <p><b>Verificarea poveștii.</b> Înainte să scrie XML-ul, aplicația verifică răspunsul lui Claude și apoi XML-ul însuși.
 <b>Erorile</b> opresc totul și XML-ul <b>nu</b> se scrie: un cod care nu există, un interval peste două interviuri sau care merge
@@ -1087,8 +1104,25 @@ times come from its first and last word (tighter cuts). The text is split <b>int
 than 0.6 s; a piece lasts at most 8 s (a longer one is cut at the best pause, comma or linking word "and", "but", "because"…), so it
 can be interleaved. Pieces under 0.8 s and pieces with only "uh", "so", "like" are joined to the closest neighbour (as long as they
 stay under 8 s); a short but whole sentence ("Yes, definitely.") stays alone. Your short lines ("Perfect", "Bravo", "Thank you") are
-marked as questions. When Whisper
+marked as questions. When Whisper forgets the full stop ("again Then she"), a word with a capital letter in the middle of a line, after
+a word without punctuation, starts a new sentence (except names: a word that appears only with a capital letter in the whole interview, like "Mamaia", "TikTok" or the
+godfather's name, is recognised as a name by itself; the couple's names from the folder and the first names typed in the list are
+always names), so a question glued to an
+answer ends up separate. A short piece is never glued to a question. When Whisper gives no time for each word, that part is
+transcribed again on its own; if that fails too, the times are estimated from the letters and every cut is moved to the closest real
+pause in the sound (±0.6 s). In the list, an interview with pieces over 8 s has ⚠. In the .txt the times have tenths
+([00:00:05.2]). When Whisper
 loops and repeats one sentence, the repeats are removed.</li>
+<li><b>Quality</b> (under the text) and <b>Quality report</b>: after every transcription the app checks itself, measuring from the
+sound: how many codes pass 8 s (target 0), how many are under 0.8 s, how many have a "?" in the middle (a question glued to an
+answer) and how many borders between codes fall in a real pause (target 95 % or more), with the list of those that fall in speech.
+The report is saved next to the file (<i>name</i>_raport.txt). Green = every target met, red = something to check. For the story the
+cut in / out points are measured the same way and the report is saved next to the XML.</li>
+<li><b>Test on several weddings…</b>: choose a folder (e.g. <i>teste</i>) with one sub-folder per wedding (the interviews + the source
+XML from Premiere, if you have it). The app transcribes them all, measures them as above, makes a test story of each (every code,
+alternating the interviews) and checks its cuts and XML. The result is a table: red = under the target, ▼ = worse than the previous
+version (the numbers of every version stay in rezultate.json, in the test folder). Choose 3–4 weddings as different as possible:
+FX6 on 4 tracks, lavaliers only, the interview with both at once, bad sound (outside, wind).</li>
 <li><b>Speed</b>: on M1–M4 Macs the transcription runs on the graphics chip (Apple MLX), several times faster than on the processor; if it
 does not work, the app switches to the processor by itself. On Intel Macs it runs on the processor.</li>
 <li> Some words can still come out misspelled: Claude understands them from the
@@ -1124,7 +1158,8 @@ it always says which step you are at.</li>
 <li>You get an XML: the pieces one after the other (picture + all the sound, 0.12 s before and 0.2 s after, never into the
 neighbouring sentence), a marker on each (who speaks and what, the text corrected by Claude); the story's text shows in the app. Two
 pieces of the same file never overlap (not even one frame), however they are placed in the story: if they would touch, the cut moves to
-the middle of the pause between them. The sequence is named like yours, with " - STORY" at the end.</li>
+the middle of the pause between them. The start and the end of every piece fall into a real pause of the sound when there is one close by. The
+sequence is named like yours, with " - STORY" at the end.</li>
 </ol>
 <p><b>The story check.</b> Before writing the XML, the app checks Claude's answer and then the XML itself. <b>Errors</b> stop everything
 and the XML is <b>not</b> written: a code that does not exist, a range across two interviews or going backwards, one of your lines

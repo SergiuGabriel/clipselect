@@ -49,7 +49,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.9.0"
+APP, VER = "MoneyMakingMachine", "v3.9.2"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -5733,11 +5733,13 @@ class OffloadPage(QWidget):
 class _TranscribeWorker(QThread):
     progress = Signal(str, float)
     one = Signal(str, object, str)                 # path, segments, error
+    qual = Signal(str, object)                     # path, quality report (measured)
     ended = Signal(str)                            # "" or the reason it stopped
 
-    def __init__(self, paths, base, lang, quality, stop):
+    def __init__(self, paths, base, lang, quality, stop, names=()):
         super().__init__()
         self.paths, self.base, self.lang, self.quality, self.stop = paths, base, lang, quality, stop
+        self.names = list(names)
 
     def run(self):
         try:
@@ -5751,9 +5753,12 @@ class _TranscribeWorker(QThread):
                 self.ended.emit("Cancelled")
                 return
             try:
+                keep = {}
                 segs = transcribe.transcribe(p, model, self.lang, lambda t, f, k=k: self.progress.emit(
-                    f"{k + 1} / {len(self.paths)} · {t}", (k + f) / len(self.paths)), self.stop)
-                transcribe.write_files(p, segs)
+                    f"{k + 1} / {len(self.paths)} · {t}", (k + f) / len(self.paths)), self.stop, self.names, keep)
+                q = transcribe.quality(segs, keep.get(p))
+                transcribe.write_files(p, segs, q, i18n.T)
+                self.qual.emit(p, q)
                 self.one.emit(p, segs, "")
             except InterruptedError:
                 self.ended.emit("Cancelled")
@@ -5762,6 +5767,31 @@ class _TranscribeWorker(QThread):
                 logging.exception("transcription failed: %s", p)
                 self.one.emit(p, None, str(e))
         self.ended.emit("")
+
+
+class _WeddingTestWorker(QThread):
+    """The quality test on several weddings (qualitytest.py): transcribe + measure every wedding of the test folder."""
+    progress = Signal(str, float)
+    ended = Signal(str)
+    done = Signal(object)
+
+    def __init__(self, folder, base, lang, quality, stop):
+        super().__init__()
+        self.folder, self.base, self.lang, self.quality, self.stop = folder, base, lang, quality, stop
+
+    def run(self):
+        import qualitytest
+        try:
+            model = transcribe.load_model(self.base, self.quality, lambda t, f: self.progress.emit(t, f))
+            out = qualitytest.run_all(self.folder, model, self.lang, VER, lambda t, f: self.progress.emit(t, f), self.stop,
+                                      i18n.T)
+            self.done.emit(out)
+            self.ended.emit("")
+        except InterruptedError:
+            self.ended.emit("Cancelled")
+        except Exception as e:
+            logging.exception("wedding test failed")
+            self.ended.emit(str(e))
 
 
 class TranscribePage(QWidget):
@@ -5850,13 +5880,21 @@ class TranscribePage(QWidget):
         self.text = QTextBrowser()
         self.text.setStyleSheet(f"QTextBrowser{{background:#181818;border:1px solid {C['BORDER']};border-radius:6px;padding:10px}}")
         right.addWidget(self.text, 1)
+        self.q_lbl = lbl("", "muted", True)
+        right.addWidget(self.q_lbl)
         rb = QHBoxLayout()
         self.b_copy = btn("Copy the text", slot=self.copy)
+        self.b_qrep = btn("Quality report", slot=self.quality_report)
+        self.b_test = btn("Test on several weddings…", slot=self.wedding_test)
+        self.b_test.setToolTip(i18n.T("A folder with one sub-folder per wedding (the interviews + the source XML): every "
+                                      "wedding is transcribed and measured, and compared with the previous version."))
         self.b_xml = btn("Export XML with markers", slot=self.export)
         self.b_xml.hide()                          # owner: one interview with markers is not useful (the story is)
         rb.addWidget(self.b_copy)
+        rb.addWidget(self.b_qrep)
         rb.addWidget(self.b_xml)
         rb.addStretch()
+        rb.addWidget(self.b_test)
         right.addLayout(rb)
         right.addSpacing(8)
         right.addWidget(lbl("THE STORY OF THE INTERVIEWS (WITH CLAUDE)", "section"))
@@ -5908,10 +5946,16 @@ class TranscribePage(QWidget):
                     else ("✕" if f.get("error") else "·"))
             who = (f"  ·  {i18n.T(names[f['who']])}" if f.get("who") in names else "") + \
                 (f" {f['name']}" if (f.get("name") or "").strip() else "")
-            it = QListWidgetItem(f"{mark}  {Path(f['path']).name}{who}")
+            longs = [i for i, sg in enumerate(f.get("segs") or [], 1) if sg[1] - sg[0] > transcribe.MAX_PIECE]
+            warn = ("  ·  " + i18n.T("⚠ {} pieces over 8 s").format(len(longs))) if longs else ""
+            glued = len((f.get("quality") or {}).get("glued") or [])
+            if glued and f.get("tv", 0) >= transcribe.VERSION:
+                warn += "  ·  " + i18n.T("⚠ {} questions glued").format(glued)
+            it = QListWidgetItem(f"{mark}  {Path(f['path']).name}{who}{warn}")
             it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
             it.setCheckState(Qt.Checked if f.get("story", True) else Qt.Unchecked)
-            it.setToolTip(i18n.T("Ticked = goes into the story"))
+            it.setToolTip(i18n.T("Ticked = goes into the story") + (
+                "\n" + i18n.T("Pieces over 8 s: {}").format(", ".join(map(str, longs[:12]))) if longs else ""))
             self.list.addItem(it)
         self.list.blockSignals(False)
         if self._files():
@@ -5926,6 +5970,8 @@ class TranscribePage(QWidget):
         f = self._cur()
         self.b_go.setEnabled(not self._busy() and not transcribe.available() and bool(self._todo()))
         self.b_copy.setEnabled(bool(f and f.get("segs")))
+        self.b_qrep.setEnabled(bool(f and f.get("quality") and f.get("segs") is not None))
+        self.b_test.setEnabled(not self._busy() and not transcribe.available())
         self.b_xml.setEnabled(bool(f and f.get("segs")))
         self.b_ask.setEnabled(not self._busy() and bool(self._story_files()))
         self.b_answer.setEnabled(not self._busy() and bool(self.cfg.get("story_paths")))
@@ -6136,7 +6182,18 @@ class TranscribePage(QWidget):
             notify(i18n.T("An interview file cannot be read any more. Is the disk connected?"), error=True)
             return
         durs = [infos[f["path"]]["dur"] for f in fs]
-        cuts = story.cut_times(pieces, fs, durs)
+        used = {p[0] for p in pieces}
+        audio = {}
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            for fi in used:                              # the cuts go into real pauses of the sound
+                try:
+                    audio[fi] = transcribe.read_audio(fs[fi]["path"])
+                except Exception:
+                    logging.exception("audio for the cuts: %s", fs[fi]["path"])
+        finally:
+            QApplication.restoreOverrideCursor()
+        cuts = story.cut_times(pieces, fs, durs, audio=audio)
         e2, w2 = story.check_cuts(cuts, pieces, fs, durs)
         errors, warnings = errors + e2, warnings + w2
         if errors:
@@ -6191,13 +6248,39 @@ class TranscribePage(QWidget):
             self._report(x_err, warnings, written=None)
             return
         os.replace(tmp, out)
+        n_in = good = 0
+        speech = []
+        for j, (fi, t0, t1, _t) in enumerate(cuts, 1):   # measured: does every cut fall into a real pause?
+            for side, tt in (("in", t0), ("out", t1)):
+                ok = transcribe.in_pause(audio.get(fi), tt)
+                if ok is None:
+                    continue
+                n_in += 1
+                good += bool(ok)
+                if not ok:
+                    speech.append(f"{j} {side} ({transcribe._at(tt)})")
+        pct = round(100.0 * good / n_in, 1) if n_in else None
+        rep_lines = [i18n.T("Story report: {}").format(Path(out).name),
+                     i18n.T("Pieces: {}").format(len(cuts)),
+                     (i18n.T("Cut in / out points in a real pause (target 95 % or more): {} % of {}").format(f"{pct:g}", n_in)
+                      if pct is not None else i18n.T("Cut points in a real pause: not measured (no sound)"))]
+        if speech:
+            rep_lines.append(i18n.T("Cut points that fall in speech: {}").format(", ".join(speech[:40])))
+        rep_lines.append(i18n.T("XML: links, overlaps, ticks, complete file: OK"))
+        rep_lines += [i18n.T(w) for w in warnings]
+        try:
+            Path(out).with_name(Path(out).stem + "_raport.txt").write_text("\n".join(rep_lines) + "\n", encoding="utf-8")
+        except OSError:
+            pass
+        if pct is not None and pct < 95:
+            warnings = warnings + [f"Cut points that fall in speech: {', '.join(speech[:20])}"]
         pos, lines = 0.0, []
         for fi, t0, t1, txt in cuts:
             who = labels.get(fi) or f"{story.LETTERS[fi]}"
             lines.append(f"[{story._mmss(pos)}] {who}: {txt}")
             pos += t1 - t0
         self.text.setPlainText(i18n.T("The story ({} pieces, {}):").format(r["pieces"], story._mmss(r["seconds"])) +
-                               "\n\n" + "\n\n".join(lines))
+                               "\n\n" + "\n\n".join(lines) + "\n\n" + "\n".join(rep_lines))
         self.story_out = str(out)
         msg = i18n.T("Story XML saved: {} pieces, {} long.").format(r["pieces"], story._mmss(r["seconds"]))
         if not same:
@@ -6261,11 +6344,18 @@ class TranscribePage(QWidget):
         if not f:
             self.text.setPlainText("")
         elif f.get("segs") is not None:
-            self.text.setPlainText("\n".join(f"[{int(a // 60)}:{int(a % 60):02d}] {t}" for a, b, t in f["segs"]) or i18n.T("No speech found."))
+            self.text.setPlainText("\n".join(f"[{int(a // 60)}:{a % 60:04.1f}] {t}" for a, b, t in f["segs"]) or i18n.T("No speech found."))
         elif f.get("error"):
             self.text.setPlainText(i18n.T("Error: {}").format(i18n.T(f["error"])))
         else:
             self.text.setPlainText(i18n.T("Not transcribed yet: press Transcribe."))
+        q = f.get("quality") if f and f.get("segs") is not None and f.get("tv", 0) >= transcribe.VERSION else None
+        if q:
+            bad = q["over8"] or q["glued"] or (q.get("pause_pct") is not None and q["pause_pct"] < 95)
+            self.q_lbl.setText(f'<span style="color:{C["POOR"] if bad else C["GOOD"]}">' + i18n.T("Quality") + ": " +
+                               transcribe.quality_line(q, i18n.T) + "</span>")
+        else:
+            self.q_lbl.setText("")
         self._buttons()
 
     def _todo(self):
@@ -6277,9 +6367,11 @@ class TranscribePage(QWidget):
         if not todo or self._busy():
             return
         self._stop = False
+        names = [f["name"] for f in self._files() if (f.get("name") or "").strip()]
         self.worker = _TranscribeWorker(todo, self.store.dir, self.cfg.get("lang", "ro"), self.cfg.get("quality", "fast"),
-                                        lambda: self._stop)
+                                        lambda: self._stop, names)
         self.worker.progress.connect(self.pp.set)
+        self.worker.qual.connect(self._qual)
         self.worker.one.connect(self._one)
         self.worker.ended.connect(self._ended)
         self.pp.start(i18n.T("Transcribing {} files…").format(len(todo)))
@@ -6287,6 +6379,108 @@ class TranscribePage(QWidget):
         self.worker.finished.connect(self._buttons)     # 'ended' runs while the thread is still running
         self.worker.start()
         self._buttons()
+
+    def _qual(self, path, q):
+        f = next((x for x in self._files() if x["path"] == path), None)
+        if f is not None:
+            f["quality"] = q
+
+    def quality_report(self):
+        f = self._cur()
+        if not f or not f.get("quality"):
+            return
+        k = self._story_files().index(f) if f in self._story_files() else -1
+        q = dict(f["quality"])
+        if k >= 0:                                       # the codes as Claude sees them (A, B...)
+            L = story.LETTERS[k]
+            for key in ("over8", "under08", "glued"):
+                q[key] = [L + c for c in q[key]]
+            q["in_speech"] = [" / ".join(L + y for y in x.split(" ")[0].split("/")) + " " + x.split(" ", 1)[1]
+                              for x in q["in_speech"]]
+        self._text_dialog(i18n.T("Quality report"), transcribe.quality_text(Path(f["path"]).name, q, i18n.T) + "\n" +
+                          i18n.T("Saved next to the file: {}").format(Path(f["path"]).stem + "_raport.txt"))
+
+    def _text_dialog(self, title, text, table=None):
+        d = QDialog(self)
+        d.setWindowTitle(title)
+        d.resize(1180 if table else 660, 600 if table else 420)
+        v = QVBoxLayout(d)
+        if table is not None:
+            v.addWidget(table)
+        box = QPlainTextEdit()
+        box.setReadOnly(True)
+        box.setPlainText(text)
+        v.addWidget(box, 1)
+        row = QHBoxLayout()
+        row.addStretch()
+        row.addWidget(btn("Copy", slot=lambda: (QApplication.clipboard().setText(text), notify(i18n.T("Copied.")))))
+        row.addWidget(btn("OK", "primary", d.accept))
+        v.addLayout(row)
+        d.exec()
+
+    def wedding_test(self):
+        if self._busy():
+            return
+        folder = QFileDialog.getExistingDirectory(self, i18n.T("The test folder (one sub-folder per wedding)"),
+                                                  self.cfg.get("test_dir", str(Path.home())))
+        if not folder:
+            return
+        import qualitytest
+        plist = qualitytest.projects(folder)
+        if not plist:
+            notify(i18n.T("No wedding found: put one sub-folder per wedding (the interviews + the source XML) in it."),
+                   error=True)
+            return
+        self.cfg["test_dir"] = folder
+        self.store.save_app()
+        self._stop = False
+        self.worker = _WeddingTestWorker(folder, self.store.dir, self.cfg.get("lang", "ro"), self.cfg.get("quality", "fast"),
+                                         lambda: self._stop)
+        self.worker.progress.connect(self.pp.set)
+        self.worker.done.connect(self._test_done)
+        self.worker.ended.connect(self._test_ended)
+        self.pp.start(i18n.T("Testing {} weddings…").format(len(plist)))
+        self.pp.allow_cancel(lambda: setattr(self, "_stop", True))
+        self.worker.finished.connect(self._buttons)
+        self.worker.start()
+        self._buttons()
+
+    def _test_ended(self, why):
+        self.pp.hide()
+        self.pp.allow_cancel(None)
+        if why and why != "Cancelled":
+            notify(i18n.T("The test stopped: {}").format(i18n.T(why)), error=True)
+        self._buttons()
+
+    def _test_done(self, out):
+        import qualitytest
+        res, text, worse, prev, old = out
+        cols = list(qualitytest.METRICS)
+        t = QTableWidget(len(res), len(cols) + 1)
+        t.setHorizontalHeaderLabels([i18n.T("Wedding")] + [i18n.T(qualitytest.METRICS[c][0]) for c in cols])
+        t.verticalHeader().hide()
+        t.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        for r, (name, m) in enumerate(res.items()):
+            t.setItem(r, 0, QTableWidgetItem(name))
+            for c, key in enumerate(cols, 1):
+                val = m.get(key)
+                o = (old.get(name) or {}).get(key)
+                txt = "—" if val is None else f"{val:g}"
+                if "error" in m:
+                    txt = i18n.T("failed") if c == 1 else ""
+                if o is not None and val is not None and o != val:
+                    txt += f"  ({o:g})"
+                got_worse = any(w.startswith(f"{name}: {i18n.T(qualitytest.METRICS[key][0])} ") for w in worse)
+                it = QTableWidgetItem(("▼ " if got_worse else "") + txt)
+                if got_worse or qualitytest.fails(key, val):
+                    it.setForeground(QColor(C["POOR"]))
+                t.setItem(r, c, it)
+        t.resizeColumnsToContents()
+        head = (i18n.T("WORSE than {}:").format(prev) + "\n" + "\n".join(worse) if worse else
+                i18n.T("Nothing got worse than {}.").format(prev) if prev else
+                i18n.T("First run: the next version will be compared with these numbers."))
+        notify(head.split("\n")[0], error=bool(worse), ms=9000)
+        self._text_dialog(i18n.T("Test on several weddings"), head + "\n\n" + text, table=t)
 
     def _one(self, path, segs, err):
         f = next((x for x in self._files() if x["path"] == path), None)
