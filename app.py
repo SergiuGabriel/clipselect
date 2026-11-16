@@ -19,7 +19,7 @@ from pathlib import Path
 import numpy as np
 from PySide6.QtCore import QUrl, QPoint, QPointF, QPropertyAnimation, QRectF, QRegularExpression, QStandardPaths, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QDesktopServices, QColor, QIcon, QImage, QPainter, QPen, QPixmap, QRegularExpressionValidator
-from PySide6.QtWidgets import (QTextBrowser, QAbstractItemView, QApplication, QComboBox, QDialog, QFileDialog, QFrame,
+from PySide6.QtWidgets import (QPlainTextEdit, QTextBrowser, QAbstractItemView, QApplication, QComboBox, QDialog, QFileDialog, QFrame,
                                QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
                                QMainWindow, QProgressBar, QPushButton, QScrollArea, QSlider, QStackedWidget,
                                QTabWidget, QVBoxLayout, QWidget, QSizePolicy, QTableWidget, QTableWidgetItem,
@@ -43,7 +43,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.8.4"
+APP, VER = "MoneyMakingMachine", "v3.8.5"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -2583,6 +2583,7 @@ class MulticamPage(QWidget):
         worker.done.connect(self.on_done)
         worker.failed.connect(self.on_failed)
         self._button = button
+        worker.finished.connect(self._sync_buttons)     # refresh once the thread has really stopped
         worker.start()
         self._sync_buttons()
 
@@ -4636,6 +4637,7 @@ class LongFilmPage(QWidget):
         self.runner.failed.connect(lambda m: (self.pp.hide(), self.pp.allow_cancel(None), self._buttons(),
                                               self.parts_lbl.setText(f'<span style="color:{C["POOR"]}">{i18n.T("Error: {}").format(i18n.T(m))}</span>'),
                                               notify(f"Error: {m}", error=True) if m != "Cancelled" else None))
+        self.runner.finished.connect(self._buttons)     # done/failed run while the thread is still running
         self.runner.start()
         self._buttons()
 
@@ -4990,6 +4992,7 @@ class CreateProjectPage(QWidget):
         self.worker.progress.connect(lambda t, f: self.pp.set(i18n.T(t), f))
         self.worker.done.connect(lambda infos, cams=cams: self._done(cams, infos))
         self.worker.failed.connect(self._failed)
+        self.worker.finished.connect(self._ui)          # done/failed run while the thread is still running
         self.worker.start()
         self._ui()
 
@@ -5483,6 +5486,7 @@ class OffloadPage(QWidget):
         opts["window"] = self._window()
         self._stop = False
         self.workers, self.state, self.waiting = [], {}, {}
+        self._reported = False                           # the end of this offload is reported once
         jobs = []
         for s in self._ticked_paths():
             f = self._folder(s)
@@ -5498,6 +5502,7 @@ class OffloadPage(QWidget):
             w = _OffloadWorker(k, Path(s), dest, opts, lambda: self._stop, check_only=check)
             w.moved.connect(self._moved)
             w.ended.connect(self._ended)
+            w.finished.connect(self._maybe_all_done)    # 'ended' runs while the thread is still running
             self.state[k] = dict(name=Path(s).name, src=s, folder=dest.relative_to(root), done=0.0, total=1.0, result=None,
                                  error=None, check=check, twin=twin)
             self.workers.append(w)
@@ -5528,13 +5533,18 @@ class OffloadPage(QWidget):
                     s["error"] = "Its twin could not be copied"
                 else:
                     self.workers[j].start()
-        if not self._busy() and all(s["result"] is not None or s["error"] for s in self.state.values()):
-            QTimer.singleShot(100, self._all_done)
+        self._maybe_all_done()
         self._show()
 
+    def _maybe_all_done(self):
+        if not self._busy() and self.state and all(s["result"] is not None or s["error"] for s in self.state.values()):
+            QTimer.singleShot(100, self._all_done)
+        self._buttons()
+
     def _all_done(self):
-        if self._busy():
+        if self._busy() or getattr(self, "_reported", True):
             return
+        self._reported = True                            # once per offload, whichever signal comes last
         self.pp.hide()
         self.pp.allow_cancel(None)
         failed = sum((s["result"] or {}).get("failed", 0) + (s["result"] or {}).get("different", 0) +
@@ -5720,6 +5730,8 @@ class TranscribePage(QWidget):
         sb.addWidget(self.b_answer)
         sb.addStretch()
         right.addLayout(sb)
+        self.story_status = lbl("", "muted", True)
+        right.addWidget(self.story_status)
         self.pp = ProgressPanel()
         right.addWidget(self.pp)
         body.addLayout(right, 2)
@@ -5760,6 +5772,17 @@ class TranscribePage(QWidget):
         self.b_xml.setEnabled(bool(f and f.get("segs")))
         self.b_ask.setEnabled(not self._busy() and bool(self._story_files()))
         self.b_answer.setEnabled(not self._busy() and bool(self.cfg.get("story_paths")))
+        n = len(self._story_files())
+        if self._busy():
+            st = i18n.T("Wait for the transcription to finish.")
+        elif not n:
+            st = i18n.T("Step 1 is ready once an interview is transcribed (✓) and ticked.")
+        elif self.cfg.get("story_paths"):
+            st = i18n.T("Sent to Claude at {} ({} interviews). When Claude has answered, press step 2 and paste its answer.").format(
+                self.cfg.get("story_sent", "?"), len(self.cfg["story_paths"]))
+        else:
+            st = i18n.T("Ready: {} interviews ticked. Press step 1.").format(n)
+        self.story_status.setText(st)
         self.c_who.blockSignals(True)
         self.c_who.setEnabled(f is not None)
         self.l_who.setStyleSheet("" if f is not None else "color:#5e5e5e")
@@ -5843,6 +5866,7 @@ class TranscribePage(QWidget):
             return
         text = story.prompt(fs, i18n.LANG)
         self.cfg["story_paths"] = [f["path"] for f in fs]      # the codes A, B... belong to these files
+        self.cfg["story_sent"] = datetime.now().strftime("%H:%M")
         self.store.save_app()
         QApplication.clipboard().setText(text)
         QDesktopServices.openUrl(QUrl("https://claude.ai/new"))
@@ -5856,7 +5880,9 @@ class TranscribePage(QWidget):
         if not fs or any(f is None or not f.get("segs") for f in fs):
             notify(i18n.T("The interviews sent to Claude are no longer in the list: press Copy for Claude again."), error=True)
             return
-        ans = QApplication.clipboard().text()
+        ans = self._paste_dialog()
+        if ans is None:
+            return
         if "=== INTERVI" in ans:                      # still the text for Claude, not its answer
             notify(i18n.T("The clipboard still holds the text for Claude. Send it in Claude, then copy Claude's answer."),
                    error=True, ms=10000)
@@ -5900,6 +5926,26 @@ class TranscribePage(QWidget):
             msg += " " + i18n.T("{} lines of the answer were not understood and were skipped.").format(len(bad))
         notify(msg, error=bool(bad), ms=9000)
 
+    def _paste_dialog(self):
+        """A window where he pastes Claude's answer (already filled when the clipboard holds it)."""
+        d = QDialog(self)
+        d.setWindowTitle(i18n.T("Claude's answer"))
+        d.resize(640, 480)
+        v = QVBoxLayout(d)
+        v.addWidget(lbl("Paste here Claude's whole answer (Cmd+V), then press Make the story XML.", "muted", True))
+        box = QPlainTextEdit()
+        clip = QApplication.clipboard().text()
+        if "STORY_START" in clip and "=== INTERVI" not in clip:
+            box.setPlainText(clip)
+        v.addWidget(box, 1)
+        row = QHBoxLayout()
+        row.addStretch()
+        row.addWidget(btn("Cancel", slot=d.reject))
+        row.addWidget(btn("Make the story XML", "primary", d.accept))
+        v.addLayout(row)
+        box.setFocus()
+        return box.toPlainText() if d.exec() == QDialog.Accepted else None
+
     def _show(self, r):
         f = self._files()[r] if 0 <= r < len(self._files()) else None
         if not f:
@@ -5924,6 +5970,7 @@ class TranscribePage(QWidget):
         self.worker.ended.connect(self._ended)
         self.pp.start(i18n.T("Transcribing {} files…").format(len(todo)))
         self.pp.allow_cancel(lambda: setattr(self, "_stop", True))
+        self.worker.finished.connect(self._buttons)     # 'ended' runs while the thread is still running
         self.worker.start()
         self._buttons()
 

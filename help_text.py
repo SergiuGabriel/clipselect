@@ -490,12 +490,18 @@ fiecare lucru. Nu scurtează nimic.</li>
 <p>Claude citește interviurile mirilor, găsește povestea lor și le împletește într-<b>o singură poveste spusă de amândoi</b>: unul
 continuă ideea celuilalt, cu început, mijloc și final. Povestea are cât are nevoie: nu e scurtată forțat. Folosește doar fraze întregi,
 exact cum le-au spus; nu inventează nimic. Merge prin <b>abonamentul tău Claude</b> (fără cheie, fără costuri în plus).</p>
+<p><b>Întrebările tale nu intră în poveste.</b> Interviurile sunt de tipul „tu întrebi, mirii răspund”: frazele care se termină cu
+„?” sunt marcate ca întrebări și nu sunt folosite niciodată (nici în mijlocul unei bucăți), iar Claude primește regula să lase afară
+și replicile tale scurte („Perfect!”, „Bravo!”, „Mulțumesc!”) și glumele de la final. Cu un singur interviu, Claude face povestea
+lui (sau a ei) curgătoare, ca și cum ar fi spusă fără întrebări.</p>
 <ol>
 <li>Transcrie interviurile, <b>bifează</b> în listă ce intră în poveste și alege la fiecare <b>Cine vorbește</b> (mireasa / mirele / mirii
 împreună / altcineva). „Cine vorbește” e gri până selectezi un fișier.</li>
 <li><b>1. Copiază pentru Claude</b>: aplicația copiază transcrierile (fiecare frază cu un cod: A1, A2… pentru primul interviu, B1… pentru
 al doilea) cu o cerere gata scrisă și deschide un <b>chat nou</b> în Claude. Lipești (Cmd+V) și trimiți.</li>
-<li>Când Claude a răspuns, copiezi tot răspunsul (butonul de copiere de sub el) și apeși <b>2. Lipește răspunsul lui Claude</b>.</li>
+<li>Când Claude a răspuns, copiezi tot răspunsul (butonul de copiere de sub el) și apeși <b>2. Lipește răspunsul lui Claude</b>: se
+deschide o fereastră în care lipești răspunsul (dacă e deja copiat, apare singur), apoi <b>Fă XML-ul cu povestea</b>. Sub butoane
+scrie mereu la ce pas ești.</li>
 <li>Primești un XML: bucățile una după alta (imagine + tot sunetul, cu o mică respirație înainte și după, fără să intre în fraza
 vecină), cu un marker pe fiecare (cine vorbește și ce spune); textul poveștii apare în aplicație.</li>
 </ol>
@@ -1035,12 +1041,18 @@ where each thing is said. Nothing is shortened.</li>
 <p>Claude reads the couple's interviews, finds their story and weaves them into <b>one story told by both</b>: one continues the other's
 thought, with a beginning, a middle and an ending. The story is as long as it needs to be: it is not shortened by force. It uses only whole
 sentences, exactly as they said them; it invents nothing. It works through <b>your Claude subscription</b> (no key, no extra cost).</p>
+<p><b>Your questions never go into the story.</b> The interviews go "you ask, the couple answers": sentences ending with "?" are
+marked as questions and never used (not even inside a piece), and Claude gets the rule to leave out your short lines too ("Perfect!",
+"Bravo!", "Thank you!") and the jokes at the end. With one interview, Claude makes that person's story flow as if told without
+questions.</p>
 <ol>
 <li>Transcribe the interviews, <b>tick</b> in the list what goes into the story and set <b>Who is speaking</b> on each (the bride / the
 groom / the bride and the groom / someone else). "Who is speaking" is grey until you select a file.</li>
 <li><b>1. Copy for Claude</b>: the app copies the transcripts (every sentence with a code: A1, A2… for the first interview, B1… for the
 second) with a request already written and opens a <b>new chat</b> in Claude. Paste (Cmd+V) and send.</li>
-<li>When Claude has answered, copy the whole answer (the copy button under it) and press <b>2. Paste Claude's answer</b>.</li>
+<li>When Claude has answered, copy the whole answer (the copy button under it) and press <b>2. Paste Claude's answer</b>: a window
+opens where you paste the answer (if it is already copied, it is there by itself), then <b>Make the story XML</b>. Under the buttons
+it always says which step you are at.</li>
 <li>You get an XML: the pieces one after the other (picture + all the sound, with a short breath before and after, never into the
 neighbouring sentence), a marker on each (who speaks and what); the story's text shows in the app.</li>
 </ol>

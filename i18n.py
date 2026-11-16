@@ -171,6 +171,19 @@ TEMPLATES.update({
     "New version {} available: Settings > Download and install": "Versiune nouă {} disponibilă: Setări > Descarcă și instalează",
 })
 
+EXACT.update({
+    "Wait for the transcription to finish.": "Așteaptă să se termine transcrierea.",
+    "Step 1 is ready once an interview is transcribed (✓) and ticked.": "Pasul 1 e gata după ce un interviu e transcris (✓) și bifat.",
+    "Claude's answer": "Răspunsul lui Claude",
+    "Paste here Claude's whole answer (Cmd+V), then press Make the story XML.": "Lipește aici tot răspunsul lui Claude (Cmd+V), apoi apasă Fă XML-ul cu povestea.",
+    "Make the story XML": "Fă XML-ul cu povestea",
+})
+TEMPLATES.update({
+    "Sent to Claude at {} ({} interviews). When Claude has answered, press step 2 and paste its answer.":
+        "Trimis lui Claude la {} ({} interviuri). Când Claude a răspuns, apasă pasul 2 și lipește răspunsul.",
+    "Ready: {} interviews ticked. Press step 1.": "Gata: {} interviuri bifate. Apasă pasul 1.",
+})
+
 _PATS = []
 
 

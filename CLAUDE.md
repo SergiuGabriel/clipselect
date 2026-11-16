@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.8.4), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.8.5), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -474,6 +474,17 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   exposure 45 / 210 / 15 % burnt, director pace = switch cost 20 -> 2, static <-> handheld +-25, static +10 activity,
   moves x0.15, HORA, offload twins 90 % of the smaller card, etc.). The Romanian text uses the Romanian UI names (with the
   English name in brackets for the main controls). WHEN A NUMBER OR AN OPTION CHANGES IN THE CODE, CHANGE IT IN BOTH.
+
+## v3.8.5
+- His first real transcription (a bride's interview, "I ask, she answers"): the questions were mixed in. story.is_question
+  (ends with "?") marks them [ÎNTREBARE] / [QUESTION] in the prompt, story.parse splits any range around them (a question
+  is never in the story), the prompt tells Claude to skip his other lines (Perfect!, Bravo!, Mulțumesc!, the jokes at the
+  end); one interview -> a flowing story of that person. Step 2 opens a paste window (filled when the clipboard already
+  holds the answer); a status line says which step he is at.
+- BUG (all pages): a worker's done / ended signal runs while QThread.isRunning() is still True, so the buttons refreshed
+  there stayed grey (Transcribe step 1 after transcribing: the model is released after 'ended'). Now every worker's
+  finished signal refreshes the buttons (multicam, Long Film, Create Project, Transcribe) and Card Offload reports the
+  end from finished too, once per offload (_reported). Rule: refresh UI state on QThread.finished, never only on our signals.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

@@ -21,6 +21,12 @@ WHO_RO = {"bride": "mireasa", "groom": "mirele", "both": "mirii împreună", "ot
 WHO_EN = {"bride": "the bride", "groom": "the groom", "both": "the couple together", "other": "someone else", "": "unknown"}
 
 
+def is_question(text):
+    """The interviewer's questions end with '?' (Whisper writes the punctuation). Claude also gets the rule to skip his
+    other lines (Perfect!, Bravo!, Mulțumesc!), which it recognises from the context."""
+    return str(text).strip().rstrip('"\'»”').endswith("?")
+
+
 def _mmss(t):
     return f"{int(t // 60)}:{int(t % 60):02d}"
 
@@ -37,22 +43,28 @@ def prompt(files, lang="ro"):
                     f"({Path(f['path']).name})")
         body.append(f"\n=== {'INTERVIUL' if ro else 'INTERVIEW'} {L} ===")
         for i, (a, b, t) in enumerate(f["segs"], 1):
-            body.append(f"{L}{i} ({b - a:.1f} s) {t}")
+            q = (" [ÎNTREBARE]" if ro else " [QUESTION]") if is_question(t) else ""
+            body.append(f"{L}{i} ({b - a:.1f} s){q} {t}")
     if ro:
         intro = (
             "Ești editorul unui film de nuntă. Mai jos sunt interviurile transcrise, fiecare frază are un cod "
             "(A1, A2… pentru primul interviu, B1, B2… pentru al doilea) și durata ei în secunde.\n\n"
             + "\n".join(head) + "\n\n"
+            "Interviurile sunt de tipul: eu (cameramanul) întreb, mirii răspund. ÎNTREBĂRILE MELE ȘI REPLICILE MELE NU INTRĂ "
+            "NICIODATĂ ÎN POVESTE: cele marcate [ÎNTREBARE], dar și replicile mele scurte (de ex. „Perfect!”, „Bravo!”, "
+            "„Mulțumesc!”, „A fost perfect!”) și glumele de la final. Folosește doar răspunsurile mirilor.\n\n"
             "Ce vreau:\n"
             "1. Găsește povestea lor: ce îi leagă, cum s-au cunoscut, momentele importante, ce simt unul pentru altul.\n"
-            "2. Construiește O SINGURĂ POVESTE în care povestesc ÎMPREUNĂ: frazele lor se împletesc, unul continuă ideea "
-            "celuilalt, ca și cum ar vorbi împreună, iar la final povestea e un întreg, cu început, mijloc și un final "
-            "emoționant.\n"
+            + ("2. Construiește O SINGURĂ POVESTE în care povestesc ÎMPREUNĂ: frazele lor se împletesc, unul continuă ideea "
+               "celuilalt, ca și cum ar vorbi împreună, iar la final povestea e un întreg, cu început, mijloc și un final "
+               "emoționant.\n" if len(files) > 1 else
+               "2. Construiește din răspunsuri o poveste curgătoare, ca și cum ar povesti fără întrebări, cu început, mijloc "
+               "și un final emoționant.\n") +
             "3. Durata: cât are nevoie povestea. Nu o scurta forțat și nu o lungi: păstrează tot ce e bun și spune "
             "povestea, lasă afară ce nu adaugă nimic.\n"
             "4. Folosește DOAR fraze care există, întregi, exact cum sunt. Nu inventa, nu rescrie, nu tăia o frază la "
             "jumătate. Poți lua mai multe fraze la rând (de ex. A12-A14). Evită ezitările, repetițiile, frazele "
-            "neterminate și ce nu se înțelege fără întrebarea reporterului.\n\n"
+            "neterminate și ce nu se înțelege fără întrebarea mea.\n\n"
             "Răspunsul tău: întâi 1-2 propoziții cu povestea pe scurt, apoi lista, exact între rândurile STORY_START și "
             "STORY_END, un rând pe bucată, în ordinea din film: codul (A12) sau codurile la rând (A12-A14), apoi \" | \" și "
             "începutul textului. Exemplu:\n"
@@ -63,16 +75,21 @@ def prompt(files, lang="ro"):
             "You are the editor of a wedding film. Below are the transcribed interviews; every sentence has a code "
             "(A1, A2… for the first interview, B1, B2… for the second) and its length in seconds.\n\n"
             + "\n".join(head) + "\n\n"
+            "The interviews go like this: I (the videographer) ask, the couple answers. MY QUESTIONS AND MY LINES NEVER GO "
+            "INTO THE STORY: the ones marked [QUESTION], and also my short lines (e.g. \"Perfect!\", \"Bravo!\", "
+            "\"Thank you!\") and the jokes at the end. Use only the couple's answers.\n\n"
             "What I want:\n"
             "1. Find their story: what binds them, how they met, the important moments, what they feel for each other.\n"
-            "2. Build ONE STORY that they tell TOGETHER: their sentences weave into each other, one continues the other's "
-            "thought as if they were talking together, and in the end the story is a whole, with a beginning, a middle "
-            "and an emotional ending.\n"
+            + ("2. Build ONE STORY that they tell TOGETHER: their sentences weave into each other, one continues the "
+               "other's thought as if they were talking together, and in the end the story is a whole, with a beginning, "
+               "a middle and an emotional ending.\n" if len(files) > 1 else
+               "2. Build a flowing story from the answers, as if told without questions, with a beginning, a middle and "
+               "an emotional ending.\n") +
             "3. Length: as long as the story needs. Do not shorten it by force and do not stretch it: keep everything "
             "that is good and tells the story, leave out what adds nothing.\n"
             "4. Use ONLY sentences that exist, whole, exactly as they are. Do not invent, rewrite or cut a sentence in "
             "half. You may take several sentences in a row (e.g. A12-A14). Avoid hesitations, repetitions, unfinished "
-            "sentences and anything that needs the interviewer's question to make sense.\n\n"
+            "sentences and anything that needs my question to make sense.\n\n"
             "Your answer: first 1-2 sentences with the story in short, then the list, exactly between the lines "
             "STORY_START and STORY_END, one line per piece, in film order: the code (A12) or the codes in a row (A12-A14), "
             "then \" | \" and the beginning of the text. Example:\n"
@@ -105,7 +122,16 @@ def parse(answer, files):
         if (L2 and L2 != L) or fi < 0 or fi >= len(files) or not (1 <= a <= b <= len(files[fi]["segs"])):
             bad.append(s[:60])
             continue
-        pieces.append((fi, a - 1, b - 1))
+        run = []                                        # a range never carries a question inside it
+        for k in range(a - 1, b):
+            if is_question(files[fi]["segs"][k][2]):
+                if run:
+                    pieces.append((fi, run[0], run[-1]))
+                run = []
+            else:
+                run.append(k)
+        if run:
+            pieces.append((fi, run[0], run[-1]))
     return pieces, bad
 
 
