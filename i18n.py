@@ -184,6 +184,34 @@ TEMPLATES.update({
     "Ready: {} interviews ticked. Press step 1.": "Gata: {} interviuri bifate. Apasă pasul 1.",
 })
 
+EXACT.update({
+    "Make the story with Claude": "Fă povestea cu Claude",
+    "Automatic (your Claude API key, Settings): tick the interviews, set who is speaking and press Make the story with Claude. Claude weaves them theme by theme and the XML is saved next to the first interview.":
+        "Automat (cheia ta Claude API, din Setări): bifezi interviurile, alegi cine vorbește și apeși Fă povestea cu Claude. Claude le împletește pe teme, iar XML-ul se salvează lângă primul interviu.",
+    "Tick the interviews in the list and set who is speaking. 1: the app copies the transcripts and opens a new Claude chat: paste (Cmd+V) and send. 2: copy Claude's whole answer and press Paste Claude's answer: you get an XML with the story. To skip the copy / paste, put a Claude API key in Settings.":
+        "Bifezi interviurile din listă și alegi cine vorbește. 1: aplicația copiază transcrierile și deschide un chat nou în Claude: lipești (Cmd+V) și trimiți. 2: copiezi tot răspunsul lui Claude și apeși Lipește răspunsul lui Claude: primești un XML cu povestea. Ca să nu mai faci copy / paste, pune o cheie Claude API în Setări.",
+    "Wait: the app is working.": "Așteaptă: aplicația lucrează.",
+    "Claude is writing the story… (usually 1-3 minutes)": "Claude scrie povestea… (de obicei 1-3 minute)",
+    "Select a file in the list first.": "Selectează întâi un fișier din listă.",
+    "Claude (optional)": "Claude (opțional)",
+    "A Claude API key (from console.anthropic.com, paid per use: a few cents for a wedding's interviews) makes the interview story automatic in Transcribe, without copy / paste. Without a key the story is made through your Claude subscription with copy / paste. The key stays on this computer.":
+        "O cheie Claude API (de pe console.anthropic.com, plătită la folosire: câțiva cenți pentru interviurile unei nunți) face povestea din interviuri automată în Transcriere, fără copy / paste. Fără cheie, povestea se face prin abonamentul tău Claude, cu copy / paste. Cheia rămâne pe acest calculator.",
+    "That does not look like a Claude API key (it starts with sk-ant-).": "Nu pare o cheie Claude API (începe cu sk-ant-).",
+    "Claude API key saved: the interview story is automatic now.": "Cheia Claude API e salvată: povestea din interviuri e acum automată.",
+    "Claude API key removed: the story uses copy / paste.": "Cheia Claude API e ștearsă: povestea se face cu copy / paste.",
+    "the Claude API key is not valid": "cheia Claude API nu e validă",
+    "the Claude API account has no credit (add credit at console.anthropic.com)": "contul Claude API nu are credit (adaugă credit pe console.anthropic.com)",
+    "Claude's limit was reached for now, try again in a few minutes": "limita lui Claude a fost atinsă deocamdată, încearcă peste câteva minute",
+    "Claude is overloaded right now, try again in a few minutes": "Claude e foarte ocupat acum, încearcă peste câteva minute",
+    "empty answer": "răspuns gol", "no answer": "niciun răspuns", "Save": "Salvează",
+})
+TEMPLATES.update({
+    "Ready: {} interviews ticked. Press Make the story with Claude.": "Gata: {} interviuri bifate. Apasă Fă povestea cu Claude.",
+    "Claude could not make the story: {}": "Claude nu a putut face povestea: {}",
+    "It is next to the interview: {}": "E lângă interviu: {}",
+    "model {} not available": "modelul {} nu e disponibil",
+})
+
 _PATS = []
 
 

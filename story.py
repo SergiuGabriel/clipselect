@@ -8,7 +8,10 @@
 3. export_xml(): the pieces back to back on a 25 fps timeline, picture + all sound channels linked, a marker on every
    piece with its text. Imported into Premiere like every other XML of the app.
 """
+import json
 import re
+import urllib.error
+import urllib.request
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -55,9 +58,14 @@ def prompt(files, lang="ro"):
             "„Mulțumesc!”, „A fost perfect!”) și glumele de la final. Folosește doar răspunsurile mirilor.\n\n"
             "Ce vreau:\n"
             "1. Găsește povestea lor: ce îi leagă, cum s-au cunoscut, momentele importante, ce simt unul pentru altul.\n"
-            + ("2. Construiește O SINGURĂ POVESTE în care povestesc ÎMPREUNĂ: frazele lor se împletesc, unul continuă ideea "
-               "celuilalt, ca și cum ar vorbi împreună, iar la final povestea e un întreg, cu început, mijloc și un final "
-               "emoționant.\n" if len(files) > 1 else
+            + ("2. Construiește O SINGURĂ POVESTE în care povestesc ÎMPREUNĂ. Pe amândoi îi întreb aceleași lucruri (cum s-au "
+               "cunoscut, cum e celălalt, ce iubește la el / ea, ce își doresc, un mesaj pentru celălalt), deci pe fiecare "
+               "temă ai versiunea ei și versiunea lui. Împletește-le pe teme: pe aceeași temă tai de la unul la celălalt, "
+               "des, în bucăți scurte (una-trei fraze), ca și cum unul ar continua ideea celuilalt (de ex. el spune ce iubește "
+               "la ea, apoi tai la ea care spune ce iubește la el; ea începe cum s-au cunoscut, el continuă). Ordinea "
+               "temelor: cum s-au cunoscut, apoi cum se văd unul pe altul, ce îi leagă, viitorul, iar la final mesajele "
+               "lor unul pentru celălalt (finalul emoționant). Fiecare temă să aibă ambele voci, iar povestea să fie un "
+               "întreg, cu început, mijloc și final.\n" if len(files) > 1 else
                "2. Construiește din răspunsuri o poveste curgătoare, ca și cum ar povesti fără întrebări, cu început, mijloc "
                "și un final emoționant.\n") +
             "3. Durata: cât are nevoie povestea. Nu o scurta forțat și nu o lungi: păstrează tot ce e bun și spune "
@@ -80,9 +88,14 @@ def prompt(files, lang="ro"):
             "\"Thank you!\") and the jokes at the end. Use only the couple's answers.\n\n"
             "What I want:\n"
             "1. Find their story: what binds them, how they met, the important moments, what they feel for each other.\n"
-            + ("2. Build ONE STORY that they tell TOGETHER: their sentences weave into each other, one continues the "
-               "other's thought as if they were talking together, and in the end the story is a whole, with a beginning, "
-               "a middle and an emotional ending.\n" if len(files) > 1 else
+            + ("2. Build ONE STORY that they tell TOGETHER. I ask both of them the same things (how they met, what the "
+               "other is like, what they love about him / her, what they wish for, a message to the other), so on every "
+               "theme you have her version and his. Weave them by theme: on the same theme cut from one to the other, "
+               "often, in short pieces (one to three sentences), as if one continued the other's thought (e.g. he says "
+               "what he loves about her, then cut to her saying what she loves about him; she starts how they met, he "
+               "goes on). Order of the themes: how they met, then how they see each other, what binds them, the future, "
+               "and at the end their messages to each other (the emotional ending). Every theme with both voices, and "
+               "the story a whole, with a beginning, a middle and an ending.\n" if len(files) > 1 else
                "2. Build a flowing story from the answers, as if told without questions, with a beginning, a middle and "
                "an emotional ending.\n") +
             "3. Length: as long as the story needs. Do not shorten it by force and do not stretch it: keep everything "
@@ -229,3 +242,46 @@ def export_xml(cuts, files, infos, out_path, name, labels=None):
            f'</media></sequence></xmeml>')
     Path(out_path).write_text(xml, encoding="utf-8")
     return dict(pieces=len(clips), seconds=pos / sf)
+
+
+# ---- automatic: straight to Claude with his own API key (optional; without a key the copy / paste way is used)
+MODELS = ["claude-sonnet-5-5", "claude-opus-5-5"]       # the first one that answers
+
+
+def ask_claude(text, key, cancel=None):
+    """Sends the prompt to the Claude API and returns the answer's text. Raises RuntimeError(short reason)."""
+    import updater
+    last = "no answer"
+    for model in MODELS:
+        body = json.dumps({"model": model, "max_tokens": 8000,
+                           "messages": [{"role": "user", "content": text}]}).encode("utf-8")
+        req = urllib.request.Request("https://api.anthropic.com/v1/messages", data=body, method="POST", headers={
+            "x-api-key": key.strip(), "anthropic-version": "2023-06-01", "content-type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=600, context=updater._ctx()) as r:
+                d = json.loads(r.read().decode("utf-8"))
+            out = "".join(b.get("text", "") for b in d.get("content", []) if b.get("type") == "text")
+            if out.strip():
+                return out
+            last = "empty answer"
+        except urllib.error.HTTPError as e:
+            try:
+                msg = json.loads(e.read().decode("utf-8")).get("error", {}).get("message", "")
+            except Exception:
+                msg = ""
+            low = msg.lower()
+            if e.code == 401:
+                raise RuntimeError("the Claude API key is not valid") from None
+            if "credit" in low or "billing" in low:
+                raise RuntimeError("the Claude API account has no credit (add credit at console.anthropic.com)") from None
+            if e.code == 429:
+                raise RuntimeError("Claude's limit was reached for now, try again in a few minutes") from None
+            if e.code in (500, 529):
+                raise RuntimeError("Claude is overloaded right now, try again in a few minutes") from None
+            if e.code == 404 or "model" in low:
+                last = f"model {model} not available"
+                continue                                # try the next model
+            raise RuntimeError(f"Claude refused the request (HTTP {e.code}{': ' + msg[:80] if msg else ''})") from None
+        except urllib.error.URLError:
+            raise RuntimeError("no internet connection") from None
+    raise RuntimeError(last)

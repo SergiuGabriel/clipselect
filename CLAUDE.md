@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.8.5), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.8.6), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -485,6 +485,20 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   there stayed grey (Transcribe step 1 after transcribing: the model is released after 'ended'). Now every worker's
   finished signal refreshes the buttons (multicam, Long Film, Create Project, Transcribe) and Card Offload reports the
   end from finished too, once per offload (_reported). Rule: refresh UI state on QThread.finished, never only on our signals.
+
+## v3.8.6
+- Owner: "I need the interviews interleaved, not a transcript". The prompt now weaves BY THEME (he asks both the same
+  questions: how they met, what the other is like, what they love, the future, a message to the other): short cuts from
+  one to the other on the same theme, theme order met -> how they see each other -> what binds them -> future -> messages
+  (ending). The result XML is the edited story.
+- Optional Claude API key (Settings > Claude, store.app["claude_key"], local only, hidden in the error report as
+  "(set, hidden)"): Transcribe's button becomes "Make the story with Claude" -> story.ask_claude (POST
+  api.anthropic.com/v1/messages, MODELS claude-sonnet-5-5 then claude-opus-5-5 on 404, max_tokens 8000, clear messages
+  for invalid key / no credit / 429 / overloaded / no internet) in _ClaudeWorker -> parse -> XML saved next to the first
+  interview (no dialog). Without a key: the copy / paste way (his subscription). Not testable in the sandbox (API
+  blocked): tested with a simulated API (ok, 404 -> next model, no credit).
+- Transcribe: Remove is a real button + Delete / Backspace on the list (clears story_paths if that file was sent);
+  "Export XML with markers" hidden (owner: one interview with markers is useless).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

@@ -43,7 +43,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.8.5"
+APP, VER = "MoneyMakingMachine", "v3.8.6"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -2951,6 +2951,19 @@ class SettingsPage(QWidget):
                              "muted", True)
         right.addWidget(self.lang_note)
         right.addSpacing(18)
+        right.addWidget(lbl("Claude (optional)", "h2"))
+        kr = QHBoxLayout()
+        self.e_key = QLineEdit(store.app.get("claude_key", ""))
+        self.e_key.setEchoMode(QLineEdit.Password)
+        self.e_key.setPlaceholderText("sk-ant-…")
+        kr.addWidget(self.e_key, 1)
+        kr.addWidget(btn("Save", slot=self._save_key))
+        right.addLayout(kr)
+        right.addWidget(lbl("A Claude API key (from console.anthropic.com, paid per use: a few cents for a wedding's interviews) "
+                            "makes the interview story automatic in Transcribe, without copy / paste. Without a key the story "
+                            "is made through your Claude subscription with copy / paste. The key stays on this computer.",
+                            "muted", True))
+        right.addSpacing(18)
         right.addWidget(lbl("Updates and problems", "h2"))
         ur = QHBoxLayout()
         ur.addWidget(btn("Check for updates", slot=lambda: self.check_updates(False)))
@@ -3066,6 +3079,19 @@ class SettingsPage(QWidget):
         self.upd.setText(i18n.T("The download failed ({}). Try again.").format(i18n.T(m[:60])))
         notify(i18n.T("The download failed ({}). Try again.").format(i18n.T(m[:60])), error=True)
 
+    def _save_key(self):
+        k = self.e_key.text().strip()
+        if k and not k.startswith("sk-"):
+            notify(i18n.T("That does not look like a Claude API key (it starts with sk-ant-)."), error=True)
+            return
+        self.store.app["claude_key"] = k
+        self.store.save_app()
+        notify(i18n.T("Claude API key saved: the interview story is automatic now.") if k else
+               i18n.T("Claude API key removed: the story uses copy / paste."))
+        w = self.window()
+        if hasattr(w, "transcribe"):
+            w.transcribe._buttons()
+
     def save_report(self):
         out, _ = QFileDialog.getSaveFileName(self, "Save error report", str(Path.home() / "MoneyMakingMachine report.txt"),
                                              "Text (*.txt)")
@@ -3076,8 +3102,9 @@ class SettingsPage(QWidget):
             text = log.read_text("utf-8", errors="replace")[-300000:]
         except Exception:
             text = "(no log yet)"
+        safe = {k: ("(set, hidden)" if k == "claude_key" and v else v) for k, v in self.store.app.items()}   # never the key
         info = (f"{APP} {VER}\n{platform.platform()}\nPython {platform.python_version()}\n"
-                f"CPU cores: {os.cpu_count()}\nSettings: {json.dumps(self.store.app)}\n\n")
+                f"CPU cores: {os.cpu_count()}\nSettings: {json.dumps(safe)}\n\n")
         Path(out).write_text(info + text, encoding="utf-8")
         self.upd.setText(f"Report saved: {out}")
         notify(f"Report saved: {Path(out).name}")
@@ -4825,6 +4852,23 @@ class _UpdWorker(QThread):
             self.failed.emit(str(e))
 
 
+class _ClaudeWorker(QThread):
+    """The story request to the Claude API, off the UI thread."""
+    done = Signal(str)
+    failed = Signal(str)
+
+    def __init__(self, text, key):
+        super().__init__()
+        self.text, self.key = text, key
+
+    def run(self):
+        try:
+            self.done.emit(story.ask_claude(self.text, self.key))
+        except Exception as e:
+            logging.warning("claude story failed: %s", e)
+            self.failed.emit(str(e))
+
+
 class _ProbeWorker(QThread):
     done = Signal(object)
     failed = Signal(str)
@@ -5665,6 +5709,7 @@ class TranscribePage(QWidget):
         self.list.setStyleSheet(f"QListWidget{{{box}}} QListWidget::item{{padding:6px 4px}}")
         self.list.currentRowChanged.connect(self._show)
         self.list.itemChanged.connect(self._ticked)
+        self.list.keyPressEvent = self._list_key
         self.list.setStyleSheet(self.list.styleSheet() +
                                 "QListWidget::indicator{width:16px;height:16px;border:1px solid #6a6a6a;border-radius:4px;background:#232323}"
                                 f"QListWidget::indicator:checked{{background:{C['HOT']};border-color:{C['HOT']};image:url({_check_png()})}}")
@@ -5672,7 +5717,7 @@ class TranscribePage(QWidget):
         fr = QHBoxLayout()
         fr.addWidget(btn("+  Add files", slot=self.add))
         fr.addWidget(btn("Import XML", slot=self.import_xml))
-        fr.addWidget(btn("Remove", "link", self.remove))
+        fr.addWidget(btn("Remove", slot=self.remove))
         fr.addStretch()
         left.addLayout(fr)
         wr = QHBoxLayout()
@@ -5713,16 +5758,15 @@ class TranscribePage(QWidget):
         rb = QHBoxLayout()
         self.b_copy = btn("Copy the text", slot=self.copy)
         self.b_xml = btn("Export XML with markers", slot=self.export)
+        self.b_xml.hide()                          # owner: one interview with markers is not useful (the story is)
         rb.addWidget(self.b_copy)
         rb.addWidget(self.b_xml)
         rb.addStretch()
         right.addLayout(rb)
         right.addSpacing(8)
         right.addWidget(lbl("THE STORY OF THE INTERVIEWS (WITH CLAUDE)", "section"))
-        right.addWidget(lbl("Tick the interviews in the list and set who is speaking. 1: the app copies the transcripts and "
-                            "opens a new Claude chat: paste (Cmd+V) and send. 2: copy Claude's whole answer (the copy button "
-                            "under it) and press Paste Claude's answer: you get an XML with the story, the pieces one after "
-                            "the other, with a marker on each.", "muted", True))
+        self.story_help = lbl("", "muted", True)
+        right.addWidget(self.story_help)
         sb = QHBoxLayout()                       # own row: both buttons fit in Romanian too
         self.b_ask = btn("1. Copy for Claude", "primary", self.ask_claude)
         self.b_answer = btn("2. Paste Claude's answer", slot=self.claude_answer)
@@ -5773,8 +5817,19 @@ class TranscribePage(QWidget):
         self.b_ask.setEnabled(not self._busy() and bool(self._story_files()))
         self.b_answer.setEnabled(not self._busy() and bool(self.cfg.get("story_paths")))
         n = len(self._story_files())
+        auto = bool(self._key())
+        self.b_ask.setText(i18n.T("Make the story with Claude") if auto else i18n.T("1. Copy for Claude"))
+        self.b_answer.setVisible(not auto)
+        self.story_help.setText(i18n.T(
+            "Automatic (your Claude API key, Settings): tick the interviews, set who is speaking and press Make the story "
+            "with Claude. Claude weaves them theme by theme and the XML is saved next to the first interview.") if auto else i18n.T(
+            "Tick the interviews in the list and set who is speaking. 1: the app copies the transcripts and opens a new Claude "
+            "chat: paste (Cmd+V) and send. 2: copy Claude's whole answer and press Paste Claude's answer: you get an XML with "
+            "the story. To skip the copy / paste, put a Claude API key in Settings."))
         if self._busy():
-            st = i18n.T("Wait for the transcription to finish.")
+            st = i18n.T("Wait: the app is working.")
+        elif auto and n:
+            st = i18n.T("Ready: {} interviews ticked. Press Make the story with Claude.").format(n)
         elif not n:
             st = i18n.T("Step 1 is ready once an interview is transcribed (✓) and ticked.")
         elif self.cfg.get("story_paths"):
@@ -5805,11 +5860,26 @@ class TranscribePage(QWidget):
         self._fill(select=len(self._files()) - 1 if fs else None)
 
     def remove(self):
+        """Takes the selected file off the list (the file and its .txt / .srt stay on the disk)."""
         r = self.list.currentRow()
-        if 0 <= r < len(self._files()) and not self._busy():
-            del self._files()[r]
-            self.store.save_app()
-            self._fill()
+        if self._busy():
+            notify(i18n.T("Wait: the app is working."), error=True)
+            return
+        if not (0 <= r < len(self._files())):
+            notify(i18n.T("Select a file in the list first."), error=True)
+            return
+        gone = self._files()[r]["path"]
+        del self._files()[r]
+        if gone in self.cfg.get("story_paths", []):
+            self.cfg.pop("story_paths", None)              # the codes A, B... would point to other files
+        self.store.save_app()
+        self._fill(select=min(r, len(self._files()) - 1) if self._files() else None)
+
+    def _list_key(self, e):
+        if e.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+            self.remove()
+        else:
+            QListWidget.keyPressEvent(self.list, e)
 
     def import_xml(self):
         """The interviews of a Premiere / DaVinci timeline (FCP7 XML), in the timeline's order."""
@@ -5856,7 +5926,12 @@ class TranscribePage(QWidget):
     def _story_files(self):
         return [f for f in self._files() if f.get("story", True) and f.get("segs")]
 
+    def _key(self):
+        return (self.store.app.get("claude_key") or "").strip()
+
     def ask_claude(self):
+        if self._key():
+            return self._auto_story()
         fs = self._story_files()
         if not fs:
             notify(i18n.T("Transcribe and tick at least one interview first."), error=True)
@@ -5874,6 +5949,26 @@ class TranscribePage(QWidget):
                       "Paste Claude's answer."), ms=12000)
         self._buttons()
 
+    def _auto_story(self):
+        """With his Claude API key: prompt -> Claude -> story XML, in one press (in the background)."""
+        fs = self._story_files()
+        if not fs or self._busy():
+            if not fs:
+                notify(i18n.T("Transcribe and tick at least one interview first."), error=True)
+            return
+        if len(fs) > len(story.LETTERS):
+            notify(i18n.T("Too many interviews ticked (at most {}).").format(len(story.LETTERS)), error=True)
+            return
+        text = story.prompt(fs, i18n.LANG)
+        self.pp.start(i18n.T("Claude is writing the story… (usually 1-3 minutes)"))
+        self.worker = _ClaudeWorker(text, self._key())
+        self.worker.done.connect(lambda ans, fs=fs: (self.pp.hide(), self._make_story(fs, ans, auto=True)))
+        self.worker.failed.connect(lambda m: (self.pp.hide(), notify(i18n.T("Claude could not make the story: {}").format(
+            i18n.T(m)), error=True, ms=10000)))
+        self.worker.finished.connect(self._buttons)
+        self.worker.start()
+        self._buttons()
+
     def claude_answer(self):
         by = {f["path"]: f for f in self._files()}
         fs = [by.get(p) for p in self.cfg.get("story_paths", [])]
@@ -5887,6 +5982,10 @@ class TranscribePage(QWidget):
             notify(i18n.T("The clipboard still holds the text for Claude. Send it in Claude, then copy Claude's answer."),
                    error=True, ms=10000)
             return
+        self._make_story(fs, ans, auto=False)
+
+    def _make_story(self, fs, ans, auto):
+        """Claude's answer -> the story XML (auto: saved next to the first interview without asking)."""
         pieces, bad = story.parse(ans, fs)
         if not pieces:
             notify(i18n.T("No story found in the copied text. Copy Claude's whole answer (the copy button under it) and "
@@ -5905,10 +6004,18 @@ class TranscribePage(QWidget):
         labels = {k: i18n.T(names[f["who"]]) for k, f in enumerate(fs) if f.get("who") in names}
         first = Path(fs[0]["path"])
         start = str(projectsetup.free_path(first.with_name(i18n.T("Interview story") + ".xml")))
-        out, _ = QFileDialog.getSaveFileName(self, "Save XML", start, "XML (*.xml)")
-        if not out:
-            return
+        if auto:
+            out = start
+        else:
+            out, _ = QFileDialog.getSaveFileName(self, "Save XML", start, "XML (*.xml)")
+            if not out:
+                return
         try:
+            r = story.export_xml(cuts, fs, infos, out, i18n.T("Interview story"), labels)
+        except OSError:
+            out, _ = QFileDialog.getSaveFileName(self, "Save XML", str(Path.home() / Path(start).name), "XML (*.xml)")
+            if not out:
+                return
             r = story.export_xml(cuts, fs, infos, out, i18n.T("Interview story"), labels)
         except Exception as e:
             logging.exception("story export failed")
@@ -5921,7 +6028,10 @@ class TranscribePage(QWidget):
             pos += t1 - t0
         self.text.setPlainText(i18n.T("The story ({} pieces, {}):").format(r["pieces"], story._mmss(r["seconds"])) +
                                "\n\n" + "\n\n".join(lines))
+        self.story_out = str(out)
         msg = i18n.T("Story XML saved: {} pieces, {} long.").format(r["pieces"], story._mmss(r["seconds"]))
+        if auto:
+            msg += " " + i18n.T("It is next to the interview: {}").format(Path(out).name)
         if bad:
             msg += " " + i18n.T("{} lines of the answer were not understood and were skipped.").format(len(bad))
         notify(msg, error=bool(bad), ms=9000)
