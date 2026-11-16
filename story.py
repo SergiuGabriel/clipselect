@@ -38,12 +38,16 @@ def prompt(files, lang="ro"):
     """files = [dict(path, segs=[[start, end, text]], who)] in the order of the list. Returns the text for Claude."""
     ro = lang == "ro"
     who = WHO_RO if ro else WHO_EN
+    import transcribe
     head = []
     body = []
+    names = next((transcribe.couple_names(f["path"]) for f in files if transcribe.couple_names(f["path"])), [])
+    unknown = any(not f.get("who") for f in files)
     for k, f in enumerate(files):
         L = LETTERS[k]
-        head.append(f"- {'Interviul' if ro else 'Interview'} {L}: {who.get(f.get('who') or '', who[''])} "
-                    f"({Path(f['path']).name})")
+        w = f.get("who") or ""
+        label = {"bride": "MIREASA" if ro else "THE BRIDE", "groom": "MIRELE" if ro else "THE GROOM"}.get(w) or who.get(w, who[""])
+        head.append(f"- {'Interviul' if ro else 'Interview'} {L}: {label} ({Path(f['path']).name})")
         body.append(f"\n=== {'INTERVIUL' if ro else 'INTERVIEW'} {L} ===")
         for i, (a, b, t) in enumerate(f["segs"], 1):
             q = (" [ÎNTREBARE]" if ro else " [QUESTION]") if is_question(t) else ""
@@ -55,7 +59,13 @@ def prompt(files, lang="ro"):
             + "\n".join(head) + "\n\n"
             "Interviurile sunt de tipul: eu (cameramanul) întreb, mirii răspund. ÎNTREBĂRILE MELE ȘI REPLICILE MELE NU INTRĂ "
             "NICIODATĂ ÎN POVESTE: cele marcate [ÎNTREBARE], dar și replicile mele scurte (de ex. „Perfect!”, „Bravo!”, "
-            "„Mulțumesc!”, „A fost perfect!”) și glumele de la final. Folosește doar răspunsurile mirilor.\n\n"
+            "„Mulțumesc!”, „A fost perfect!”) și glumele de la final. Folosește doar răspunsurile mirilor.\n"
+            "Replicile adresate mirilor care sună a instrucțiuni sau vorbă de-a mea (de ex. „Tre' să-mi zici ce zi este "
+            "astăzi”, „Aș vrea să-i zici la persoana a doua”, vorbele de dinainte să înceapă interviul, „Bravo, ai scăpat”) "
+            "sunt ale MELE chiar dacă nu sunt marcate [ÎNTREBARE]. Lasă-le afară.\n"
+            + (f"Mirii sunt {names[0]} și {names[1]}.\n" if names else "")
+            + ("Unde scrie „nu știu cine”: află din ce spun care interviu e al MIRELUI și care al MIRESEI și scrie-le în "
+               "răspuns pe rândul WHO.\n" if unknown else "") + "\n"
             "Ce vreau:\n"
             "1. Găsește povestea lor: ce îi leagă, cum s-au cunoscut, momentele importante, ce simt unul pentru altul.\n"
             + ("2. Construiește O SINGURĂ POVESTE în care povestesc ÎMPREUNĂ. Pe amândoi îi întreb aceleași lucruri (cum s-au "
@@ -74,9 +84,16 @@ def prompt(files, lang="ro"):
             "jumătate. Poți lua mai multe fraze la rând (de ex. A12-A14). Evită ezitările, repetițiile, frazele "
             "neterminate și ce nu se înțelege fără întrebarea mea.\n"
             "5. Scoate înjurăturile și glumele vulgare, chiar dacă sunt amuzante.\n"
-            "6. Deschide puternic (ziua, emoția) și încheie emoționant, eventual cu un zâmbet.\n\n"
+            "6. Taie des între ei: o bucată are ideal una-trei fraze. Când ea spune o parte dintr-o poveste și el partea "
+            "următoare, alternează.\n"
+            "7. Caută ecouri: o frază a lui care răspunde unei fraze a ei (de ex. ea: „învățăm să ne punem pe noi pe primul "
+            "loc”, el: „să încerce să se pună și pe ea pe primul loc”). Pune-le una lângă alta.\n"
+            "8. Lasă afară tot ce e doar un răspuns scurt la întrebarea mea și nu are sens singur (de ex. „Pe Instagram, "
+            "prima dată.”).\n"
+            "9. Deschide puternic (ziua, emoția) și încheie emoționant, eventual cu un zâmbet.\n\n"
             "Transcrierea automată mai pocește cuvinte: înțelege-le din context.\n\n"
-            "Răspunsul tău: întâi 1-2 propoziții cu povestea pe scurt, apoi lista, exact între rândurile STORY_START și "
+            "Răspunsul tău: întâi un rând WHO cu cine e în fiecare interviu (de ex. WHO: A=MIRE, B=MIREASA), apoi 1-2 "
+            "propoziții cu povestea pe scurt, apoi lista, exact între rândurile STORY_START și "
             "STORY_END, un rând pe bucată, în ordinea din film: codul (A12) sau codurile la rând (A12-A14), apoi \" | \" și "
             "textul acelor fraze scris corect (cuvintele pocite de transcriere corectate, cu diacritice, fără să schimbi "
             "ce au spus). Exemplu:\n"
@@ -89,7 +106,13 @@ def prompt(files, lang="ro"):
             + "\n".join(head) + "\n\n"
             "The interviews go like this: I (the videographer) ask, the couple answers. MY QUESTIONS AND MY LINES NEVER GO "
             "INTO THE STORY: the ones marked [QUESTION], and also my short lines (e.g. \"Perfect!\", \"Bravo!\", "
-            "\"Thank you!\") and the jokes at the end. Use only the couple's answers.\n\n"
+            "\"Thank you!\") and the jokes at the end. Use only the couple's answers.\n"
+            "Lines addressed to the couple that sound like instructions or chatter from me (e.g. \"Tre' să-mi zici ce zi "
+            "este astăzi\", \"Aș vrea să-i zici la persoana a doua\", small talk before the interview starts, \"Bravo, ai "
+            "scăpat\") are MINE even if they are not marked [QUESTION]. Leave them out.\n"
+            + (f"The couple: {names[0]} and {names[1]}.\n" if names else "")
+            + ("Where it says unknown: find out from what they say which interview is THE GROOM and which is THE BRIDE "
+               "and write it in your answer on the WHO line.\n" if unknown else "") + "\n"
             "What I want:\n"
             "1. Find their story: what binds them, how they met, the important moments, what they feel for each other.\n"
             + ("2. Build ONE STORY that they tell TOGETHER. I ask both of them the same things (how they met, what the "
@@ -108,15 +131,39 @@ def prompt(files, lang="ro"):
             "half. You may take several sentences in a row (e.g. A12-A14). Avoid hesitations, repetitions, unfinished "
             "sentences and anything that needs my question to make sense.\n"
             "5. Leave out swearing and vulgar jokes, even when they are funny.\n"
-            "6. Open strong (the day, the emotion) and end emotionally, maybe with a smile.\n\n"
+            "6. Cut often between them: a piece is ideally one to three sentences. When she tells part of a story and he "
+            "tells the next part, alternate.\n"
+            "7. Look for echoes: a sentence of his that answers a sentence of hers (e.g. she: \"we are learning to put "
+            "ourselves first\", he: \"she should try to put herself first too\"). Put them next to each other.\n"
+            "8. Leave out anything that is only a short answer to my question and makes no sense alone (e.g. \"On "
+            "Instagram, the first time.\").\n"
+            "9. Open strong (the day, the emotion) and end emotionally, maybe with a smile.\n\n"
             "The automatic transcript misspells some words: understand them from the context.\n\n"
-            "Your answer: first 1-2 sentences with the story in short, then the list, exactly between the lines "
+            "Your answer: first a WHO line with who is in each interview (e.g. WHO: A=GROOM, B=BRIDE), then 1-2 sentences "
+            "with the story in short, then the list, exactly between the lines "
             "STORY_START and STORY_END, one line per piece, in film order: the code (A12) or the codes in a row (A12-A14), "
             "then \" | \" and the text of those sentences written correctly (words the transcript misheard fixed, without "
             "changing what they said). Example:\n"
             "STORY_START\nB3 | The first time I saw her…\nA7-A8 | I never thought…\nSTORY_END\n"
         )
     return intro + "\n".join(body) + "\n"
+
+
+def parse_who(answer, n):
+    """The WHO line of Claude's answer -> {interview index: 'groom' / 'bride'}."""
+    m = re.search(r"WHO\s*:\s*(.+)", answer)
+    out = {}
+    if not m:
+        return out
+    for L, w in re.findall(r"\b([A-Z])\s*[=:]\s*\**\s*([A-Za-zĂÂÎȘȚăâîșț]+)", m.group(1)):
+        k = LETTERS.find(L)
+        w = w.lower()
+        if 0 <= k < n:
+            if w.startswith(("groom", "mire")) and not w.startswith("mireas"):
+                out[k] = "groom"
+            elif w.startswith(("bride", "mireas")):
+                out[k] = "bride"
+    return out
 
 
 _LINE = re.compile(r"^\W*([A-Z])\s*(\d+)(?:\s*[-–—]\s*([A-Z])?\s*(\d+))?\b")

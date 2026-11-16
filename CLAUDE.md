@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.8.7), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.8.8), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -514,6 +514,26 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   word_timestamps (a sentence = first word start .. last word end); "best" = large-v3 float32 (slower, more accurate).
 - Claude writes the corrected text after "|" (story.parse returns it; markers and the story pane use it). Padding
   -0.12 s / +0.20 s (his notes), never into the neighbour sentence.
+
+## v3.8.8
+- BUG: pressing Transcribe opened a SECOND copy of the app: tqdm (inside Whisper / Hugging Face) creates a
+  multiprocessing lock -> the resource tracker re-runs the frozen executable. multiprocessing.freeze_support() is now the
+  first thing in app.py (before the heavy imports). Never remove it.
+- His notes from another Claude chat (PROMPT_pentru_Claude_program.md): transcripts split into SENTENCES from word times
+  (transcribe.sentences: . ? ! … or a pause > 0.4 s; after 8 s closed at the next comma; hard stop 15 s) so Claude can
+  interleave; Whisper loops removed (_dedupe: a segment equal to one of the last two; hallucination_silence_threshold 2.0;
+  condition_on_previous_text False); prompt rules added (his unmarked chatter is his, cut often, echoes, short answers out,
+  couple names from the folder); WHO line: Claude says which interview is the groom / bride when "Who is speaking" is not
+  set (story.parse_who), remembered in the list.
+- Speed: Apple Silicon builds try mlx-whisper on the graphics chip (transcribe.mlx_ok / _transcribe_mlx, models
+  mlx-community/whisper-large-v3-turbo / whisper-large-v3-mlx in <data>/ai_model/whisper/mlx); any failure -> faster-whisper
+  and <data>/ai_model/whisper/mlx_failed. build.yml installs mlx + mlx-whisper WITHOUT torch (--no-deps, + numba scipy
+  tiktoken more-itertools) only on the Apple Silicon runner, continue-on-error, and passes MLX_FLAGS to PyInstaller only
+  when that step succeeded. NOT testable in Claude's sandbox (Linux): check the Actions log line "mlx ok".
+- Drag and drop from Finder on every page (enable_drops / _Drops event filter on the page and all its widgets, each page
+  has _drop(paths)); the Card Offload destination area has its own handler.
+- Analysis Queue also shows Long Film, Card Offload, Create Project, Transcribe (+ the Claude story) and opens them.
+- Card Offload has no NEW badge any more.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

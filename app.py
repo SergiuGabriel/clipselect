@@ -1,4 +1,10 @@
 """MoneyMakingMachine - AI-free footage pre-selection. Desktop app (PySide6)."""
+import multiprocessing
+if __name__ == "__main__":
+    # FIRST thing in the packed app: libraries (tqdm inside Whisper / Hugging Face) start multiprocessing's helper
+    # process, which re-runs THIS executable; without freeze_support() that started a second copy of the whole app
+    # (v3.8.6: pressing Transcribe opened the app twice). With it, the helper does its job and never shows a window.
+    multiprocessing.freeze_support()
 import json
 import logging
 import logging.handlers
@@ -17,7 +23,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
-from PySide6.QtCore import QUrl, QPoint, QPointF, QPropertyAnimation, QRectF, QRegularExpression, QStandardPaths, Qt, QThread, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, QUrl, QPoint, QPointF, QPropertyAnimation, QRectF, QRegularExpression, QStandardPaths, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QDesktopServices, QColor, QIcon, QImage, QPainter, QPen, QPixmap, QRegularExpressionValidator
 from PySide6.QtWidgets import (QPlainTextEdit, QTextBrowser, QAbstractItemView, QApplication, QComboBox, QDialog, QFileDialog, QFrame,
                                QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
@@ -43,7 +49,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.8.7"
+APP, VER = "MoneyMakingMachine", "v3.8.8"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -475,6 +481,51 @@ class AutoPreview(QWidget):
             p.setPen(QColor("#ececec"))
             p.drawText(QRectF(left + x + 8, y2, 200, h), Qt.AlignVCenter | Qt.AlignLeft,
                        f"{int(secs // 60)}:{int(secs % 60):02d}  ·  {secs / self.total:.0%} kept")
+
+
+class _Drops(QObject):
+    """Drag and drop from Finder anywhere on a page (owner: no hunting through dialogs). handler(paths) decides."""
+
+    def __init__(self, handler, parent):
+        super().__init__(parent)
+        self.handler = handler
+
+    def eventFilter(self, obj, ev):
+        t = ev.type()
+        if t in (QEvent.DragEnter, QEvent.DragMove, QEvent.Drop):
+            md = ev.mimeData()
+            paths = [u.toLocalFile() for u in md.urls() if u.isLocalFile()] if md.hasUrls() else []
+            if paths:
+                ev.acceptProposedAction()
+                if t == QEvent.Drop:
+                    QTimer.singleShot(0, lambda p=paths: self.handler(p))   # dialogs never open inside the drop
+                return True
+        return False
+
+
+def enable_drops(widget, handler):
+    """Every widget of the page (and the page) takes file / folder drops and gives them to handler."""
+    f = _Drops(handler, widget)
+    for w in [widget] + widget.findChildren(QWidget):
+        w.setAcceptDrops(True)
+        w.installEventFilter(f)
+    return f
+
+
+def _labelled(xml_path):
+    """True when the XML's clips carry his colour labels (selects), False for a music edit."""
+    try:
+        import xml.etree.ElementTree as ET
+        root = ET.parse(xml_path).getroot()
+        n = sum(1 for lab in root.iter("label2") if (lab.text or "").strip() in teaser.CATS)
+        return n >= 3
+    except Exception:
+        return False
+
+
+def _xml_or_rest(paths):
+    xmls = [p for p in paths if p.lower().endswith(".xml") and Path(p).is_file()]
+    return xmls, [p for p in paths if p not in xmls]
 
 
 class DropZone(QFrame):
@@ -993,7 +1044,7 @@ class ProjectPage(QWidget):
         lb = QHBoxLayout()                      # own row: both buttons fit in Romanian too
         lb.setSpacing(8)
         lb.addWidget(btn("Add Folder", slot=self.pick_dir))
-        lb.addWidget(btn("Import XML", slot=self.import_xml))
+        lb.addWidget(btn("Import XML", slot=lambda: self.import_xml()))
         lb.addStretch()
         lv.addLayout(lb)
         lv.addSpacing(4)
@@ -1150,6 +1201,14 @@ class ProjectPage(QWidget):
         self.list.keyPressEvent = self._list_key
 
     # --- loading
+    def _drop(self, paths):
+        """Finder drop: an XML is imported (its clips in its order), clips / folders are added."""
+        xmls, rest = _xml_or_rest(paths)
+        if xmls:
+            self.import_xml(xmls[0])
+        if rest:
+            self.add(rest)
+
     def load(self, p):
         self.p = p
         p["settings"] = norm_settings(p["settings"])
@@ -1220,10 +1279,11 @@ class ProjectPage(QWidget):
         if d:
             self.add([d])
 
-    def import_xml(self):
+    def import_xml(self, path=None):
         """The clips of a Premiere / DaVinci timeline (FCP7 XML), in the order they sit on it: the analysis and the
         export keep that order (cameras and filming order as he laid them out)."""
-        path, _ = QFileDialog.getOpenFileName(self, "Import XML", "", "XML (*.xml)")
+        if not path:
+            path, _ = QFileDialog.getOpenFileName(self, "Import XML", "", "XML (*.xml)")
         if not path:
             return
         try:
@@ -2100,7 +2160,7 @@ class MulticamPage(QWidget):
         hh.addWidget(self.title)
         hh.addStretch()
         self.b_exp = btn("Export XML", slot=self.export)
-        self.b_xml = btn("Import XML", slot=self.import_xml)
+        self.b_xml = btn("Import XML", slot=lambda: self.import_xml())
         self.b_xml.setToolTip("Use a timeline that is already synced in Syncaila, Premiere Pro or DaVinci Resolve (FCP7 XML).")
         self.b_auto = btn("Auto Edit", slot=self.run_auto)
         self.b_run = btn("Sync", "primary", self.toggle_run)
@@ -2311,6 +2371,14 @@ class MulticamPage(QWidget):
         body.addWidget(right)
 
     # ---- learn my editing style
+    def _drop(self, paths):
+        """Finder drop: an XML = a synced timeline (Import XML), everything else is added like Add Folder."""
+        xmls, rest = _xml_or_rest(paths)
+        if xmls:
+            self.import_xml(xmls[0])
+        elif rest:
+            self.add(rest)
+
     def _show_style(self):
         s = self.store.app.get("style")
         self.style_lbl.setText(f"Your style: learned from {s['from']} ({s['date']})" if s else "")
@@ -2595,10 +2663,11 @@ class MulticamPage(QWidget):
         if self.p["files"]:
             self._start(MCWorker("sync", list(self.p["files"]), jobs=self.store.app["jobs"]), self.b_run)
 
-    def import_xml(self):
+    def import_xml(self, f=None):
         if self._busy():
             return
-        f, _ = QFileDialog.getOpenFileName(self, "Import a synced timeline (Syncaila / Premiere / DaVinci)", "", "XML (*.xml)")
+        if not f:
+            f, _ = QFileDialog.getOpenFileName(self, "Import a synced timeline (Syncaila / Premiere / DaVinci)", "", "XML (*.xml)")
         if f:
             self._start(MCWorker("xml", None, todo=f), self.b_run)
 
@@ -3844,6 +3913,22 @@ class TeaserPage(QWidget):
         self.auto_bounds = None
         self._buttons()
 
+    def _drop(self, paths):
+        """Finder drop: an XML with your colour labels = the footage (selects); an XML without them = your music edit;
+        an audio file = the music."""
+        for f in paths:
+            ext = Path(f).suffix.lower()
+            if ext == ".xml":
+                if _labelled(f):
+                    self._load_footage(f)
+                else:
+                    self._load_music_file(f)
+                return
+            if ext in sync.AUDIO_EXT:
+                self._load_music_file(f)
+                return
+        notify(i18n.T("Drop the XML of your selects or your music here."), error=True)
+
     def open_project(self):
         """Opened from its card."""
         self._fill_projects()
@@ -4536,6 +4621,15 @@ class LongFilmPage(QWidget):
         body.addLayout(right, 1)
         self.layout_ = None
 
+    def _drop(self, paths):
+        """Finder drop: the XML of your selects sequence."""
+        xmls, _ = _xml_or_rest(paths)
+        if not xmls:
+            notify(i18n.T("Drop the XML of your selects sequence here."), error=True)
+            return
+        self._remember(footage=xmls[0])
+        self._load(xmls[0])
+
     def open_project(self):
         self._fill_projects()
         self.pname.setText(self._cur()["name"])
@@ -4978,6 +5072,13 @@ class CreateProjectPage(QWidget):
             self.load(start)
         self._ui()
 
+    def _drop(self, paths):
+        """Finder drop: the wedding folder (a file dropped = its folder)."""
+        if self._busy():
+            return
+        q = Path(paths[0])
+        self.load(str(q if q.is_dir() else q.parent))
+
     def _busy(self):
         return bool(self.worker and self.worker.isRunning())
 
@@ -5255,7 +5356,7 @@ class OffloadPage(QWidget):
         left.addWidget(cs, 1)
         rr = QHBoxLayout()
         rr.addWidget(btn("Refresh", "link", lambda: self.refresh(force=True)))
-        af = btn("+  Add a folder (not a card)", "link", self.add_folder)
+        af = btn("+  Add a folder (not a card)", "link", lambda: self.add_folder())
         af.setToolTip(i18n.T("Footage that is not on a card: a folder on the computer, a backup on another drive, a card reader that does not show up by itself."))
         rr.addWidget(af)
         rr.addStretch()
@@ -5266,7 +5367,7 @@ class OffloadPage(QWidget):
         dr = QHBoxLayout()
         self.dest_lbl = lbl("", "muted", True)
         dr.addWidget(self.dest_lbl, 1)
-        dr.addWidget(btn("Choose", slot=self.pick_dest))
+        dr.addWidget(btn("Choose", slot=lambda: self.pick_dest()))
         right.addLayout(dr)
         self.where = QLabel("")
         self.where.setTextFormat(Qt.RichText)
@@ -5304,6 +5405,20 @@ class OffloadPage(QWidget):
         self._buttons()
 
     # ---- the wedding's folder name
+    def _drop(self, paths):
+        """Finder drop on the page: folders to copy (footage that is not on a card)."""
+        dirs = [p for p in paths if Path(p).is_dir()]
+        if not dirs:
+            notify(i18n.T("Drop a folder here."), error=True)
+            return
+        for d in dirs:
+            self.add_folder(d)
+
+    def _drop_dest(self, paths):
+        """Finder drop on the destination: where the footage goes."""
+        q = Path(paths[0])
+        self.pick_dest(str(q if q.is_dir() else q.parent))
+
     def _name_from_fields(self, *_):
         b, g = self.w_bride.text().strip(), self.w_groom.text().strip()
         if b and g:
@@ -5479,14 +5594,16 @@ class OffloadPage(QWidget):
     def _folder(self, s):
         return self.choice.get(s) or (CHECK_ONLY if s in self.twin_of else self.auto_folder.get(s, "")) or Path(s).name
 
-    def add_folder(self):
-        d = QFileDialog.getExistingDirectory(self, "A folder to copy (a card reader, a backup)")
+    def add_folder(self, d=None):
+        if not d:
+            d = QFileDialog.getExistingDirectory(self, "A folder to copy (a card reader, a backup)")
         if d and d not in self.extra:
             self.extra.append(d)
             self.refresh()
 
-    def pick_dest(self):
-        d = QFileDialog.getExistingDirectory(self, "Where the footage goes (your drive)", self.cfg.get("dest", ""))
+    def pick_dest(self, d=None):
+        if not d:
+            d = QFileDialog.getExistingDirectory(self, "Where the footage goes (your drive)", self.cfg.get("dest", ""))
         if d:
             self.cfg["dest"] = d
             self.store.save_app()
@@ -5715,8 +5832,8 @@ class TranscribePage(QWidget):
                                 f"QListWidget::indicator:checked{{background:{C['HOT']};border-color:{C['HOT']};image:url({_check_png()})}}")
         left.addWidget(self.list, 1)
         fr = QHBoxLayout()
-        fr.addWidget(btn("+  Add files", slot=self.add))
-        fr.addWidget(btn("Import XML", slot=self.import_xml))
+        fr.addWidget(btn("+  Add files", slot=lambda: self.add()))
+        fr.addWidget(btn("Import XML", slot=lambda: self.import_xml()))
         fr.addWidget(btn("Remove", slot=self.remove))
         fr.addStretch()
         left.addLayout(fr)
@@ -5784,6 +5901,23 @@ class TranscribePage(QWidget):
             self.why.setText(f'<span style="color:{C["POOR"]}">' + i18n.T("The speech engine is missing from this build ({}).").format(miss) + "</span>")
         self._fill()
 
+    def _drop(self, paths):
+        """Finder drop: an XML = your sequence with the interviews (Import XML); sound / video files and folders are
+        added."""
+        xmls, rest = _xml_or_rest(paths)
+        if xmls:
+            self.import_xml(xmls[0])
+        media = []
+        for p in rest:
+            q = Path(p)
+            cands = sorted(q.rglob("*")) if q.is_dir() else [q]
+            media += [str(c) for c in cands if c.is_file() and not c.name.startswith(".") and not is_proxy(c)
+                      and c.suffix.lower() in (core.VIDEO_EXT | sync.AUDIO_EXT)]
+        if media:
+            self.add(media)
+        elif rest and not xmls:
+            notify(i18n.T("No sound or video files in what you dropped."), error=True)
+
     def _files(self):
         return self.cfg["files"]
 
@@ -5849,9 +5983,10 @@ class TranscribePage(QWidget):
         r = self.list.currentRow()
         return self._files()[r] if 0 <= r < len(self._files()) else None
 
-    def add(self):
-        fs, _ = QFileDialog.getOpenFileNames(self, "Files to transcribe (sound or video)", "",
-                                             "Sound / video (*.wav *.WAV *.mp3 *.m4a *.aif *.aiff *.flac *.mp4 *.MP4 *.mov *.MOV *.mxf *.MXF);;All files (*)")
+    def add(self, fs=None):
+        if fs is None:
+            fs, _ = QFileDialog.getOpenFileNames(self, "Files to transcribe (sound or video)", "",
+                                                 "Sound / video (*.wav *.WAV *.mp3 *.m4a *.aif *.aiff *.flac *.mp4 *.MP4 *.mov *.MOV *.mxf *.MXF);;All files (*)")
         have = {f["path"] for f in self._files()}
         for f in fs:
             if f not in have:
@@ -5881,9 +6016,10 @@ class TranscribePage(QWidget):
         else:
             QListWidget.keyPressEvent(self.list, e)
 
-    def import_xml(self):
+    def import_xml(self, path=None):
         """The interviews of a Premiere / DaVinci timeline (FCP7 XML), in the timeline's order."""
-        path, _ = QFileDialog.getOpenFileName(self, "Import XML", "", "XML (*.xml)")
+        if not path:
+            path, _ = QFileDialog.getOpenFileName(self, "Import XML", "", "XML (*.xml)")
         if not path:
             return
         try:
@@ -6004,7 +6140,17 @@ class TranscribePage(QWidget):
             return
         cuts = story.ranges(pieces, fs, [infos[f["path"]]["dur"] for f in fs])
         names = {"bride": "Bride", "groom": "Groom", "both": "Bride and groom", "other": "Someone else"}
-        labels = {k: i18n.T(names[f["who"]]) for k, f in enumerate(fs) if f.get("who") in names}
+        found = story.parse_who(ans, len(fs))          # Claude says who is who when he did not set it
+        labels = {}
+        for k, f in enumerate(fs):
+            w = f.get("who") or found.get(k)
+            if w in names:
+                labels[k] = i18n.T(names[w])
+            if not f.get("who") and found.get(k):
+                f["who"] = found[k]                     # remembered (shown in the list)
+        if found:
+            self.store.save_app()
+            self._fill(select=self.list.currentRow())
         first = Path(fs[0]["path"])
         start = str(projectsetup.free_path(first.with_name(i18n.T("Interview story") + ".xml")))
         if auto:
@@ -6048,6 +6194,8 @@ class TranscribePage(QWidget):
         msg = i18n.T("Story XML saved: {} pieces, {} long.").format(r["pieces"], story._mmss(r["seconds"]))
         if auto:
             msg += " " + i18n.T("It is next to the interview: {}").format(Path(out).name)
+        if not same:
+            msg += " " + i18n.T("For your exact sound tracks (mic and lavalier), import your Premiere sequence with Import XML (or drag it into the list).")
         if bad:
             msg += " " + i18n.T("{} lines of the answer were not understood and were skipped.").format(len(bad))
         notify(msg, error=bool(bad), ms=9000)
@@ -6321,7 +6469,7 @@ class Main(QMainWindow):
                     "info": btn("Info / How to use", "nav", lambda: self.go("info"))}
         for b in self.nav.values():
             sv.addWidget(b)
-        for key in ("offload", "project", "teaser", "long", "transcribe"):
+        for key in ("project", "teaser", "long", "transcribe"):     # owner: no NEW on Card Offload any more
             nb = QHBoxLayout(self.nav[key])
             nb.setContentsMargins(0, 0, 8, 0)
             nb.addStretch()
@@ -6358,6 +6506,12 @@ class Main(QMainWindow):
         self.toast = Toast(self)
         global _NOTIFY
         _NOTIFY = lambda text, error=False, ms=None: self.toast.show_msg(text, ms, error)
+        self._drops = [enable_drops(pg, pg._drop) for pg in (self.proj, self.mc, self.teaser, self.long, self.offload,
+                                                              self.transcribe, self.cproject)]
+        dd = _Drops(self.offload._drop_dest, self.offload)  # the destination area takes the destination folder
+        for w_ in (self.offload.dest_lbl, self.offload.where):
+            w_.installEventFilter(dd)
+        self._drops.append(dd)
         self.res.export_done = lambda name: (self.toast.show_msg(f"XML saved: {name}"), logging.info("footage export %s", name))
         self.teaser.notify.connect(self.toast.show_msg)
         for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser_hub, self.long_hub, self.offload, self.transcribe, self.cproject):
@@ -6391,6 +6545,15 @@ class Main(QMainWindow):
         tr = getattr(self.teaser, "runner", None)
         if tr and tr.isRunning():
             jobs["teaser"] = ("Teaser Studio", self.teaser.pp.title.text(), self.teaser.pp.bar.value() / 1000)
+        lr = getattr(self.long, "runner", None)
+        if lr and lr.isRunning():
+            jobs["long"] = ("Long Film", self.long.pp.title.text(), self.long.pp.bar.value() / 1000)
+        if self.offload._busy():
+            jobs["offload"] = ("Card Offload", self.offload.pp.title.text(), self.offload.pp.bar.value() / 1000)
+        if self.cproject._busy():
+            jobs["project"] = ("Create Project", self.cproject.pp.title.text(), self.cproject.pp.bar.value() / 1000)
+        if self.transcribe._busy():
+            jobs["transcribe"] = ("Transcribe", self.transcribe.pp.title.text(), self.transcribe.pp.bar.value() / 1000)
         running_here = bool(self.worker and self.worker.isRunning() and self.job and self.proj.p is self.job["p"])
         self.proj.b_an.setText("View analysis" if running_here else "Analyze Footage")
         self.queue.set_jobs(jobs)
@@ -6400,6 +6563,11 @@ class Main(QMainWindow):
         if k == "teaser":
             self.teaser_hub.stack.setCurrentIndex(1)
             self.show_page(self.teaser_hub)
+        elif k == "long":
+            self.long_hub.stack.setCurrentIndex(1)
+            self.show_page(self.long_hub)
+        elif k in ("offload", "project", "transcribe"):
+            self.go(k)
         else:
             self.show_page({"footage": self.anl}.get(k, self.mc))
 

@@ -17,16 +17,25 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { runner: macos-15, name: "Apple-Silicon-M1-M2-M3-M4" }
-          - { runner: macos-15-intel, name: "Mac-Intel" }
+          - { runner: macos-15, name: "Apple-Silicon-M1-M2-M3-M4", mlx: true }
+          - { runner: macos-15-intel, name: "Mac-Intel", mlx: false }
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install -r requirements.txt pyinstaller pillow
+      - name: Fast speech engine on the graphics chip (Apple Silicon only; if it fails the app keeps faster-whisper)
+        if: ${{ matrix.mlx }}
+        continue-on-error: true
+        run: |
+          # mlx-whisper WITHOUT torch (only its model converter needs torch); numba + scipy are for word timings
+          pip install mlx mlx-whisper --no-deps
+          pip install numba scipy tiktoken more-itertools
+          python -c "import mlx.core, mlx_whisper, mlx_whisper.timing, numba, scipy; print('mlx ok')"
+          echo "MLX_FLAGS=--collect-all mlx --collect-all mlx_whisper --collect-all tiktoken --hidden-import tiktoken_ext.openai_public --collect-all llvmlite --collect-submodules numba" >> "$GITHUB_ENV"
       - run: python make_icons.py
-      - run: ${{ env.PYI }} --icon icon.icns --add-data "icon.png:." --osx-bundle-identifier com.moneymakingmachine.app app.py
+      - run: ${{ env.PYI }} $MLX_FLAGS --exclude-module torch --icon icon.icns --add-data "icon.png:." --osx-bundle-identifier com.moneymakingmachine.app app.py
       - name: Check bundled FFmpeg and ad-hoc sign
         run: |
           find dist/MoneyMakingMachine.app -name 'ffmpeg*' -type f

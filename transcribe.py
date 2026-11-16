@@ -6,6 +6,8 @@ almost as good). Nothing is uploaded.
 Results, next to the file: <name>.txt (text with times), <name>.srt (subtitles); and on request an XML for Premiere /
 DaVinci: the clip with a marker on every sentence, the sentence in the marker.
 """
+import logging
+import sys
 import re
 import subprocess
 from pathlib import Path
@@ -29,13 +31,41 @@ def available():
         return str(e)
 
 
+MLX_MODELS = {"fast": "mlx-community/whisper-large-v3-turbo", "best": "mlx-community/whisper-large-v3-mlx"}
+
+
+def mlx_ok():
+    """Whisper on the Mac's graphics chip (Apple MLX): several times faster. Only on Apple Silicon, only when the app was
+    built with it; anything wrong -> faster-whisper on the processor (the old way)."""
+    import platform
+    if sys.platform != "darwin" or platform.machine() != "arm64":
+        return False
+    try:
+        import mlx.core  # noqa: F401
+        import mlx_whisper  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
 def load_model(base, quality="fast", progress=None):
-    """'best' runs at full precision (float32: slower, the most accurate words); 'fast' uses int8."""
-    from faster_whisper import WhisperModel
+    """MLX (graphics chip) when available, else faster-whisper ('best' = float32, 'fast' = int8)."""
     folder = Path(base) / "ai_model" / "whisper"
     folder.mkdir(parents=True, exist_ok=True)
     if progress:
         progress("Loading the speech model (the first time it is downloaded once, about 1.5-3 GB)…", 0.0)
+    if mlx_ok() and not (folder / "mlx_failed").exists():
+        try:
+            from huggingface_hub import snapshot_download
+            local = snapshot_download(MLX_MODELS.get(quality, MLX_MODELS["fast"]), cache_dir=str(folder / "mlx"))
+            return dict(engine="mlx", path=local, base=str(base), quality=quality)
+        except Exception:
+            logging.exception("mlx whisper model: falling back to faster-whisper")
+    return _fw_model(folder, quality)
+
+
+def _fw_model(folder, quality):
+    from faster_whisper import WhisperModel
     ct = "float32" if quality == "best" else "int8"
     try:
         return WhisperModel(MODELS.get(quality, MODELS["fast"]), device="auto", compute_type=ct, download_root=str(folder))
@@ -125,26 +155,96 @@ def hint(path, lang):
             (f" Mirii: {names[0]} și {names[1]}." if names else "") + " Cuvinte: nunta, mireasa, mirele, biserica, nașii.")
 
 
+MAX_PIECE = 8.0        # owner: a piece ideally lasts at most ~8 s (Claude can only cut between codes)
+PAUSE = 0.4            # a pause longer than this between two words ends a sentence
+
+
+def _norm(t):
+    return re.sub(r"[^\w]+", " ", str(t).lower()).strip()
+
+
+def sentences(words):
+    """Words [(start, end, text)] -> sentences: a new piece after . ? ! … or a pause > 0.4 s; a piece longer than 8 s
+    is closed at the next comma (an enumeration like "Iubitor, muncitor, frumos." stays its own piece), never past 15 s.
+    Every piece keeps the exact time of its first and last word."""
+    out, cur = [], []
+
+    def flush():
+        if cur:
+            txt = "".join(w[2] for w in cur).strip()
+            if txt:
+                out.append((float(cur[0][0]), max(float(cur[-1][1]), float(cur[0][0]) + 0.1), txt))
+        cur.clear()
+    for w in words:
+        if cur:
+            last = cur[-1][2].strip()
+            dur = cur[-1][1] - cur[0][0]
+            if (last.endswith((".", "?", "!", "…")) or w[0] - cur[-1][1] > PAUSE
+                    or (dur > MAX_PIECE and last.endswith((",", ";", ":"))) or dur > 15.0):
+                flush()
+        cur.append(w)
+    flush()
+    return out
+
+
+def _dedupe(segs):
+    """Whisper sometimes loops on one sentence ("Nu i-am răspuns la mesaj…" again and again): a segment equal to one of
+    the last two is dropped."""
+    out = []
+    for seg in segs:
+        n = _norm(seg[-1] if isinstance(seg, tuple) else seg["text"])
+        if n and any(_norm(o[-1] if isinstance(o, tuple) else o["text"]) == n for o in out[-2:]):
+            continue
+        out.append(seg)
+    return out
+
+
 def transcribe(path, model, lang="ro", progress=None, cancel=None):
-    """[(start s, end s, text)] of one file. The times come from the first and last WORD (tighter cuts)."""
+    """[(start s, end s, text)] of one file: one entry per SENTENCE, times from its first and last word."""
     x = read_audio(path)
     dur = len(x) / SR
-    segs, info = model.transcribe(x, language=LANGS.get(lang, lang), vad_filter=True, beam_size=5,
-                                  condition_on_previous_text=False, word_timestamps=True,
-                                  initial_prompt=hint(path, lang))
-    out = []
+    opts = dict(language=LANGS.get(lang, lang), condition_on_previous_text=False, word_timestamps=True,
+                initial_prompt=hint(path, lang))
+    if isinstance(model, dict) and model.get("engine") == "mlx":
+        try:
+            return _transcribe_mlx(x, model, opts, path, progress)
+        except InterruptedError:
+            raise
+        except Exception:
+            logging.exception("mlx whisper failed: faster-whisper from now on")
+            folder = Path(model["base"]) / "ai_model" / "whisper"
+            (folder / "mlx_failed").write_text("mlx failed, see app.log")
+            model = _fw_model(folder, model["quality"])
+    segs, info = model.transcribe(x, vad_filter=True, beam_size=5, hallucination_silence_threshold=2.0, **opts)
+    kept = []
     for s in segs:                                   # a generator: the work happens while reading it
         if cancel and cancel():
             raise InterruptedError("Cancelled")
-        t = s.text.strip()
-        if t:
-            ws = [w for w in (s.words or []) if w.end > w.start]
-            a, b = (float(ws[0].start), float(ws[-1].end)) if ws else (float(s.start), float(s.end))
-            out.append((a, max(b, a + 0.1), t))
+        if s.text.strip():
+            kept.append(s)
         if progress:
             progress(f"{Path(path).name}: {int(s.end // 60)}:{int(s.end % 60):02d} of {int(dur // 60)}:{int(dur % 60):02d}",
                      min(1.0, s.end / max(1.0, dur)))
-    return out
+    words = []
+    for s in _dedupe([dict(text=s.text, seg=s) for s in kept]):
+        ws = [w for w in (s["seg"].words or []) if w.end > w.start]
+        words += [(w.start, w.end, w.word) for w in ws] or [(s["seg"].start, s["seg"].end, " " + s["seg"].text.strip())]
+    return sentences(words)
+
+
+def _transcribe_mlx(x, model, opts, path, progress):
+    import mlx_whisper
+    if progress:
+        progress(f"{Path(path).name}: transcribing on the graphics chip…", 0.3)
+    r = mlx_whisper.transcribe(x, path_or_hf_repo=model["path"], verbose=None, hallucination_silence_threshold=2.0,
+                               **opts)
+    words = []
+    for s in _dedupe([seg for seg in r.get("segments", []) if str(seg.get("text", "")).strip()]):
+        ws = [w for w in s.get("words", []) if w.get("end", 0) > w.get("start", 0)]
+        words += [(w["start"], w["end"], w["word"]) for w in ws] or [(s["start"], s["end"], " " + s["text"].strip())]
+    if progress:
+        progress(f"{Path(path).name}: done", 1.0)
+    return sentences(words)
 
 
 def _ts(t, comma=True):

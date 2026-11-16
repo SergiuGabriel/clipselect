@@ -16,6 +16,10 @@ camerele cu recorderul de la mixer și face montajul petrecerii.</li>
 </ol>
 <p>Fiecare pagină din stânga a acestui Info explică o parte din aplicație, cu fiecare opțiune: ce face, cu ce cifre lucrează
 și când merită s-o schimbi. Caută cu bara de sus (de exemplu „tremur”, „drop”, „vornic”).</p>
+<p><b>Drag and drop</b>: pe orice pagină poți trage din Finder fișiere sau foldere în loc să le cauți cu butoanele: un XML din Premiere
+e importat (selecții, sequence cu interviuri, timeline sincronizat), un folder sau clipuri sunt adăugate, la Creează proiectul folderul
+nunții, la Descărcare carduri un folder de copiat (sau, tras peste destinație, destinația), la Teaser Studio XML-ul cu culori =
+filmările, iar un fișier audio sau XML-ul montajului muzical = muzica.</p>
 <p>Peste tot: notificarea <b>verde</b> = gata, <b>roșie</b> = ceva n-a mers (cu motivul). Aplicația nu modifică și nu șterge
 niciodată filmările tale: doar le citește și scrie fișiere XML noi.</p>
 
@@ -488,7 +492,12 @@ mai lent, cel mai bun la nume și cuvinte rare). Prima dată modelul se descarc�
 <li><b>Ce face ca să înțeleagă mai bine</b>: ascultă <b>canalul cel mai clar</b> al fișierului, nu un amestec. La FX6, microfonul camerei și
 lavaliera sunt pe canale diferite, iar aplicația o alege pe cea în care vorbirea iese cel mai clar peste zgomot (lavaliera). Din
 numele folderului nunții („NUNTA 22 AUGUST 2026 Florin si Miruna”) ia numele mirilor, ca să le scrie corect. Timpii fiecărei fraze
-vin de la primul și ultimul cuvânt (tăieturi mai exacte). Unele cuvinte tot pot ieși pocite: Claude le înțelege din context, iar în
+vin de la primul și ultimul cuvânt (tăieturi mai exacte). Textul e împărțit <b>pe fraze</b>: tăiat la . ? ! și la pauzele de peste
+0,4 s, o bucată are de obicei sub 8 s (una mai lungă se închide la prima virgulă după 8 s), ca să poată fi intercalată. Dacă Whisper
+intră în buclă și repetă aceeași frază, repetările sunt scoase.</li>
+<li><b>Viteza</b>: pe Mac-urile M1–M4, transcrierea rulează pe placa video (Apple MLX), de câteva ori mai repede decât pe procesor; dacă
+nu merge, aplicația trece singură pe varianta de procesor. Pe Mac-urile Intel rulează pe procesor.</li>
+<li> Unele cuvinte tot pot ieși pocite: Claude le înțelege din context, iar în
 markerele poveștii scrie textul corectat.</li>
 <li><b>Transcriere</b>: lângă fiecare fișier apar un .txt (textul cu orele) și un .srt (subtitrare). Textul se vede în dreapta;
 <b>Copiază textul</b> îl pune în clipboard.</li>
@@ -513,8 +522,9 @@ de mai jos).</p>
 și replicile tale scurte („Perfect!”, „Bravo!”, „Mulțumesc!”) și glumele de la final. Cu un singur interviu, Claude face povestea
 lui (sau a ei) curgătoare, ca și cum ar fi spusă fără întrebări.</p>
 <ol>
-<li>Transcrie interviurile, <b>bifează</b> în listă ce intră în poveste și alege la fiecare <b>Cine vorbește</b> (mireasa / mirele / mirii
-împreună / altcineva). „Cine vorbește” e gri până selectezi un fișier.</li>
+<li>Transcrie interviurile și <b>bifează</b> în listă ce intră în poveste. <b>Cine vorbește</b> e opțional: dacă nu-l alegi, Claude află
+singur din ce spun care interviu e al mirelui și care al miresei (numele mirilor le ia din folderul nunții), iar lista se completează
+după răspuns.</li>
 <li><b>1. Copiază pentru Claude</b>: aplicația copiază transcrierile (fiecare frază cu un cod: A1, A2… pentru primul interviu, B1… pentru
 al doilea) cu o cerere gata scrisă și deschide un <b>chat nou</b> în Claude. Lipești (Cmd+V) și trimiți.</li>
 <li>Când Claude a răspuns, copiezi tot răspunsul (butonul de copiere de sub el) și apeși <b>2. Lipește răspunsul lui Claude</b>: se
@@ -528,8 +538,8 @@ repornire), deci apeși doar pasul 2 când ai răspunsul, sau pasul 1 din nou î
 înțelege sunt sărite și numărate.</p>
 
 <h2>Coada de analiză</h2>
-<p>Arată tot ce rulează acum: analizele Footage Selection, Sync și Auto Edit din Multicam, analiza selecțiilor din Teaser Studio, cu
-progres. <b>Deschide</b> te duce la job. Poți lucra în altă parte cât rulează; joburile merg în fundal.</p>
+<p>Arată tot ce rulează acum: analizele Footage Selection, Sync și Auto Edit din Multicam, analiza selecțiilor din Teaser Studio,
+construirea Long Film, Descărcare carduri, Creează proiectul și Transcriere (inclusiv povestea cu Claude), cu progres. <b>Deschide</b> te duce la job. Poți lucra în altă parte cât rulează; joburile merg în fundal.</p>
 
 <h2>Setări</h2>
 <h3>Performance</h3>
@@ -596,6 +606,10 @@ cameras to the mixer recorder and edits the party.</li>
 </ol>
 <p>Every page on the left of this Info explains one part of the app with every option: what it does, the numbers it works with
 and when it is worth changing. Search with the bar at the top (for example "shake", "drop", "vornic").</p>
+<p><b>Drag and drop</b>: on every page you can drag files or folders from Finder instead of looking for them with the buttons: a
+Premiere XML is imported (selects, a sequence with interviews, a synced timeline), a folder or clips are added, in Create Project the
+wedding folder, in Card Offload a folder to copy (or, dropped on the destination, the destination), in Teaser Studio the XML with
+colours = the footage, and an audio file or the XML of the music edit = the music.</p>
 <p>Everywhere: a <b>green</b> notification = done, <b>red</b> = something did not work (with the reason). The app never changes or
 deletes your footage: it only reads it and writes new XML files.</p>
 
@@ -1060,7 +1074,12 @@ best on names and rare words). The first time the model downloads once (1.5–3 
 <li><b>What it does to understand better</b>: it listens to the file's <b>clearest channel</b>, not a mix. On the FX6 the camera mic and
 the lavalier are on different channels, and the app picks the one where the speech stands out most over the noise (the lavalier). From
 the wedding folder's name ("NUNTA 22 AUGUST 2026 Florin si Miruna") it takes the couple's names, to write them right. Every sentence's
-times come from its first and last word (tighter cuts). Some words can still come out misspelled: Claude understands them from the
+times come from its first and last word (tighter cuts). The text is split <b>into sentences</b>: cut at . ? ! and at pauses longer
+than 0.4 s, a piece usually lasts under 8 s (a longer one closes at the first comma after 8 s), so it can be interleaved. When Whisper
+loops and repeats one sentence, the repeats are removed.</li>
+<li><b>Speed</b>: on M1–M4 Macs the transcription runs on the graphics chip (Apple MLX), several times faster than on the processor; if it
+does not work, the app switches to the processor by itself. On Intel Macs it runs on the processor.</li>
+<li> Some words can still come out misspelled: Claude understands them from the
 context and writes the corrected text in the story's markers.</li>
 <li><b>Transcribe</b>: next to every file a .txt (the text with times) and a .srt (subtitles). The text shows on the right; <b>Copy the
 text</b> puts it on the clipboard.</li>
@@ -1085,8 +1104,9 @@ marked as questions and never used (not even inside a piece), and Claude gets th
 "Bravo!", "Thank you!") and the jokes at the end. With one interview, Claude makes that person's story flow as if told without
 questions.</p>
 <ol>
-<li>Transcribe the interviews, <b>tick</b> in the list what goes into the story and set <b>Who is speaking</b> on each (the bride / the
-groom / the bride and the groom / someone else). "Who is speaking" is grey until you select a file.</li>
+<li>Transcribe the interviews and <b>tick</b> in the list what goes into the story. <b>Who is speaking</b> is optional: when you do not set
+it, Claude finds out from what they say which interview is the groom's and which the bride's (the names come from the wedding folder),
+and the list is filled in after the answer.</li>
 <li><b>1. Copy for Claude</b>: the app copies the transcripts (every sentence with a code: A1, A2… for the first interview, B1… for the
 second) with a request already written and opens a <b>new chat</b> in Claude. Paste (Cmd+V) and send.</li>
 <li>When Claude has answered, copy the whole answer (the copy button under it) and press <b>2. Paste Claude's answer</b>: a window
@@ -1100,8 +1120,8 @@ you only press step 2 when you have the answer, or step 1 again in a new chat. L
 counted.</p>
 
 <h2>Analysis Queue</h2>
-<p>Shows everything running now: Footage Selection analyses, Multicam Sync and Auto Edit, the Teaser Studio selection analysis, with
-progress. <b>Open</b> takes you to the job. You can work elsewhere while it runs; the jobs run in the background.</p>
+<p>Shows everything running now: Footage Selection analyses, Multicam Sync and Auto Edit, the Teaser Studio selection analysis, the
+Long Film build, Card Offload, Create Project and Transcribe (the Claude story too), with progress. <b>Open</b> takes you to the job. You can work elsewhere while it runs; the jobs run in the background.</p>
 
 <h2>Settings</h2>
 <h3>Performance</h3>

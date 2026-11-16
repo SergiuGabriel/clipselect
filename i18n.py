@@ -212,6 +212,18 @@ TEMPLATES.update({
     "model {} not available": "modelul {} nu e disponibil",
 })
 
+EXACT.update({
+    "Drop the XML of your selects or your music here.": "Trage aici XML-ul cu selecțiile sau muzica.",
+    "Drop the XML of your selects sequence here.": "Trage aici XML-ul sequence-ului cu selecții.",
+    "No sound or video files in what you dropped.": "Nu sunt fișiere audio sau video în ce ai tras.",
+    "Drop a folder here.": "Trage aici un folder.",
+})
+
+EXACT.update({
+    "For your exact sound tracks (mic and lavalier), import your Premiere sequence with Import XML (or drag it into the list).":
+        "Pentru pistele tale exacte de sunet (microfon și lavalieră), importă sequence-ul din Premiere cu Import XML (sau trage-l în listă).",
+})
+
 _PATS = []
 
 
