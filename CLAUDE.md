@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.8.3), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.8.4), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -463,6 +463,17 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   started with updater.launch (waited in a thread), caffeinate is terminated AND waited, the memory panel ignores
   gone / zombie / denied processes, and the crash dialog (sys.excepthook) shows one dialog at a time and the same
   error at most once a minute (always logged). Rule: never Popen without wait(); never let a timer raise.
+
+## v3.8.4
+- Info rewritten (help_text.py, RO + EN, ~45 KB each), owner: "more text, but everything very well explained, like the
+  Auto selection answer". One <h2> page per menu item in menu order (Card Offload, Create Project, Footage Selection,
+  Multicam: Sync, Multicam: Auto Edit and Auto Director, Multicam on the music, Teaser Studio, Long Film, What your
+  selects need, Transcribe, Analysis Queue, Settings, Useful tips). Every option with its range, default and real
+  numbers from the code (Auto score 40/30/30 + 60 % average / 40 % weakest, shake 1.5 px -> 100 %, 9.5 px -> 0 %,
+  moves > MOVE_PX, Custom weights = relative, percentiles Lenient 15/50, Normal 25/65, Strict 35/75, protect 65 / 85,
+  exposure 45 / 210 / 15 % burnt, director pace = switch cost 20 -> 2, static <-> handheld +-25, static +10 activity,
+  moves x0.15, HORA, offload twins 90 % of the smaller card, etc.). The Romanian text uses the Romanian UI names (with the
+  English name in brackets for the main controls). WHEN A NUMBER OR AN OPTION CHANGES IN THE CODE, CHANGE IT IN BOTH.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower
