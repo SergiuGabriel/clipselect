@@ -493,12 +493,15 @@ mai lent, cel mai bun la nume și cuvinte rare). Prima dată modelul se descarc�
 lavaliera sunt pe canale diferite, iar aplicația o alege pe cea în care vorbirea iese cel mai clar peste zgomot (lavaliera). Din
 numele folderului nunții („NUNTA 22 AUGUST 2026 Florin si Miruna”) ia numele mirilor, ca să le scrie corect. Timpii fiecărei fraze
 vin de la primul și ultimul cuvânt (tăieturi mai exacte). Textul e împărțit <b>pe fraze</b>: tăiat la . ? ! și la pauzele de peste
-0,6 s; o bucată are cel mult 8 s (una mai lungă e tăiată la cea mai bună pauză, virgulă sau cuvânt de legătură „și”, „dar”,
-„pentru că”…), ca să poată fi intercalată. Bucățile sub 0,8 s și cele doar cu „ăă”, „deci”, „așa” sunt lipite de vecina cea mai
+0,6 s; o bucată are cel mult 8 s (una mai lungă e tăiată la cea mai bună pauză reală, de preferat la virgulă sau la un cuvânt de
+legătură „și”, „dar”, „pentru că”…; dacă nu există nicio pauză, e o <b>tăiere forțată</b>, în punctul cel mai liniștit din sunet
+între 5 și 8 s, și apare așa în raport), ca să poată fi intercalată. Bucățile sub 0,8 s și cele doar cu „ăă”, „deci”, „așa” sunt lipite de vecina cea mai
 apropiată (cât timp rămân sub 8 s); o frază scurtă dar întreagă („Da, cu siguranță.”) rămâne singură. Replicile tale scurte
 („Perfect”, „Bravo”, „Mulțumesc”) sunt marcate ca întrebări. Când Whisper uită punctul („din nou Mi-a dat”), un cuvânt cu literă
 mare în mijlocul rândului, după un cuvânt fără punctuație, începe o frază nouă (în afară de nume: un cuvânt care în tot interviul apare doar cu literă mare, ca „Mamaia”, „TikTok” sau numele nașului, e
-recunoscut singur ca nume; numele mirilor din folder și prenumele scrise în listă sunt mereu nume),
+recunoscut singur ca nume; un cuvânt uzual al limbii, din primele 5000, care apare o singură dată cu literă mare, ca „Asta” sau
+„Mi-a”, e început de frază; după „cu”, „pe”, „la”, „și” nu se începe niciodată frază nouă; numele mirilor din folder și prenumele
+scrise în listă sunt mereu nume),
 deci o întrebare lipită de un răspuns ajunge separat. O bucată scurtă nu e lipită niciodată de o întrebare. Când Whisper nu dă timpul
 fiecărui cuvânt, porțiunea e transcrisă încă o dată singură; dacă nici atunci, timpii sunt estimați după litere și fiecare tăietură e
 mutată în cea mai apropiată pauză reală din sunet (±0,6 s). În listă, un interviu cu bucăți peste 8 s are ⚠. În .txt timpii au
@@ -1101,13 +1104,16 @@ best on names and rare words). The first time the model downloads once (1.5–3 
 the lavalier are on different channels, and the app picks the one where the speech stands out most over the noise (the lavalier). From
 the wedding folder's name ("NUNTA 22 AUGUST 2026 Florin si Miruna") it takes the couple's names, to write them right. Every sentence's
 times come from its first and last word (tighter cuts). The text is split <b>into sentences</b>: cut at . ? ! and at pauses longer
-than 0.6 s; a piece lasts at most 8 s (a longer one is cut at the best pause, comma or linking word "and", "but", "because"…), so it
+than 0.6 s; a piece lasts at most 8 s (a longer one is cut at the best real pause, preferably at a comma or a linking word "and", "but",
+"because"…; when there is no pause at all it is a <b>forced cut</b>, at the quietest point of the sound between 5 and 8 s, listed as
+such in the report), so it
 can be interleaved. Pieces under 0.8 s and pieces with only "uh", "so", "like" are joined to the closest neighbour (as long as they
 stay under 8 s); a short but whole sentence ("Yes, definitely.") stays alone. Your short lines ("Perfect", "Bravo", "Thank you") are
 marked as questions. When Whisper forgets the full stop ("again Then she"), a word with a capital letter in the middle of a line, after
 a word without punctuation, starts a new sentence (except names: a word that appears only with a capital letter in the whole interview, like "Mamaia", "TikTok" or the
-godfather's name, is recognised as a name by itself; the couple's names from the folder and the first names typed in the list are
-always names), so a question glued to an
+godfather's name, is recognised as a name by itself; a common word of the language, one of the first 5000, that appears only once with
+a capital letter, like "Asta" or "Mi-a", starts a sentence; a sentence never starts right after "cu", "pe", "la", "și"; the couple's
+names from the folder and the first names typed in the list are always names), so a question glued to an
 answer ends up separate. A short piece is never glued to a question. When Whisper gives no time for each word, that part is
 transcribed again on its own; if that fails too, the times are estimated from the letters and every cut is moved to the closest real
 pause in the sound (±0.6 s). In the list, an interview with pieces over 8 s has ⚠. In the .txt the times have tenths

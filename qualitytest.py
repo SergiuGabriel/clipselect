@@ -31,6 +31,7 @@ METRICS = {
     "over8": ("Over 8 s", False),
     "under08": ("Under 0.8 s", False),
     "glued": ("'?' inside", False),
+    "forced": ("Forced cuts", False),
     "border_pct": ("Borders in a pause %", True),
     "cut_pct": ("Cuts in a pause %", True),
     "overlaps": ("Overlaps", False),
@@ -90,7 +91,8 @@ def run_project(name, files, src, model, lang, progress=None, stop=None, tr=lamb
         segs_all.append(dict(path=path, segs=[list(s) for s in segs]))
         lines.append(transcribe.quality_text(Path(path).name, q, tr).rstrip())
     m = dict(codes=sum(q["codes"] for q in qs), over8=sum(len(q["over8"]) for q in qs),
-             under08=sum(len(q["under08"]) for q in qs), glued=sum(len(q["glued"]) for q in qs))
+             under08=sum(len(q["under08"]) for q in qs), glued=sum(len(q["glued"]) for q in qs),
+             forced=sum(len(q.get("forced", [])) for q in qs))
     nb = sum(q["borders"] for q in qs)
     m["border_pct"] = _pct(nb - sum(len(q["in_speech"]) for q in qs), nb)
     # a test story: every code that is not a question, alternating the interviews

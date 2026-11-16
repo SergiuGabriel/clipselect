@@ -49,7 +49,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.9.2"
+APP, VER = "MoneyMakingMachine", "v3.9.3"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -6395,8 +6395,9 @@ class TranscribePage(QWidget):
             L = story.LETTERS[k]
             for key in ("over8", "under08", "glued"):
                 q[key] = [L + c for c in q[key]]
-            q["in_speech"] = [" / ".join(L + y for y in x.split(" ")[0].split("/")) + " " + x.split(" ", 1)[1]
-                              for x in q["in_speech"]]
+            for key in ("in_speech", "forced"):
+                q[key] = [" / ".join(L + y for y in x.split(" ")[0].split("/")) + " " + x.split(" ", 1)[1]
+                          for x in q.get(key, [])]
         self._text_dialog(i18n.T("Quality report"), transcribe.quality_text(Path(f["path"]).name, q, i18n.T) + "\n" +
                           i18n.T("Saved next to the file: {}").format(Path(f["path"]).stem + "_raport.txt"))
 

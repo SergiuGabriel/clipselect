@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.9.2), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.9.3), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -605,6 +605,20 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   % cuts in a pause, overlaps, export_from_source / export_xml -> check_xml. rezultate.json keeps every version;
   compare() lists what got worse than the previous version; table: red = misses the target (fails()), ▼ = worse.
   Tested with synthetic weddings and a mock model that "hears" speech regions of the real audio (/home/claude/t5).
+
+## v3.9.3 (owner: single-occurrence capitals and forced cuts, both general)
+- transcribe.VERSION = 7. wordfreq.py = the first 5000 words of RO and EN (FrequencyWords, MIT, OpenSubtitles 2018),
+  wordfreq.common(lang) (both for "auto"). transcribe.vocabulary(words, names, lang) -> small / count / names / common.
+  _cap_start: a capitalised word mid-line after a word without punctuation starts a sentence when it is also seen with a
+  small letter, or it appears ONCE and is a common word; never before a chosen name; never after NO_END ("cu", "pe",
+  "la", "și", "the", "with"...: the subtitle list contains names like maria / john, NO_END keeps "cu Maria" whole).
+  proper_nouns = never small and (said more than once or not common).
+- _split_long(ws, audio, forced): real words -> a border in a real pause (gap >= 0.15 s or in_pause); estimated words ->
+  the real pauses of the sound (pauses()) pick the border (comma / link preferred within +-0.6 s) and the times move to
+  the pause. NO pause at all -> FORCED cut: the quietest moment (_quietest, 50 ms smoothing) between 5 s and 8 s
+  (owner said 5-9 s, capped at 8 because 8 s is the hard maximum), then the nearest word border (estimated times move
+  to that moment). Forced borders: Segs.forced -> quality()["forced"] -> "Forced cuts (...)" line in the report, the
+  "Forced cuts" column in the multi-wedding test.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

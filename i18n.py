@@ -306,6 +306,9 @@ TEMPLATES.update({
     "Test on {} weddings · {} · {} s": "Test pe {} nunți · {} · {} s", "compared with {}": "comparat cu {}",
 })
 
+EXACT["Forced cuts"] = "Tăieri forțate"
+TEMPLATES["Forced cuts (no pause: cut at the quietest point between 5 and 8 s): {}"] = "Tăieri forțate (nicio pauză: tăiat în punctul cel mai liniștit între 5 și 8 s): {}"
+
 _PATS = []
 
 
