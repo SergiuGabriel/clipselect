@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.8.9), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.9.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -548,6 +548,28 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 - Owner: NO Claude API key (Settings section removed, TranscribePage._key returns ""; story.ask_claude unused). The story
   is made through his subscription (copy / paste). No NEW badge on Transcribe.
 - 4-track FX6 source: the copy keeps all 4 exploded tracks (tested); his last check used an older 2-track source.
+
+## v3.9.0 (MODIFICARE_FINALA_program.md: the owner's general final spec; order 1 -> 4 -> 6 -> 3; section 5 = XML untouched)
+- Transcription (1): PAUSE 0.6 s, MIN_PIECE 0.8 s, MAX_PIECE 8 s; _split_long prefers pauses, commas and linking words;
+  _join_short glues short / filler-only pieces ("ăă", "deci", "așa") to the closer neighbour if the result stays <= 8 s,
+  whole short sentences stay alone. transcribe.VERSION = 4 (older transcripts are ↻ and redone). story.is_question also
+  marks the interviewer's short lines (Perfect / Bravo / Mulțumesc / Bun...).
+- Parsing (4): story.parse_checked(answer, files) -> (pieces, errors, warnings). Errors: no STORY_START, unknown code,
+  range across letters, backwards range, a [QUESTION] endpoint, a code used twice. Warnings: a line without a code, a
+  question inside a range (split out). story.cut_times: in = start - 0.12 (>= previous code end + 0.02), out = end + 0.2
+  (<= next code start - 0.02); overlaps of one file move to the midpoint.
+- Checks (6): story.check_cuts (errors: length 0, past the file end, frame overlap; warnings: transcript pieces > 8 s,
+  linking-word start without the previous code, same speaker > 3 in a row) and story.check_xml (links / indices,
+  pproTicks, file complete at first use). TranscribePage._make_story writes to "<out>.checking", runs check_xml and only
+  then os.replace -> out; any error = nothing written + the _report dialog (ERRORS / WARNINGS, "Copy for Claude" copies a
+  fix request). "Only one voice on a theme" cannot be checked automatically (themes unknown): told to the owner.
+- tools/story_check.py + tools/reference_make_story_xml.py (his proven script): 2- and 4-track sources, app vs reference
+  compared element by element + check_xml. Runs in build.yml BEFORE PyInstaller on Mac and Windows: a broken story XML
+  stops the build.
+- Prompt (3): the owner's final English prompt (story.prompt). First-name field (e_name) next to "Who is speaking",
+  stored in f["name"], used in the prompt and the markers. Sequence name "<source xml name> - STORY".
+- i18n: the old template "{} core{}" matched any text containing " core" ("corectează" -> "nuclee"); replaced by
+  "{} cores" / "{} core". Lazy templates ending in {} are dangerous: check T(T(x)) == T(x) for new strings.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

@@ -156,29 +156,34 @@ def hint(path, lang):
 
 
 MAX_PIECE = 8.0        # owner: a piece ideally lasts at most ~8 s (Claude can only cut between codes)
-PAUSE = 0.4            # a pause longer than this between two words ends a sentence
+PAUSE = 0.6            # owner's final spec: a pause longer than this between two words ends a piece
+MIN_PIECE = 0.8        # shorter pieces are joined to a neighbour, unless they are a complete short line ("Te iubesc.")
+LINKS = ("și", "si", "dar", "așa", "asa", "pentru", "deci", "iar", "and", "but", "so", "because")
+FILLERS = {"da", "păi", "pai", "nu știu", "nu stiu", "deci", "adică", "adica", "ăă", "ăăă", "mm", "ok", "bine", "yes", "well"}
 
 
 def _norm(t):
     return re.sub(r"[^\w]+", " ", str(t).lower()).strip()
 
 
-VERSION = 3            # transcripts made before (no "tv" or lower) are long pieces: Transcribe redoes them
+VERSION = 4            # transcripts made before (no "tv" or lower) use older pieces: Transcribe redoes them
 
 
 def _split_long(ws):
-    """A piece longer than MAX_PIECE is cut at its best inner point (a comma first, else the longest pause between two
-    words), again and again, until every part is <= MAX_PIECE (parts never shorter than ~1 s when it can be helped)."""
+    """A piece longer than MAX_PIECE is cut at its longest inner pause, preferably after a comma or before "și", "dar",
+    "așa că", "pentru că" (owner's final spec, rule 3), again and again until every part is <= MAX_PIECE; parts are
+    never shorter than MIN_PIECE when it can be helped."""
     if len(ws) < 2 or ws[-1][1] - ws[0][0] <= MAX_PIECE:
         return [ws]
     best, bk = None, None
     for k in range(1, len(ws)):
         left, right = ws[k - 1][1] - ws[0][0], ws[-1][1] - ws[k][0]
-        if min(left, right) < 1.0 and len(ws) > 2:
+        if min(left, right) < MIN_PIECE and len(ws) > 2:
             continue
         gap = ws[k][0] - ws[k - 1][1]
-        comma = ws[k - 1][2].strip().endswith((",", ";", ":", "—", "-"))
-        score = 3.0 * gap + (0.5 if comma else 0.0) - 0.03 * abs(left - right)   # a real pause first, then a comma
+        nice = ws[k - 1][2].strip().endswith((",", ";", ":", "—", "-")) or \
+            ws[k][2].strip().lower().strip(",.").startswith(LINKS)
+        score = 3.0 * gap + (0.5 if nice else 0.0) - 0.03 * abs(left - right)
         if best is None or score > best:
             best, bk = score, k
     if bk is None:
@@ -186,11 +191,53 @@ def _split_long(ws):
     return _split_long(ws[:bk]) + _split_long(ws[bk:])
 
 
+def _text(ws):
+    return "".join(w[2] for w in ws).strip()
+
+
+def _is_filler(ws):
+    t = re.sub(r"[^\w\s]", "", _text(ws).lower()).strip()
+    return t in FILLERS or not t
+
+
+def _complete(ws):
+    """A complete short line that may stay on its own ("Te iubesc.", "Mulțumesc!")."""
+    t = _text(ws)
+    return t.endswith((".", "!", "?", "…")) and not _is_filler(ws)
+
+
+def _join_short(parts):
+    """Pieces under MIN_PIECE (and isolated fillers like "Da.", "Păi") are joined to the closer neighbour, unless they
+    are a complete short line; the joined piece may not grow past MAX_PIECE."""
+    out = [list(p) for p in parts]
+    k = 0
+    while k < len(out):
+        p = out[k]
+        short = p[-1][1] - p[0][0] < MIN_PIECE
+        if (short and not _complete(p)) or (_is_filler(p) and len(out) > 1):
+            gl = p[0][0] - out[k - 1][-1][1] if k > 0 else 1e9
+            gr = out[k + 1][0][0] - p[-1][1] if k + 1 < len(out) else 1e9
+            for side in sorted(((gl, -1), (gr, 1))):
+                j = k + side[1]
+                if side[0] < 1e8 and 0 <= j < len(out):
+                    merged = out[j] + p if side[1] < 0 else p + out[j]
+                    if merged[-1][1] - merged[0][0] <= MAX_PIECE:
+                        lo = min(j, k)
+                        out[lo:lo + 2] = [merged]
+                        k = max(0, lo - 1)
+                        break
+            else:
+                k += 1
+            continue
+        k += 1
+    return out
+
+
 def sentences(words):
-    """Words [(start, end, text)] -> sentences: a new piece after . ? ! … or a pause > 0.4 s, then every piece longer
-    than 8 s is cut again at its comma / longest pause (owner: Claude can only cut between codes, so a long piece cannot
-    be interleaved). An enumeration like "Iubitor, muncitor, frumos." stays its own piece. Every piece keeps the exact
-    time of its first and last word."""
+    """Words [(start, end, text)] -> pieces (owner's final spec): cut after every word ending in . ? ! and at every
+    pause > 0.6 s; a piece > 8 s is cut again at its longest pause (comma / "și" / "dar"...) until <= 8 s; pieces under
+    0.8 s are joined to a neighbour unless they are a complete short line; fillers ("Da.", "Păi") are joined too. Every
+    piece keeps the exact time of its first and last word (seconds from the start of the media file)."""
     groups, cur = [], []
     for w in words:
         if cur:
@@ -201,12 +248,14 @@ def sentences(words):
         cur.append(w)
     if cur:
         groups.append(cur)
-    out = []
+    parts = []
     for g in groups:
-        for part in _split_long(g):
-            txt = "".join(w[2] for w in part).strip()
-            if txt:
-                out.append((float(part[0][0]), max(float(part[-1][1]), float(part[0][0]) + 0.1), txt))
+        parts += _split_long(g)
+    out = []
+    for part in _join_short(parts):
+        txt = _text(part)
+        if txt:
+            out.append((float(part[0][0]), max(float(part[-1][1]), float(part[0][0]) + 0.1), txt))
     return out
 
 

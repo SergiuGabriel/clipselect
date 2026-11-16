@@ -49,7 +49,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.8.9"
+APP, VER = "MoneyMakingMachine", "v3.9.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -5782,8 +5782,7 @@ class TranscribePage(QWidget):
         top.addWidget(self.b_go)
         v.addLayout(top)
         v.addWidget(lbl("Interviews, speeches, the vornic, the sermon: the speech becomes text, on this computer (nothing is "
-                        "uploaded). Next to every file you get a .txt with the times and a .srt (subtitles); an XML with a "
-                        "marker on every sentence shows in Premiere where each thing is said. From the bride's and the "
+                        "uploaded). Next to every file you get a .txt with the times and a .srt (subtitles). From the bride's and the "
                         "groom's interviews Claude can make ONE story they tell together (below). The first time the "
                         "speech model is downloaded once (1.5-3 GB).", "muted", True))
         v.addSpacing(10)
@@ -5820,6 +5819,11 @@ class TranscribePage(QWidget):
         self.c_who.setMinimumWidth(220)
         self.c_who.currentIndexChanged.connect(self._who)
         wr.addWidget(self.c_who)
+        self.e_name = QLineEdit()
+        self.e_name.setPlaceholderText(i18n.T("First name"))
+        self.e_name.setMaximumWidth(180)
+        self.e_name.editingFinished.connect(self._name)
+        wr.addWidget(self.e_name)
         wr.addStretch()
         left.addLayout(wr)
         opt = QHBoxLayout()
@@ -5902,7 +5906,8 @@ class TranscribePage(QWidget):
         for f in self._files():
             mark = (("✓" if f.get("tv", 0) >= transcribe.VERSION else "↻") if f.get("segs") is not None
                     else ("✕" if f.get("error") else "·"))
-            who = f"  ·  {i18n.T(names[f['who']])}" if f.get("who") in names else ""
+            who = (f"  ·  {i18n.T(names[f['who']])}" if f.get("who") in names else "") + \
+                (f" {f['name']}" if (f.get("name") or "").strip() else "")
             it = QListWidgetItem(f"{mark}  {Path(f['path']).name}{who}")
             it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
             it.setCheckState(Qt.Checked if f.get("story", True) else Qt.Unchecked)
@@ -5956,6 +5961,10 @@ class TranscribePage(QWidget):
         self.c_who.setToolTip("" if f is not None else i18n.T("Add a file and select it in the list first."))
         self.c_who.setCurrentIndex(["", "bride", "groom", "both", "other"].index(f.get("who") or "") if f else 0)
         self.c_who.blockSignals(False)
+        self.e_name.blockSignals(True)
+        self.e_name.setEnabled(f is not None)
+        self.e_name.setText((f.get("name") or "") if f else "")
+        self.e_name.blockSignals(False)
 
     def _cur(self):
         r = self.list.currentRow()
@@ -6040,6 +6049,13 @@ class TranscribePage(QWidget):
             self.store.save_app()
             self._fill(select=self.list.currentRow())
 
+    def _name(self):
+        f = self._cur()
+        if f is not None and (f.get("name") or "") != self.e_name.text().strip():
+            f["name"] = self.e_name.text().strip()
+            self.store.save_app()
+            self._fill(select=self.list.currentRow())
+
     def _story_files(self):
         """Ticked and transcribed by this version (sentence pieces: an older transcript cannot be interleaved)."""
         return [f for f in self._files() if f.get("story", True) and f.get("segs") and f.get("tv", 0) >= transcribe.VERSION]
@@ -6103,11 +6119,13 @@ class TranscribePage(QWidget):
         self._make_story(fs, ans, auto=False)
 
     def _make_story(self, fs, ans, auto):
-        """Claude's answer -> the story XML (auto: saved next to the first interview without asking)."""
-        pieces, bad = story.parse(ans, fs)
-        if not pieces:
-            notify(i18n.T("No story found in the copied text. Copy Claude's whole answer (the copy button under it) and "
-                          "press again."), error=True, ms=10000)
+        """Claude's answer -> checks -> the story XML (owner's final spec: with an ERROR nothing is written, warnings
+        are listed in a short report)."""
+        pieces, errors, warnings = story.parse_checked(ans, fs)
+        if not pieces and not errors:
+            errors = ["The answer has no STORY_START / STORY_END list."]
+        if errors:
+            self._report(errors, warnings, written=None)
             return
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
@@ -6117,21 +6135,29 @@ class TranscribePage(QWidget):
         if any(infos[f["path"]].get("dur", 0) <= 0 for f in fs):
             notify(i18n.T("An interview file cannot be read any more. Is the disk connected?"), error=True)
             return
-        cuts = story.ranges(pieces, fs, [infos[f["path"]]["dur"] for f in fs])
+        durs = [infos[f["path"]]["dur"] for f in fs]
+        cuts = story.cut_times(pieces, fs, durs)
+        e2, w2 = story.check_cuts(cuts, pieces, fs, durs)
+        errors, warnings = errors + e2, warnings + w2
+        if errors:
+            self._report(errors, warnings, written=None)
+            return
         names = {"bride": "Bride", "groom": "Groom", "both": "Bride and groom", "other": "Someone else"}
         found = story.parse_who(ans, len(fs))          # Claude says who is who when he did not set it
         labels = {}
         for k, f in enumerate(fs):
             w = f.get("who") or found.get(k)
             if w in names:
-                labels[k] = i18n.T(names[w])
+                labels[k] = i18n.T(names[w]) + (f" {f['name'].strip()}" if (f.get("name") or "").strip() else "")
             if not f.get("who") and found.get(k):
                 f["who"] = found[k]                     # remembered (shown in the list)
         if found:
             self.store.save_app()
             self._fill(select=self.list.currentRow())
         first = Path(fs[0]["path"])
-        start = str(projectsetup.free_path(first.with_name(i18n.T("Interview story") + ".xml")))
+        base = Path(fs[0].get("src_xml") or first).stem if fs[0].get("src_xml") else i18n.T("Interview story")
+        seqname = f"{base} - {i18n.T('STORY')}" if fs[0].get("src_xml") else base
+        start = str(projectsetup.free_path(first.with_name(seqname + ".xml")))
         if auto:
             out = start
         else:
@@ -6141,27 +6167,30 @@ class TranscribePage(QWidget):
         src = {f.get("src_xml") for f in fs}
         src = src.pop() if len(src) == 1 else None
         same = bool(src and Path(src).exists())         # all from the sequence he imported: copy HIS clips (his sound)
+        tmp = str(out) + ".checking"
 
         def write(o):
             if same:
-                try:
-                    return story.export_from_source(cuts, fs, src, o, i18n.T("Interview story"), labels)
-                except OSError:
-                    raise
-                except Exception:
-                    logging.exception("story from his sequence failed, plain export")
-            return story.export_xml(cuts, fs, infos, o, i18n.T("Interview story"), labels)
+                return story.export_from_source(cuts, fs, src, o, seqname, labels)
+            return story.export_xml(cuts, fs, infos, o, seqname, labels)
         try:
-            r = write(out)
+            r = write(tmp)
         except OSError:
             out, _ = QFileDialog.getSaveFileName(self, "Save XML", str(Path.home() / Path(start).name), "XML (*.xml)")
             if not out:
                 return
-            r = write(out)
+            tmp = str(out) + ".checking"
+            r = write(tmp)
         except Exception as e:
             logging.exception("story export failed")
             notify(i18n.T("Export failed: {}").format(i18n.T(str(e))), error=True)
             return
+        x_err = story.check_xml(tmp)                    # links, clipindex, ticks, complete <file> first
+        if x_err:
+            Path(tmp).unlink(missing_ok=True)
+            self._report(x_err, warnings, written=None)
+            return
+        os.replace(tmp, out)
         pos, lines = 0.0, []
         for fi, t0, t1, txt in cuts:
             who = labels.get(fi) or f"{story.LETTERS[fi]}"
@@ -6171,13 +6200,41 @@ class TranscribePage(QWidget):
                                "\n\n" + "\n\n".join(lines))
         self.story_out = str(out)
         msg = i18n.T("Story XML saved: {} pieces, {} long.").format(r["pieces"], story._mmss(r["seconds"]))
-        if auto:
-            msg += " " + i18n.T("It is next to the interview: {}").format(Path(out).name)
         if not same:
             msg += " " + i18n.T("For your exact sound tracks (mic and lavalier), import your Premiere sequence with Import XML (or drag it into the list).")
-        if bad:
-            msg += " " + i18n.T("{} lines of the answer were not understood and were skipped.").format(len(bad))
-        notify(msg, error=bool(bad), ms=9000)
+        if warnings:
+            self._report([], warnings, written=out)
+        notify(msg, ms=9000)
+
+    def _report(self, errors, warnings, written):
+        """The check report: errors (nothing was written) and / or warnings (the XML was written)."""
+        d = QDialog(self)
+        d.setWindowTitle(i18n.T("Story check"))
+        d.resize(660, 440)
+        v = QVBoxLayout(d)
+        head = ("The XML was NOT written: fix these with Claude (ask it again) and paste the new answer." if errors
+                else "The XML was written ({}). Have a look at these:".format(Path(written).name))   # lbl translates
+        v.addWidget(lbl(head, "", True))
+        box = QPlainTextEdit()
+        box.setReadOnly(True)
+        txt = ""
+        if errors:
+            txt += i18n.T("ERRORS") + "\n" + "\n".join("• " + i18n.T(e) for e in errors) + "\n\n"
+        if warnings:
+            txt += i18n.T("WARNINGS") + "\n" + "\n".join("• " + i18n.T(w) for w in warnings)
+        box.setPlainText(txt.strip())
+        v.addWidget(box, 1)
+        row = QHBoxLayout()
+        row.addStretch()
+        if errors:
+            row.addWidget(btn("Copy for Claude", slot=lambda: (QApplication.clipboard().setText(
+                "Please fix your list, these codes are wrong:\n" + "\n".join(errors) +
+                "\nAnswer again with the whole list between STORY_START and STORY_END."), notify(i18n.T("Copied.")))))
+        row.addWidget(btn("OK", "primary", d.accept))
+        v.addLayout(row)
+        if errors:
+            notify(i18n.T("The story has errors: the XML was not written."), error=True)
+        d.exec()
 
     def _paste_dialog(self):
         """A window where he pastes Claude's answer (already filled when the clipboard holds it)."""

@@ -493,7 +493,10 @@ mai lent, cel mai bun la nume și cuvinte rare). Prima dată modelul se descarc�
 lavaliera sunt pe canale diferite, iar aplicația o alege pe cea în care vorbirea iese cel mai clar peste zgomot (lavaliera). Din
 numele folderului nunții („NUNTA 22 AUGUST 2026 Florin si Miruna”) ia numele mirilor, ca să le scrie corect. Timpii fiecărei fraze
 vin de la primul și ultimul cuvânt (tăieturi mai exacte). Textul e împărțit <b>pe fraze</b>: tăiat la . ? ! și la pauzele de peste
-0,4 s, o bucată are de obicei sub 8 s (una mai lungă se închide la prima virgulă după 8 s), ca să poată fi intercalată. Dacă Whisper
+0,6 s; o bucată are cel mult 8 s (una mai lungă e tăiată la cea mai bună pauză, virgulă sau cuvânt de legătură „și”, „dar”,
+„pentru că”…), ca să poată fi intercalată. Bucățile sub 0,8 s și cele doar cu „ăă”, „deci”, „așa” sunt lipite de vecina cea mai
+apropiată (cât timp rămân sub 8 s); o frază scurtă dar întreagă („Da, cu siguranță.”) rămâne singură. Replicile tale scurte
+(„Perfect”, „Bravo”, „Mulțumesc”) sunt marcate ca întrebări. Dacă Whisper
 intră în buclă și repetă aceeași frază, repetările sunt scoase.</li>
 <li><b>Viteza</b>: pe Mac-urile M1–M4, transcrierea rulează pe placa video (Apple MLX), de câteva ori mai repede decât pe procesor; dacă
 nu merge, aplicația trece singură pe varianta de procesor. Pe Mac-urile Intel rulează pe procesor.</li>
@@ -520,7 +523,7 @@ lui (sau a ei) curgătoare, ca și cum ar fi spusă fără întrebări.</p>
 <li>Transcrie interviurile și <b>bifează</b> în listă ce intră în poveste (cele marcate ↻ au fost transcrise de o versiune mai veche,
 cu bucăți lungi: Transcriere le reface pe fraze). <b>Cine vorbește</b> e opțional: dacă nu-l alegi, Claude află
 singur din ce spun care interviu e al mirelui și care al miresei (numele mirilor le ia din folderul nunții), iar lista se completează
-după răspuns.</li>
+după răspuns. Lângă el poți scrie <b>prenumele</b> (de exemplu Florin): apare în cererea către Claude și în markerele poveștii.</li>
 <li><b>1. Copiază pentru Claude</b>: aplicația copiază transcrierile (fiecare frază cu un cod: A1, A2… pentru primul interviu, B1… pentru
 al doilea) cu o cerere gata scrisă și deschide un <b>chat nou</b> în Claude. Lipești (Cmd+V) și trimiți.</li>
 <li>Când Claude a răspuns, copiezi tot răspunsul (butonul de copiere de sub el) și apeși <b>2. Lipește răspunsul lui Claude</b>: se
@@ -528,14 +531,23 @@ deschide o fereastră în care lipești răspunsul (dacă e deja copiat, apare s
 scrie mereu la ce pas ești.</li>
 <li>Primești un XML: bucățile una după alta (imagine + tot sunetul, cu 0,12 s înainte și 0,2 s după, fără să intre în fraza
 vecină), cu un marker pe fiecare (cine vorbește și ce spune, textul corectat de Claude); textul poveștii apare în aplicație. Două
-bucăți din același fișier nu se suprapun niciodată (nici măcar un cadru), oricum ar fi așezate în poveste.</li>
+bucăți din același fișier nu se suprapun niciodată (nici măcar un cadru), oricum ar fi așezate în poveste: dacă s-ar atinge,
+tăietura se mută la mijlocul pauzei dintre ele. Sequence-ul se numește ca al tău, cu „ - STORY” la final.</li>
 </ol>
+<p><b>Verificarea poveștii.</b> Înainte să scrie XML-ul, aplicația verifică răspunsul lui Claude și apoi XML-ul însuși.
+<b>Erorile</b> opresc totul și XML-ul <b>nu</b> se scrie: un cod care nu există, un interval peste două interviuri sau care merge
+înapoi, o replică de-a ta ([QUESTION]) folosită, același cod de două ori, bucăți care se suprapun, o bucată după finalul fișierului,
+legături sau timpi greșiți în XML. Fereastra le arată pe toate; <b>Copiază pentru Claude</b> copiază o cerere de corectare: o lipești
+în același chat, iar răspunsul nou îl lipești la pasul 2. <b>Avertismentele</b> lasă XML-ul scris, doar îți spun unde să te uiți: un
+rând fără cod (sărit), o întrebare din mijlocul unui interval (scoasă), bucăți din transcriere mai lungi de 8 s, o bucată care începe
+cu „și / dar / pentru că” fără fraza dinainte, același vorbitor de peste 3 ori la rând. Dacă pe o temă vorbește doar unul dintre
+miri, asta nu se poate verifica automat (aplicația nu știe temele): uită-te tu.</p>
 <p>Regulile date lui Claude, pe scurt: doar răspunsurile mirilor, fraze întregi, tăieturi dese între ei pe aceleași teme, ecouri unul
 lângă altul, glumele întregi (cu poantă) sau deloc, fără aceeași informație spusă de amândoi la rând, fără bucăți care au sens doar
 cu întrebarea, deschidere puternică și final emoționant. Înjurăturile pot rămâne: le scoți tu la montaj.</p>
 <p>Dacă Claude îți spune că ai atins limita, încerci la ora pe care ți-o arată Claude: aplicația ține minte ce ai trimis (chiar după
-repornire), deci apeși doar pasul 2 când ai răspunsul, sau pasul 1 din nou într-un chat nou. Rândurile din răspuns pe care nu le
-înțelege sunt sărite și numărate.</p>
+repornire), deci apeși doar pasul 2 când ai răspunsul, sau pasul 1 din nou într-un chat nou. Rândurile din răspuns fără cod sunt sărite și apar în
+verificare.</p>
 
 <h2>Coada de analiză</h2>
 <p>Arată tot ce rulează acum: analizele Footage Selection, Sync și Auto Edit din Multicam, analiza selecțiilor din Teaser Studio,
@@ -1072,7 +1084,10 @@ best on names and rare words). The first time the model downloads once (1.5–3 
 the lavalier are on different channels, and the app picks the one where the speech stands out most over the noise (the lavalier). From
 the wedding folder's name ("NUNTA 22 AUGUST 2026 Florin si Miruna") it takes the couple's names, to write them right. Every sentence's
 times come from its first and last word (tighter cuts). The text is split <b>into sentences</b>: cut at . ? ! and at pauses longer
-than 0.4 s, a piece usually lasts under 8 s (a longer one closes at the first comma after 8 s), so it can be interleaved. When Whisper
+than 0.6 s; a piece lasts at most 8 s (a longer one is cut at the best pause, comma or linking word "and", "but", "because"…), so it
+can be interleaved. Pieces under 0.8 s and pieces with only "uh", "so", "like" are joined to the closest neighbour (as long as they
+stay under 8 s); a short but whole sentence ("Yes, definitely.") stays alone. Your short lines ("Perfect", "Bravo", "Thank you") are
+marked as questions. When Whisper
 loops and repeats one sentence, the repeats are removed.</li>
 <li><b>Speed</b>: on M1–M4 Macs the transcription runs on the graphics chip (Apple MLX), several times faster than on the processor; if it
 does not work, the app switches to the processor by itself. On Intel Macs it runs on the processor.</li>
@@ -1099,7 +1114,8 @@ questions.</p>
 <li>Transcribe the interviews and <b>tick</b> in the list what goes into the story (the ones marked ↻ were transcribed by an older
 version, in long pieces: Transcribe redoes them in sentences). <b>Who is speaking</b> is optional: when you do not set
 it, Claude finds out from what they say which interview is the groom's and which the bride's (the names come from the wedding folder),
-and the list is filled in after the answer.</li>
+and the list is filled in after the answer. Next to it you can write the <b>first name</b> (e.g. Florin): it goes into the request to
+Claude and into the story's markers.</li>
 <li><b>1. Copy for Claude</b>: the app copies the transcripts (every sentence with a code: A1, A2… for the first interview, B1… for the
 second) with a request already written and opens a <b>new chat</b> in Claude. Paste (Cmd+V) and send.</li>
 <li>When Claude has answered, copy the whole answer (the copy button under it) and press <b>2. Paste Claude's answer</b>: a window
@@ -1107,14 +1123,23 @@ opens where you paste the answer (if it is already copied, it is there by itself
 it always says which step you are at.</li>
 <li>You get an XML: the pieces one after the other (picture + all the sound, 0.12 s before and 0.2 s after, never into the
 neighbouring sentence), a marker on each (who speaks and what, the text corrected by Claude); the story's text shows in the app. Two
-pieces of the same file never overlap (not even one frame), however they are placed in the story.</li>
+pieces of the same file never overlap (not even one frame), however they are placed in the story: if they would touch, the cut moves to
+the middle of the pause between them. The sequence is named like yours, with " - STORY" at the end.</li>
 </ol>
+<p><b>The story check.</b> Before writing the XML, the app checks Claude's answer and then the XML itself. <b>Errors</b> stop everything
+and the XML is <b>not</b> written: a code that does not exist, a range across two interviews or going backwards, one of your lines
+([QUESTION]) used, the same code twice, pieces that overlap, a piece past the end of the file, wrong links or times in the XML. The
+window lists them all; <b>Copy for Claude</b> copies a fix request: paste it in the same chat, and paste the new answer at step 2.
+<b>Warnings</b> leave the XML written and only tell you where to look: a line without a code (skipped), a question inside a range (left
+out), transcript pieces longer than 8 s, a piece starting with "and / but / because" without the sentence before it, the same speaker
+more than 3 times in a row. A theme where only one of them speaks cannot be checked automatically (the app does not know the themes):
+have a look yourself.</p>
 <p>The rules given to Claude, in short: only the couple's answers, whole sentences, frequent cuts between them on the same themes,
 echoes next to each other, jokes whole (with the punchline) or not at all, no information said by both in a row, no piece that only
 makes sense with the question, a strong opening and an emotional ending. Swearing may stay: you remove it when editing.</p>
 <p>If Claude says you reached your limit, try again at the time Claude shows: the app remembers what you sent (even after a restart), so
-you only press step 2 when you have the answer, or step 1 again in a new chat. Lines of the answer it does not understand are skipped and
-counted.</p>
+you only press step 2 when you have the answer, or step 1 again in a new chat. Lines of the answer without a code are skipped and show in
+the check.</p>
 
 <h2>Analysis Queue</h2>
 <p>Shows everything running now: Footage Selection analyses, Multicam Sync and Auto Edit, the Teaser Studio selection analysis, the

@@ -233,6 +233,41 @@ TEMPLATES.update({
         "{} fișiere au fost transcrise de o versiune mai veche (bucăți lungi, marcate ↻): apasă Transcriere ca să le refaci pe fraze scurte, ca să poată fi intercalate.",
 })
 
+EXACT.update({
+    "STORY": "POVESTE", "Story check": "Verificarea poveștii", "ERRORS": "ERORI", "WARNINGS": "AVERTISMENTE",
+    "Copied.": "Copiat.", "First name": "Prenume", "Copy for Claude": "Copiază pentru Claude",
+    "The XML was NOT written: fix these with Claude (ask it again) and paste the new answer.":
+        "XML-ul NU a fost scris: corectează-le cu Claude (cere-i din nou) și lipește răspunsul nou.",
+    "The story has errors: the XML was not written.": "Povestea are erori: XML-ul nu a fost scris.",
+    "The answer has no STORY_START / STORY_END list.": "Răspunsul nu are lista între STORY_START și STORY_END.",
+    "The list between STORY_START and STORY_END is empty.": "Lista dintre STORY_START și STORY_END e goală.",
+})
+TEMPLATES.update({
+    "The XML was written ({}). Have a look at these:": "XML-ul a fost scris ({}). Uită-te la acestea:",
+    "{}: a range across two interviews.": "{}: un interval peste două interviuri.",
+    "{}: this code does not exist.": "{}: codul nu există.",
+    "{}: the range goes backwards.": "{}: intervalul merge înapoi.",
+    "{}: a [QUESTION] (the videographer) is used.": "{}: e folosită o [QUESTION] (replica videografului).",
+    "{} is used twice.": "{} e folosit de două ori.",
+    "{}: the [QUESTION] {} inside it was left out.": "{}: [QUESTION] {} din interiorul lui a fost scoasă.",
+    "Line ignored (no code): {}": "Rând ignorat (fără cod): {}",
+    "Piece {}: its length is 0.": "Bucata {}: are durata 0.",
+    "Piece {}: it ends after the end of {}.": "Bucata {}: se termină după finalul lui {}.",
+    "Pieces {} and {} overlap ({} frames of the same file).": "Bucățile {} și {} se suprapun ({} cadre din același fișier).",
+    "Transcript pieces longer than 8 s: {}.": "Bucăți din transcriere mai lungi de 8 s: {}.",
+    "Piece {} ({}) starts with a linking word without {} before it.": "Bucata {} ({}) începe cu un cuvânt de legătură fără {} înaintea ei.",
+    "The same speaker more than 3 times in a row (from piece {}).": "Același vorbitor de peste 3 ori la rând (de la bucata {}).",
+    "{}: the file is not complete the first time it appears.": "{}: fișierul nu e complet la prima apariție.",
+    "{}: pproTicksIn does not match in.": "{}: pproTicksIn nu se potrivește cu in.",
+    "A link points to a clip that does not exist ({}).": "Un link arată spre un clip care nu există ({}).",
+    "A link with a wrong track / clip index ({}).": "Un link cu trackindex / clipindex greșit ({}).",
+})
+
+TEMPLATES.pop('{} core{}', None)      # it matched any text with " core" in it ("corectează")
+TEMPLATES.update({'{} cores': '{} nuclee', '{} core': '{} nucleu'})
+
+EXACT["Interviews, speeches, the vornic, the sermon: the speech becomes text, on this computer (nothing is uploaded). Next to every file you get a .txt with the times and a .srt (subtitles). From the bride's and the groom's interviews Claude can make ONE story they tell together (below). The first time the speech model is downloaded once (1.5-3 GB)."] = "Interviuri, discursuri, vornicul, predica: vorbirea devine text, pe acest calculator (nu se urcă nimic). Lângă fiecare fișier primești un .txt cu orele și un .srt (subtitrare). Din interviurile mirelui și ale miresei, Claude poate face O SINGURĂ poveste spusă de amândoi (mai jos). Prima dată modelul de vorbire se descarcă o singură dată (1,5-3 GB)."
+
 _PATS = []
 
 

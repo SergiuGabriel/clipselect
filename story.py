@@ -24,136 +24,89 @@ WHO_RO = {"bride": "mireasa", "groom": "mirele", "both": "mirii împreună", "ot
 WHO_EN = {"bride": "the bride", "groom": "the groom", "both": "the couple together", "other": "someone else", "": "unknown"}
 
 
+INTERVIEWER = {"perfect", "bravo", "multumesc", "mulțumesc", "bun", "super", "foarte bine", "gata", "excelent",
+               "good", "great", "thank you", "thanks", "perfect perfect", "bravo bravo"}
+
+
 def is_question(text):
-    """The interviewer's questions end with '?' (Whisper writes the punctuation). Claude also gets the rule to skip his
-    other lines (Perfect!, Bravo!, Mulțumesc!), which it recognises from the context."""
-    return str(text).strip().rstrip('"\'»”').endswith("?")
+    """[QUESTION] = what can be detected of the videographer (owner's final spec): a question (ends with '?') or one of
+    his very short lines ("Perfect!", "Bravo!", "Mulțumesc!", "Bun!"). Not perfect on purpose: the prompt tells Claude to
+    recognise his unmarked lines too."""
+    t = str(text).strip().rstrip('"\'»”')
+    if t.endswith("?"):
+        return True
+    return re.sub(r"[^\w\s]", "", t.lower()).strip() in INTERVIEWER
 
 
 def _mmss(t):
     return f"{int(t // 60)}:{int(t % 60):02d}"
 
 
+WHO_PROMPT = {"groom": "THE GROOM", "bride": "THE BRIDE", "both": "BOTH OF THEM", "other": "SOMEONE ELSE"}
+
+
 def prompt(files, lang="ro"):
-    """files = [dict(path, segs=[[start, end, text]], who)] in the order of the list. Returns the text for Claude."""
-    ro = lang == "ro"
-    who = WHO_RO if ro else WHO_EN
+    """The owner's final prompt (MODIFICARE_FINALA_program.md, section 3), always in English; only the <...> fields are
+    filled. files = [dict(path, segs=[[start, end, text]], who, name)] in the order of the list."""
     import transcribe
-    head = []
-    body = []
+    head, body = [], []
+    unknown = [LETTERS[k] for k, f in enumerate(files) if not f.get("who")]
     names = next((transcribe.couple_names(f["path"]) for f in files if transcribe.couple_names(f["path"])), [])
-    unknown = any(not f.get("who") for f in files)
     for k, f in enumerate(files):
         L = LETTERS[k]
-        w = f.get("who") or ""
-        label = {"bride": "MIREASA" if ro else "THE BRIDE", "groom": "MIRELE" if ro else "THE GROOM"}.get(w) or who.get(w, who[""])
-        head.append(f"- {'Interviul' if ro else 'Interview'} {L}: {label} ({Path(f['path']).name})")
-        body.append(f"\n=== {'INTERVIUL' if ro else 'INTERVIEW'} {L} ===")
+        who = WHO_PROMPT.get(f.get("who") or "", "UNKNOWN")
+        nm = (f.get("name") or "").strip()
+        head.append(f"- Interview {L}: {who}{', ' + nm if nm else ''} ({Path(f['path']).name})")
+        body.append(f"\n=== INTERVIEW {L} ===")
         for i, (a, b, t) in enumerate(f["segs"], 1):
-            q = (" [ÎNTREBARE]" if ro else " [QUESTION]") if is_question(t) else ""
+            q = " [QUESTION]" if is_question(t) else ""
             body.append(f"{L}{i} ({b - a:.1f} s){q} {t}")
-    if ro:
-        intro = (
-            "Ești editorul unui film de nuntă. Mai jos sunt interviurile transcrise, fiecare frază are un cod "
-            "(A1, A2… pentru primul interviu, B1, B2… pentru al doilea) și durata ei în secunde.\n\n"
-            + "\n".join(head) + "\n\n"
-            "Interviurile sunt de tipul: eu (cameramanul) întreb, mirii răspund. ÎNTREBĂRILE MELE ȘI REPLICILE MELE NU INTRĂ "
-            "NICIODATĂ ÎN POVESTE: cele marcate [ÎNTREBARE], dar și replicile mele scurte (de ex. „Perfect!”, „Bravo!”, "
-            "„Mulțumesc!”, „A fost perfect!”) și glumele de la final. Folosește doar răspunsurile mirilor.\n"
-            "Replicile adresate mirilor care sună a instrucțiuni sau vorbă de-a mea (de ex. „Tre' să-mi zici ce zi este "
-            "astăzi”, „Aș vrea să-i zici la persoana a doua”, vorbele de dinainte să înceapă interviul, „Bravo, ai scăpat”) "
-            "sunt ale MELE chiar dacă nu sunt marcate [ÎNTREBARE]. Lasă-le afară.\n"
-            + (f"Mirii sunt {names[0]} și {names[1]}.\n" if names else "")
-            + ("Unde scrie „nu știu cine”: află din ce spun care interviu e al MIRELUI și care al MIRESEI și scrie-le în "
-               "răspuns pe rândul WHO.\n" if unknown else "") + "\n"
-            "Ce vreau:\n"
-            "1. Găsește povestea lor: ce îi leagă, cum s-au cunoscut, momentele importante, ce simt unul pentru altul.\n"
-            + ("2. Construiește O SINGURĂ POVESTE în care povestesc ÎMPREUNĂ. Pe amândoi îi întreb aceleași lucruri (cum s-au "
-               "cunoscut, cum e celălalt, ce iubește la el / ea, ce își doresc, un mesaj pentru celălalt), deci pe fiecare "
-               "temă ai versiunea ei și versiunea lui. Împletește-le pe teme: pe aceeași temă tai de la unul la celălalt, "
-               "des, în bucăți scurte (una-trei fraze), ca și cum unul ar continua ideea celuilalt (de ex. el spune ce iubește "
-               "la ea, apoi tai la ea care spune ce iubește la el; ea începe cum s-au cunoscut, el continuă). Ordinea "
-               "temelor: cum s-au cunoscut, apoi cum se văd unul pe altul, ce îi leagă, viitorul, iar la final mesajele "
-               "lor unul pentru celălalt (finalul emoționant). Fiecare temă să aibă ambele voci, iar povestea să fie un "
-               "întreg, cu început, mijloc și final.\n" if len(files) > 1 else
-               "2. Construiește din răspunsuri o poveste curgătoare, ca și cum ar povesti fără întrebări, cu început, mijloc "
-               "și un final emoționant.\n") +
-            "3. Durata: cât are nevoie povestea. Nu o scurta forțat și nu o lungi: păstrează tot ce e bun și spune "
-            "povestea, lasă afară ce nu adaugă nimic.\n"
-            "4. Folosește DOAR fraze care există, întregi, exact cum sunt. Nu inventa, nu rescrie, nu tăia o frază la "
-            "jumătate. Poți lua mai multe fraze la rând (de ex. A12-A14). Evită ezitările, repetițiile, frazele "
-            "neterminate și ce nu se înțelege fără întrebarea mea.\n"
-            "5. Glumele rămân întregi: dacă folosești începutul unei glume, pune poanta imediat după el, sau lasă-le pe "
-            "amândouă afară (înjurăturile pot rămâne, le scot eu la montaj).\n"
-            "6. Taie des între ei: o bucată are ideal una-trei fraze. Când ea spune o parte dintr-o poveste și el partea "
-            "următoare, alternează.\n"
-            "7. Caută ecouri: o frază a lui care răspunde unei fraze a ei (de ex. ea: „învățăm să ne punem pe noi pe primul "
-            "loc”, el: „să încerce să se pună și pe ea pe primul loc”). Pune-le una lângă alta.\n"
-            "8. Lasă afară tot ce e doar un răspuns scurt la întrebarea mea și nu are sens singur (de ex. „Pe Instagram, "
-            "prima dată.”), și nu începe o bucată cu un răspuns care are sens doar cu întrebarea (de ex. „Plină de emoție, "
-            "dificultăți…”).\n"
-            "9. Nu repeta aceeași informație din două voci la rând dacă nu adaugă nimic (de ex. data nunții spusă de "
-            "amândoi): păstrează varianta mai puternică.\n"
-            "10. Deschide puternic (ziua, emoția) și încheie emoționant, eventual cu un zâmbet.\n\n"
-            "Transcrierea automată mai pocește cuvinte: înțelege-le din context.\n\n"
-            "Răspunsul tău: întâi un rând WHO cu cine e în fiecare interviu (de ex. WHO: A=MIRE, B=MIREASA), apoi 1-2 "
-            "propoziții cu povestea pe scurt, apoi lista, exact între rândurile STORY_START și "
-            "STORY_END, un rând pe bucată, în ordinea din film: codul (A12) sau codurile la rând (A12-A14), apoi \" | \" și "
-            "textul acelor fraze scris corect (cuvintele pocite de transcriere corectate, cu diacritice, fără să schimbi "
-            "ce au spus). Exemplu:\n"
-            "STORY_START\nB3 | Prima dată când am văzut-o…\nA7-A8 | Eu nu credeam că…\nSTORY_END\n"
-        )
-    else:
-        intro = (
-            "You are the editor of a wedding film. Below are the transcribed interviews; every sentence has a code "
-            "(A1, A2… for the first interview, B1, B2… for the second) and its length in seconds.\n\n"
-            + "\n".join(head) + "\n\n"
-            "The interviews go like this: I (the videographer) ask, the couple answers. MY QUESTIONS AND MY LINES NEVER GO "
-            "INTO THE STORY: the ones marked [QUESTION], and also my short lines (e.g. \"Perfect!\", \"Bravo!\", "
-            "\"Thank you!\") and the jokes at the end. Use only the couple's answers.\n"
-            "Lines addressed to the couple that sound like instructions or chatter from me (e.g. \"Tre' să-mi zici ce zi "
-            "este astăzi\", \"Aș vrea să-i zici la persoana a doua\", small talk before the interview starts, \"Bravo, ai "
-            "scăpat\") are MINE even if they are not marked [QUESTION]. Leave them out.\n"
-            + (f"The couple: {names[0]} and {names[1]}.\n" if names else "")
-            + ("Where it says unknown: find out from what they say which interview is THE GROOM and which is THE BRIDE "
-               "and write it in your answer on the WHO line.\n" if unknown else "") + "\n"
-            "What I want:\n"
-            "1. Find their story: what binds them, how they met, the important moments, what they feel for each other.\n"
-            + ("2. Build ONE STORY that they tell TOGETHER. I ask both of them the same things (how they met, what the "
-               "other is like, what they love about him / her, what they wish for, a message to the other), so on every "
-               "theme you have her version and his. Weave them by theme: on the same theme cut from one to the other, "
-               "often, in short pieces (one to three sentences), as if one continued the other's thought (e.g. he says "
-               "what he loves about her, then cut to her saying what she loves about him; she starts how they met, he "
-               "goes on). Order of the themes: how they met, then how they see each other, what binds them, the future, "
-               "and at the end their messages to each other (the emotional ending). Every theme with both voices, and "
-               "the story a whole, with a beginning, a middle and an ending.\n" if len(files) > 1 else
-               "2. Build a flowing story from the answers, as if told without questions, with a beginning, a middle and "
-               "an emotional ending.\n") +
-            "3. Length: as long as the story needs. Do not shorten it by force and do not stretch it: keep everything "
-            "that is good and tells the story, leave out what adds nothing.\n"
-            "4. Use ONLY sentences that exist, whole, exactly as they are. Do not invent, rewrite or cut a sentence in "
-            "half. You may take several sentences in a row (e.g. A12-A14). Avoid hesitations, repetitions, unfinished "
-            "sentences and anything that needs my question to make sense.\n"
-            "5. Keep jokes whole: if you use the setup, include the punchline right after it, or leave both out (swearing "
-            "may stay, I remove it when editing).\n"
-            "6. Cut often between them: a piece is ideally one to three sentences. When she tells part of a story and he "
-            "tells the next part, alternate.\n"
-            "7. Look for echoes: a sentence of his that answers a sentence of hers (e.g. she: \"we are learning to put "
-            "ourselves first\", he: \"she should try to put herself first too\"). Put them next to each other.\n"
-            "8. Leave out anything that is only a short answer to my question and makes no sense alone (e.g. \"On "
-            "Instagram, the first time.\"), and do not start a piece with an answer that only makes sense with the "
-            "question (e.g. \"Plină de emoție, dificultăți…\").\n"
-            "9. Do not repeat the same information from both voices in a row when it adds nothing (e.g. the wedding date "
-            "said by both): keep the stronger version.\n"
-            "10. Open strong (the day, the emotion) and end emotionally, maybe with a smile.\n\n"
-            "The automatic transcript misspells some words: understand them from the context.\n\n"
-            "Your answer: first a WHO line with who is in each interview (e.g. WHO: A=GROOM, B=BRIDE), then 1-2 sentences "
-            "with the story in short, then the list, exactly between the lines "
-            "STORY_START and STORY_END, one line per piece, in film order: the code (A12) or the codes in a row (A12-A14), "
-            "then \" | \" and the text of those sentences written correctly (words the transcript misheard fixed, without "
-            "changing what they said). Example:\n"
-            "STORY_START\nB3 | The first time I saw her…\nA7-A8 | I never thought…\nSTORY_END\n"
-        )
+    extra = ""
+    if unknown:
+        extra = ((f"The couple: {names[0]} and {names[1]}.\n" if names else "") +
+                 f"For interview(s) {', '.join(unknown)} (UNKNOWN): find out from what they say whether it is THE GROOM, "
+                 "THE BRIDE or BOTH OF THEM, and write it on a line before STORY_START, e.g. WHO: A=GROOM, B=BRIDE.\n")
+    intro = (
+        "You are the editor of a wedding film. Below are the transcribed interviews; every piece has a code (A1, A2… for "
+        "the first interview, B1, B2… for the second, C1… for a third) and its length in seconds.\n\n"
+        + "\n".join(head) + "\n" + extra + "\n"
+        "The interviews go like this: I (the videographer) ask, they answer. MY QUESTIONS AND MY LINES NEVER GO INTO THE "
+        "STORY: the ones marked [QUESTION], my short lines (e.g. \"Perfect!\", \"Bravo!\", \"Thank you!\", \"Good!\"), my "
+        "instructions to them even when NOT marked (e.g. \"you have to tell me what day it is today\", \"say it to her in "
+        "the second person\", \"say it as if you were talking to her\"), the small talk before the interview starts, and "
+        "the jokes at the end. Use only the couple's answers.\n\n"
+        "What I want:\n"
+        "1. Find their story: what binds them, how they met, the important moments, what they feel for each other.\n"
+        "2. Build ONE STORY that they tell TOGETHER. I ask both of them the same things, so on every theme you have her "
+        "version and his. Weave them by theme: cut from one to the other OFTEN, in short pieces (ideally one to three "
+        "sentences), as if one continued the other's thought. When one of them tells part of an event and the other tells "
+        "the next part, alternate between them.\n"
+        "3. Look for ECHOES: a sentence of one that answers or mirrors a sentence of the other (e.g. she says what they are "
+        "learning, he says the same thing about her). Put them next to each other.\n"
+        "4. Order: open strong (the day, the emotion; if one of them mentions something difficult that happened before the "
+        "wedding, use it here and let the other answer it), then how they met, how they see each other, what binds them, "
+        "what they learned / the future, and at the end their messages to each other (the emotional ending, maybe with a "
+        "smile). Every theme with both voices where both talked about it.\n"
+        "5. Length: as long as the story needs. Do not shorten it by force and do not stretch it: keep everything that is "
+        "good and tells the story, leave out what adds nothing.\n"
+        "6. Use ONLY pieces that exist, whole, exactly as they are. You may take several pieces in a row (e.g. A12-A14). "
+        "Never use part of a piece.\n"
+        "7. Avoid: hesitations, repetitions, unfinished sentences, and anything that needs my question to make sense (e.g. "
+        "a bare \"On Instagram, the first time.\" or \"Full of emotion.\" as an answer).\n"
+        "8. A piece that starts with a linking word (\"And\", \"But\", \"So\", \"Și\", \"Dar\", \"Așa că\", \"Pentru că\") "
+        "must make sense after the piece you put BEFORE it in the story. If it only makes sense after the piece that came "
+        "before it in the interview, take that piece too (e.g. B23-B24) or choose another.\n"
+        "9. Do not repeat the same information in two voices back to back unless the second one adds something (e.g. both "
+        "saying the date: keep the stronger one).\n"
+        "10. Swearing is allowed (I remove it myself in the edit). Keep jokes WHOLE: if you use the setup of a joke, put its "
+        "punchline right after it; otherwise leave both out.\n\n"
+        "The automatic transcript misspells some words: understand them from the context.\n\n"
+        "Your answer: first 1-2 sentences with the story in short, then the list, exactly between the lines STORY_START and "
+        "STORY_END, one line per piece, in film order: the code (A12) or the codes in a row (A12-A14), then \" | \" and the "
+        "text of those pieces written correctly (misheard words fixed, without changing what they said). Use only codes "
+        "that exist. Example:\n"
+        "STORY_START\nB3 | The first time I saw her…\nA7-A8 | I never thought…\nSTORY_END\n"
+    )
     return intro + "\n".join(body) + "\n"
 
 
@@ -177,32 +130,50 @@ def parse_who(answer, n):
 _LINE = re.compile(r"^\W*([A-Z])\s*(\d+)(?:\s*[-–—]\s*([A-Z])?\s*(\d+))?\b")
 
 
-def parse(answer, files):
-    """Claude's answer -> ([(file index, first sentence, last sentence, corrected text or None)] in order (0-based,
-    inclusive), [bad lines]). The text after '|' is Claude's corrected wording (used for the markers)."""
+def parse_checked(answer, files):
+    """Claude's answer -> (pieces, errors, warnings). pieces = [(file index, first, last, corrected text)] (0-based,
+    inclusive) in film order. Only the lines between STORY_START and STORY_END count. ERRORS (no XML): no list, a code
+    that does not exist, a range across two interviews or backwards, a [QUESTION] code, a code used twice. A question
+    inside a range is cut out of it (warning)."""
     text = answer.replace("\r", "")
-    m = re.search(r"STORY_START(.*?)(STORY_END|$)", text, re.S)
-    block = m.group(1) if m else text
-    pieces, bad = [], []
-    for line in block.split("\n"):
-        s = line.strip().strip("`*")
+    m = re.search(r"STORY_START(.*?)STORY_END", text, re.S) or re.search(r"STORY_START(.*)$", text, re.S)
+    errors, warnings, pieces, used = [], [], [], {}
+    if not m:
+        return [], ["The answer has no STORY_START / STORY_END list."], []
+    for line in m.group(1).split("\n"):
+        s = line.strip().strip("`*").strip()
         if not s:
             continue
         mm = _LINE.match(s)
         if not mm:
-            if m:                                     # inside the block every line should be a piece
-                bad.append(s[:60])
+            warnings.append(f"Line ignored (no code): {s[:50]}")
             continue
         L, a, L2, b = mm.group(1), int(mm.group(2)), mm.group(3), mm.group(4)
+        code = f"{L}{a}" + (f"-{L2 or L}{b}" if b else "")
         fi = LETTERS.find(L)
         b = int(b) if b else a
-        if (L2 and L2 != L) or fi < 0 or fi >= len(files) or not (1 <= a <= b <= len(files[fi]["segs"])):
-            bad.append(s[:60])
+        if L2 and L2 != L:
+            errors.append(f"{code}: a range across two interviews.")
             continue
-        txt = s.split("|", 1)[1].strip().strip("`*").strip() if "|" in s else None
-        run, runs = [], []                              # a range never carries a question inside it
+        if fi < 0 or fi >= len(files) or not (1 <= a <= len(files[fi]["segs"])) or not (1 <= b <= len(files[fi]["segs"])):
+            errors.append(f"{code}: this code does not exist.")
+            continue
+        if b < a:
+            errors.append(f"{code}: the range goes backwards.")
+            continue
+        segs = files[fi]["segs"]
+        if is_question(segs[a - 1][2]) or is_question(segs[b - 1][2]):
+            errors.append(f"{code}: a [QUESTION] (the videographer) is used.")
+            continue
         for k in range(a - 1, b):
-            if is_question(files[fi]["segs"][k][2]):
+            if k in used.setdefault(fi, set()):
+                errors.append(f"{L}{k + 1} is used twice.")
+            used[fi].add(k)
+        txt = s.split("|", 1)[1].strip().strip("`*").strip() if "|" in s else None
+        run, runs = [], []
+        for k in range(a - 1, b):
+            if is_question(segs[k][2]):
+                warnings.append(f"{code}: the [QUESTION] {L}{k + 1} inside it was left out.")
                 if run:
                     runs.append(run)
                 run = []
@@ -210,42 +181,120 @@ def parse(answer, files):
                 run.append(k)
         if run:
             runs.append(run)
-        for r in runs:                                  # split around a question: Claude's text no longer fits
-            pieces.append((fi, r[0], r[-1], txt if len(runs) == 1 and len(r) == b - a + 1 else None))
-    return pieces, bad
+        for r in runs:
+            pieces.append((fi, r[0], r[-1], txt if len(runs) == 1 else None))
+    if not pieces and not errors:
+        errors.append("The list between STORY_START and STORY_END is empty.")
+    return pieces, errors, warnings
 
 
-def bounds(segs, dur):
-    """In / out of every sentence of one file: in = start - 0.12 s (never before the previous sentence's end), out =
-    end + 0.2 s but NEVER past the next sentence's in. Every piece of the story uses these, so two pieces of the same file
-    can never share a frame (owner: #10 ended at 82.80 s and #12 began at 82.64 s, 4 frames heard twice)."""
-    n = len(segs)
-    ins, outs = [0.0] * n, [0.0] * n
-    for k in range(n):
-        a = float(segs[k][0])
-        prev_end = float(segs[k - 1][1]) if k else 0.0
-        ins[k] = max(0.0, a - PAD_IN, min(prev_end, a))
-    for k in range(n):
-        b = float(segs[k][1])
-        nxt = ins[k + 1] if k + 1 < n else dur
-        outs[k] = max(ins[k] + 0.04, min(b + PAD_OUT, nxt, dur))
-    return ins, outs
+def parse(answer, files):
+    """Old interface: (pieces, bad lines)."""
+    pieces, errors, warnings = parse_checked(answer, files)
+    return pieces, errors + [w for w in warnings if w.startswith("Line ignored")]
 
 
-def ranges(pieces, files, durs):
-    """Pieces -> [(file index, t0, t1, text)] from the sentences' bounds (no overlap between pieces of one file)."""
-    cache, out = {}, []
+def cut_times(pieces, files, durs, fps=25.0):
+    """Owner's final spec, section 4: in = start of the first code - 0.12 s, never earlier than the end of the previous
+    code of the INTERVIEW + 0.02 s; out = end of the last code + 0.20 s, never later than the start of the next code of
+    the interview - 0.02 s; then, per media file, cuts sorted by in: when one's out passes the next one's in (even if
+    they are far apart in the story), both move to the middle. No audio frame is heard twice."""
+    cuts = []
     for p in pieces:
         fi, a, b = p[:3]
         fixed = p[3] if len(p) > 3 else None
-        segs = files[fi]["segs"]
-        if fi not in cache:
-            cache[fi] = bounds(segs, durs[fi])
-        ins, outs = cache[fi]
-        t0, t1 = ins[a], outs[b]
-        if t1 - t0 >= 0.2:
-            out.append((fi, t0, t1, fixed or " ".join(str(s[2]) for s in segs[a:b + 1])))
-    return out
+        segs, dur = files[fi]["segs"], durs[fi]
+        t0 = float(segs[a][0]) - PAD_IN
+        if a > 0:
+            t0 = max(t0, float(segs[a - 1][1]) + 0.02)
+        t1 = float(segs[b][1]) + PAD_OUT
+        if b + 1 < len(segs):
+            t1 = min(t1, float(segs[b + 1][0]) - 0.02)
+        t0 = max(0.0, min(t0, float(segs[a][0])))      # never after the first word (words that touch)
+        t1 = min(dur, t1)
+        cuts.append([fi, t0, t1, fixed or " ".join(str(x[2]) for x in segs[a:b + 1])])
+    for fi in {c[0] for c in cuts}:
+        mine = sorted((c for c in cuts if c[0] == fi), key=lambda c: c[1])
+        for x, y in zip(mine, mine[1:]):
+            if x[2] > y[1]:
+                mid = (x[2] + y[1]) / 2
+                x[2] = y[1] = mid
+    return [tuple(c) for c in cuts]
+
+
+def ranges(pieces, files, durs):
+    return cut_times(pieces, files, durs)
+
+
+LINKING = ("și ", "si ", "dar ", "așa că", "asa ca", "pentru că", "pentru ca", "and ", "but ", "so ")
+
+
+def check_cuts(cuts, pieces, files, durs, fps=25.0):
+    """Errors / warnings on the cuts themselves (owner's final spec, section 6)."""
+    errors, warnings = [], []
+    frames = {}
+    for n, (fi, t0, t1, _) in enumerate(cuts, 1):
+        f0, f1 = int(round(t0 * fps)), int(round(t1 * fps))
+        if f1 <= f0:
+            errors.append(f"Piece {n}: its length is 0.")
+        if t1 > durs[fi] + 1.0 / fps:
+            errors.append(f"Piece {n}: it ends after the end of {Path(files[fi]['path']).name}.")
+        frames.setdefault(fi, []).append((f0, f1, n))
+    for fi, lst in frames.items():
+        lst.sort()
+        for (a0, a1, n1), (b0, b1, n2) in zip(lst, lst[1:]):
+            if a1 > b0:
+                errors.append(f"Pieces {n1} and {n2} overlap ({a1 - b0} frames of the same file).")
+    for k, f in enumerate(files):
+        longs = [f"{LETTERS[k]}{i}" for i, sg in enumerate(f["segs"], 1) if sg[1] - sg[0] > 8.0]
+        if longs:
+            warnings.append(f"Transcript pieces longer than 8 s: {', '.join(longs[:8])}{' …' if len(longs) > 8 else ''}.")
+    for n, p in enumerate(pieces):
+        fi, a = p[0], p[1]
+        t = str(files[fi]["segs"][a][2]).strip().lower()
+        if t.startswith(LINKING) and a > 0:
+            prev = pieces[n - 1] if n else None
+            if not (prev and prev[0] == fi and prev[2] == a - 1):
+                warnings.append(f"Piece {n + 1} ({LETTERS[fi]}{a + 1}) starts with a linking word without "
+                                f"{LETTERS[fi]}{a} before it.")
+    run = 1
+    for n in range(1, len(pieces)):
+        run = run + 1 if pieces[n][0] == pieces[n - 1][0] else 1
+        if run == 4:
+            warnings.append(f"The same speaker more than 3 times in a row (from piece {n - 2}).")
+    return errors, warnings
+
+
+def check_xml(xml_path):
+    """Errors in the written XML: links (clip exists, trackindex, clipindex), pproTicks = in x ticks per frame, every
+    file complete the first time it appears (document order)."""
+    import xml.etree.ElementTree as ET
+    errors = []
+    seq = ET.parse(xml_path).getroot().find("sequence")
+    fps = float(seq.findtext("rate/timebase") or 25)
+    tpf = TICKS_PER_SEC // int(round(fps))
+    where, seen = {}, set()
+    for kind in ("video", "audio"):
+        sect = seq.find("media").find(kind)
+        for ti, t in enumerate(sect.findall("track") if sect is not None else [], 1):
+            for ci, c in enumerate([c for c in t if c.tag in ("clipitem", "generatoritem")], 1):
+                where[c.get("id")] = (kind, str(ti), str(ci))
+                f = c.find("file")
+                if f is not None and f.get("id"):
+                    if f.get("id") not in seen and not len(f):
+                        errors.append(f"{c.findtext('name')}: the file is not complete the first time it appears.")
+                    seen.add(f.get("id"))
+                if c.tag == "clipitem" and c.find("pproTicksIn") is not None:
+                    if int(c.findtext("pproTicksIn")) != int(c.findtext("in")) * tpf:
+                        errors.append(f"{c.findtext('name')}: pproTicksIn does not match in.")
+    for c in seq.iter("clipitem"):
+        for l in c.findall("link"):
+            ref = l.findtext("linkclipref")
+            if ref not in where:
+                errors.append(f"A link points to a clip that does not exist ({ref}).")
+            elif where[ref] != (l.findtext("mediatype"), l.findtext("trackindex"), l.findtext("clipindex")):
+                errors.append(f"A link with a wrong track / clip index ({ref}).")
+    return errors
 
 
 def export_xml(cuts, files, infos, out_path, name, labels=None):
