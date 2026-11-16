@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.9.3), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.10.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -619,6 +619,35 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   (owner said 5-9 s, capped at 8 because 8 s is the hard maximum), then the nearest word border (estimated times move
   to that moment). Forced borders: Segs.forced -> quality()["forced"] -> "Forced cuts (...)" line in the report, the
   "Forced cuts" column in the multi-wedding test.
+
+## v3.10.0 (who speaks MEASURED from the sound; chunked transcription; tested on his REAL interview audio)
+- speakers.py: analyse(chans) -> x (clearest distinct channel), regions [(a, b, label)], method, gap, sure.
+  Identical channels dropped (FX6 records lav + cam twice: ch0==ch2, ch1==ch3). Close mics = lavaliers (clarity within
+  6 dB, corr < 0.5, max 2, sorted by channel: S1 = lower channel); ref = a camera mic (clarity < best - 3).
+  VAD = Silero (faster_whisper.vad, bundled by --collect-all faster_whisper) on the lavalier, + speech the lavalier
+  missed found on the other mics; energy fallback when Silero is missing or finds < 25 % of the energy regions.
+  Per region: with ref median(lav - cam) on the louder half; one channel p90 level. Two-means; videographer = low group
+  only if the groups are >= 6 dB (ref) / 8 dB (one channel) apart; band max(1.5, 0.2*gap) and regions < 0.3 s = '?'.
+  Two lavaliers: '1' / '2' by lav1 - lav2 > 6 dB. MEASURED on his wedding (Florin & Miruna): FX6 bride +10..+19 dB,
+  videographer +1..+4 dB (gap 10.3, all 11 questions found); groom lav-only: groom -28..-41, videographer -44..-55
+  (gap 13.1). label_of(a, b, regions): majority, '?' when two definite speakers each > 25 %.
+- transcribe.transcribe: chunks(regions) (never across a definite speaker change, a gap > 2 s, or 24 s) -> each chunk
+  transcribed alone (_engine: same for MLX and faster-whisper, vad_filter=False, word times; bad = no_speech > 0.6 and
+  logprob < -1) -> sentences(words, x, names, lang, hard). Whole-file fallback when chunks give no words.
+  Sentences: hard borders at speaker changes; punctuation / capital rules split ONLY at a real pause (_pause_between,
+  audio decides), except after "?" (always). _split_long real_pause uses the audio. Border snapping: within +-0.3 s,
+  never past a word's middle, a piece grows at most 0.3 s. _fragments: <0.6 s 1-2 word leftovers join their piece; the
+  other speaker's first 1-2 words after a full stop move to the next piece ("…asta. Cum va" + "decurge…?").
+  Segs.spk / .sep; transcribe.VERSION = 8. TXT marks [QUESTION] / (?) (only when something was measured).
+- story.qflags(f): 'v' -> question; 'c'/'1'/'2' -> NOT a question even with "?" ("Ai scăpat?" by the bride); '?' or no
+  measure -> the old text rule. Used by prompt, parse_checked, qualitytest. Prompt adds [S1]/[S2] for two lavaliers.
+- quality(): border = pause_between(end, next start) (a real pause anywhere between the pieces), forced cuts excluded and
+  listed; + vid / unsure / sep lines. qualitytest columns "[QUESTION] from the sound", "Unsure who speaks".
+- tools/speakers_check.py (synthetic lav+cam, one channel, two lavaliers) runs in CI next to story_check.py.
+- Real-audio before / after (his TXT/SRT text replayed per chunk, word times estimated inside each SRT line, so the
+  remaining 10 % of borders off a pause are 0.1-0.3 s from one): bride borders in a pause 49 -> 90 %, groom 76 -> 88 %,
+  glued questions 1 -> 0, 0 codes > 8 s. Multi-wedding test v3.9.3 -> v3.10.0: nothing worse, cuts in a pause 51 -> 73 %.
+  NOT tested here: real Whisper on chunks (no model in the sandbox), MLX.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

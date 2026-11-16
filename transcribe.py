@@ -166,7 +166,7 @@ def _norm(t):
     return re.sub(r"[^\w]+", " ", str(t).lower()).strip()
 
 
-VERSION = 7            # transcripts made before (no "tv" or lower) use older pieces: Transcribe redoes them
+VERSION = 8            # transcripts made before (no "tv" or lower) use older pieces: Transcribe redoes them
 
 
 SIL_DB, SIL_MIN, SNAP = -38.0, 0.15, 0.6       # a real pause: under about -38 dB for 0.15 s, looked for within +-0.6 s
@@ -310,6 +310,15 @@ def in_pause(x, t, half=0.03):
     return bool(len(seg)) and float(seg.max()) < thr
 
 
+def pause_between(x, a, b):
+    """MEASURED: is there a real pause (at least 0.08 s under the pause threshold) between the end of one piece (a) and
+    the start of the next (b)? Then the cut can go there. None without sound."""
+    if x is None:
+        return None
+    lo, hi = min(a, b) - 0.05, max(a, b) + 0.05
+    return any(min(p1, hi) - max(p0, lo) >= 0.08 for p0, p1 in pauses(x, lo, hi))
+
+
 def _at(t):
     return f"{int(t // 60)}:{t % 60:04.1f}"
 
@@ -324,9 +333,12 @@ def quality(segs, x=None, letter=""):
     glued = [code(i) for i, s in enumerate(segs) if re.search(r"\?\s*[\w„\"]", str(s[2]).strip())]
     speech, n = [], 0
     if x is not None:
+        forced_k = set(getattr(segs, "forced", ()) or ())
         for i in range(len(segs) - 1):
+            if i in forced_k:
+                continue                              # forced cuts are counted on their own line
             t = (float(segs[i][1]) + float(segs[i + 1][0])) / 2
-            r = in_pause(x, t)
+            r = pause_between(x, float(segs[i][1]), float(segs[i + 1][0]))
             if r is None:
                 continue
             n += 1
@@ -335,8 +347,11 @@ def quality(segs, x=None, letter=""):
     pct = round(100.0 * (n - len(speech)) / n, 1) if n else None
     forced = [f"{code(k)}/{code(k + 1)} ({_at((float(segs[k][1]) + float(segs[k + 1][0])) / 2)})"
               for k in getattr(segs, "forced", ()) if k + 1 < len(segs)]
+    spk = list(getattr(segs, "spk", None) or [])
+    vid = [code(i) for i, lab in enumerate(spk) if lab == "v"]
+    unsure = [code(i) for i, lab in enumerate(spk) if lab == "?"]
     return dict(codes=len(segs), over8=over, under08=under, glued=glued, borders=n, in_speech=speech, pause_pct=pct,
-                forced=forced)
+                forced=forced, vid=vid, unsure=unsure, sep=dict(getattr(segs, "sep", None) or {}))
 
 
 def _lst(xs, n=40):
@@ -360,10 +375,20 @@ def quality_text(name, q, tr=lambda t: t):
     if q.get("pause_pct") is None:
         lines.append(tr("Borders in a real pause: not measured (no sound)"))
     else:
-        lines.append(tr("Borders between codes in a real pause (target 95 % or more): {} % of {}").format(
+        lines.append(tr("Borders between codes in a real pause (target 95 % or more, forced cuts not counted): {} % of {}").format(
             f"{q['pause_pct']:g}", q["borders"]))
         if q["in_speech"]:
             lines.append(tr("Borders that fall in speech: {}").format(_lst(q["in_speech"])))
+    sep = q.get("sep") or {}
+    if sep:
+        how = {"sure": tr("sure"), "medium": tr("medium"), "unsure": tr("unsure"), "none": tr("not measured")}
+        lines.append(tr("Who speaks, measured from the sound: {} (the two voices {} dB apart, {})").format(
+            how.get(sep.get("sure"), sep.get("sure")), sep.get("gap", 0),
+            tr("lavalier vs camera mic") if sep.get("ref") else tr("one channel: level")))
+        lines.append(tr("Your lines marked [QUESTION] from the sound: {}").format(len(q.get("vid", []))) +
+                     (f" ({_lst(q['vid'])})" if q.get("vid") else ""))
+        lines.append(tr("Pieces where it is not sure who speaks (the text rule decides): {}").format(
+            len(q.get("unsure", []))) + (f" ({_lst(q['unsure'])})" if q.get("unsure") else ""))
     if q.get("forced"):
         lines.append(tr("Forced cuts (no pause: cut at the quietest point between 5 and 8 s): {}").format(len(q["forced"])) +
                      f" ({_lst(q['forced'])})")
@@ -411,10 +436,9 @@ def _split_long(ws, audio=None, forced=None):
     cands = cands or list(range(1, len(ws)))
 
     def real_pause(k):
-        gap = ws[k][0] - ws[k - 1][1]
-        if gap >= SIL_MIN and len(ws[k]) <= 3:
-            return True
-        return audio is not None and bool(in_pause(audio, (ws[k - 1][1] + ws[k][0]) / 2))
+        if audio is not None:                          # the sound decides (word times are not exact)
+            return _pause_between(audio, ws[k - 1], ws[k])
+        return ws[k][0] - ws[k - 1][1] >= SIL_MIN and len(ws[k]) <= 3
     def nice(k):
         return ws[k - 1][2].strip().endswith((",", ";", ":", "—", "-")) or \
             ws[k][2].strip().lower().strip(",.").startswith(LINKS)
@@ -492,7 +516,7 @@ def _complete(ws):
     return _ends(t) and first.isupper() and not _is_filler(ws)     # "frumos." alone is the end of a sentence, not one
 
 
-def _join_short(parts):
+def _join_short(parts, hard=frozenset()):
     """Pieces under MIN_PIECE (and isolated fillers like "Da.", "Păi") are joined to the closer neighbour, unless they
     are a complete short line; the joined piece may not grow past MAX_PIECE."""
     out = [list(p) for p in parts]
@@ -507,6 +531,8 @@ def _join_short(parts):
                 j = k + side[1]
                 if side[0] < 1e8 and 0 <= j < len(out):
                     first, second = (out[j], p) if side[1] < 0 else (p, out[j])
+                    if id(second[0]) in hard:
+                        continue     # never across a change of speaker
                     if _ends(_text(first)) or _text(out[j]).rstrip().endswith("?") or _text(p).rstrip().endswith("?"):
                         continue     # never across a finished sentence, never into / out of a question (owner: "Iubitor,")
                     merged = out[j] + p if side[1] < 0 else p + out[j]
@@ -522,7 +548,13 @@ def _join_short(parts):
     return out
 
 
-def sentences(words, audio=None, names=(), lang="ro"):
+def _pause_between(x, w1, w2):
+    """Is there a real pause between two words (searched between their middles: word times are not exact)?"""
+    lo, hi = (w1[0] + w1[1]) / 2, (w2[0] + w2[1]) / 2
+    return snap(x, (w1[1] + w2[0]) / 2, lo, hi) is not None
+
+
+def sentences(words, audio=None, names=(), lang="ro", hard=frozenset()):
     """Words [(start, end, text)] -> pieces (owner's final spec): cut after every word ending in . ? ! and at every
     pause > 0.6 s; a piece > 8 s is cut again at its longest pause (comma / "și" / "dar"...) until <= 8 s; pieces under
     0.8 s are joined to a neighbour unless they are a complete short line; fillers ("Da.", "Păi") are joined too. Every
@@ -532,8 +564,11 @@ def sentences(words, audio=None, names=(), lang="ro"):
     for w in words:
         if cur:
             last = cur[-1][2].strip()
-            if _ends(last) or w[0] - cur[-1][1] > PAUSE or _cap_start(last, w[2], voc):
-                groups.append(cur)
+            want = _ends(last) or _cap_start(last, w[2], voc)
+            asked = last.rstrip('"\'»”)').endswith("?")      # a question never stays glued to its answer
+            if id(w) in hard or asked or w[0] - cur[-1][1] > PAUSE or \
+                    (want and (audio is None or _pause_between(audio, cur[-1], w))):
+                groups.append(cur)        # punctuation only chooses among REAL pauses (v3.10.0)
                 cur = []
         cur.append(w)
     if cur:
@@ -541,18 +576,21 @@ def sentences(words, audio=None, names=(), lang="ro"):
     parts, forced = [], set()
     for g in groups:
         parts += _split_long(g, audio, forced)
-    joined = [p for p in _join_short(parts) if _text(p)]
+    joined = [p for p in _join_short(parts, hard) if _text(p)]
     times = [[float(p[0][0]), float(p[-1][1])] for p in joined]
     fk = [k for k in range(len(joined) - 1) if id(joined[k + 1][0]) in forced]
     for k in range(len(joined) - 1):                 # an estimated cut point goes to the nearest real pause (point 4)
-        est = len(joined[k][-1]) > 3 or len(joined[k + 1][0]) > 3
-        if k not in fk and est and audio is not None and joined[k + 1][0][0] - joined[k][-1][1] < 0.05:
-            lo = times[k][0] + 0.2
-            hi = times[k + 1][1] - 0.2
+        if k not in fk and audio is not None and not in_pause(audio, (times[k][1] + times[k + 1][0]) / 2):
+            # the pause is looked for around the border, never past the middle of the last / first word
+            lo = max(times[k][0] + 0.2, (joined[k][-1][0] + joined[k][-1][1]) / 2, times[k][1] - 0.3)
+            hi = min(times[k + 1][1] - 0.2, (joined[k + 1][0][0] + joined[k + 1][0][1]) / 2, times[k + 1][0] + 0.3)
             sp = snap(audio, times[k][1], lo, hi)
             if sp:
-                times[k][1] = min(sp[1], sp[0] + 0.05)
-                times[k + 1][0] = max(times[k][1], sp[1] - 0.05)
+                e = min(sp[1], sp[0] + 0.05)
+                b = max(e, sp[1] - 0.05)
+                # a piece may grow by at most 0.3 s past its words (never by seconds into noise)
+                if e <= times[k][1] + 0.3 and b >= times[k + 1][0] - 0.3:
+                    times[k][1], times[k + 1][0] = e, b
     out = Segs()
     for part, (a, b) in zip(joined, times):
         out.append((a, max(b, a + 0.1), _text(part)))
@@ -572,80 +610,156 @@ def _dedupe(segs):
     return out
 
 
+CHUNK_MAX = 24.0       # Whisper hears at most this much at once: chunks end at real pauses and at every change of speaker
+
+
+def chunks(regions):
+    """The speech regions (VAD, with who speaks) -> chunks to transcribe one by one: [(start, end, label, hard)].
+    A chunk never crosses a change of speaker (videographer / couple / interviewee 1 / 2) nor a pause over 2 s, and
+    stays under CHUNK_MAX. hard = it starts with another speaker than the chunk before (a border no rule may undo)."""
+    out = []
+    for a, b, lab in regions:
+        if out:
+            ca, cb, clab, hard = out[-1]
+            change = lab != "?" and clab != "?" and lab != clab
+            if not change and a - cb <= 2.0 and b - ca <= CHUNK_MAX:
+                out[-1] = (ca, b, clab if clab != "?" else lab, hard)
+                continue
+            out.append((a, b, lab, change))
+        else:
+            out.append((a, b, lab, False))
+    return out
+
+
+def _fragments(segs, regions, label_of):
+    """A word or two left alone on a border between speakers (under 0.6 s, no sentence of its own, e.g. "Ce" + "mai prost
+    e?") joins the piece it belongs to: forward when it does not end a sentence and the next piece is close, backward
+    when it starts with a small letter. Never past 8 s, never into a piece of a DEFINITE other speaker than its own."""
+    out = [list(sg) for sg in segs]
+    forced = {round(float(segs[k][1]), 3) for k in getattr(segs, "forced", ()) if k < len(segs)}
+    k = 0
+    while k < len(out):
+        a, b, t = out[k]
+        words = t.split()
+        lab = label_of(a, b, regions) if b - a >= 0.5 else "?"     # half a second cannot be measured
+        small = b - a < 0.6 and len(words) <= 2 and not (_ends(t) and t[:1].isupper() and len(_core(t)) > 3)
+        merged = False
+        if small:
+            nxt = out[k + 1] if k + 1 < len(out) else None
+            prv = out[k - 1] if k else None
+            if nxt and not _ends(t) and nxt[0] - b < 0.5 and nxt[1] - a <= MAX_PIECE and \
+                    (lab == "?" or label_of(*nxt[:2], regions) in (lab, "?")):
+                out[k:k + 2] = [[a, nxt[1], t + " " + nxt[2]]]
+                merged = True
+            elif prv and t[:1].islower() and a - prv[1] < 0.5 and b - prv[0] <= MAX_PIECE and \
+                    not str(prv[2]).rstrip().endswith("?") and (lab == "?" or label_of(*prv[:2], regions) in (lab, "?")):
+                out[k - 1:k + 1] = [[prv[0], b, prv[2] + " " + t]]
+                k -= 1
+                merged = True
+        if not merged:
+            k += 1
+    # the other speaker started without any pause: his first word or two stayed at the end of this piece
+    # ("…facem asta. Cum va" + "decurge ziua de astăzi…?"): they move to the next piece
+    for k in range(len(out) - 1):
+        a, b, t = out[k]
+        na, nb, nt = out[k + 1]
+        m = re.search(r"[.!?…][\"'»”)]?\s+(\S+(?:\s+\S+)?)\s*$", t)
+        if not m or not m.group(1)[:1].isupper() or _ends(m.group(1)) or na - b > 1.2:
+            continue
+        mine, theirs = label_of(a, b, regions), label_of(na, nb, regions)
+        if not ({mine, theirs} == {"c", "v"} or str(nt).rstrip().endswith("?")):
+            continue
+        cut = a + (b - a) * len(t[:m.start(1)]) / max(1, len(t))
+        out[k] = [a, cut, t[:m.start(1)].rstrip()]
+        out[k + 1] = [cut, nb, m.group(1) + " " + nt]
+    res = Segs((a, b, t) for a, b, t in out)
+    res.forced = [i for i, sg in enumerate(res) if round(float(sg[1]), 3) in forced and i + 1 < len(res)]
+    return res
+
+
+def _engine(model, opts):
+    """One function for both engines: (sound) -> segments [dict(start, end, text, words=[(s, e, w)], bad)]."""
+    if isinstance(model, dict) and model.get("engine") == "mlx":
+        import mlx_whisper
+
+        def run(y):
+            r = mlx_whisper.transcribe(y, path_or_hf_repo=model["path"], verbose=None, **opts)
+            return [dict(start=sg["start"], end=sg["end"], text=str(sg.get("text", "")),
+                         words=[(w["start"], w["end"], w["word"]) for w in sg.get("words", []) if w.get("end", 0) > w.get("start", 0)],
+                         bad=sg.get("no_speech_prob", 0) > 0.6 and sg.get("avg_logprob", 0) < -1.0)
+                    for sg in r.get("segments", [])]
+        return run
+
+    def run(y):
+        segs, _info = model.transcribe(y, vad_filter=False, beam_size=5, **opts)
+        return [dict(start=sg.start, end=sg.end, text=sg.text,
+                     words=[(w.start, w.end, w.word) for w in (sg.words or []) if w.end > w.start],
+                     bad=getattr(sg, "no_speech_prob", 0) > 0.6 and getattr(sg, "avg_logprob", 0) < -1.0)
+                for sg in segs]
+    return run
+
+
 def transcribe(path, model, lang="ro", progress=None, cancel=None, names=(), keep=None):
-    """[(start s, end s, text)] of one file: one entry per SENTENCE, times from its first and last word. names = the
-    names chosen in the program (always proper nouns); keep = a dict that receives the sound (for the quality report)."""
-    x = read_audio(path)
+    """[(start s, end s, text)] of one file: one entry per SENTENCE, times from its first and last word (v3.10.0):
+    1. who speaks when, measured from the sound (speakers.analyse: VAD regions + lavalier / camera mic levels);
+    2. every chunk between real pauses, with one speaker, is transcribed on its own (always with word times);
+    3. the words become sentences, cut only at real pauses (punctuation only chooses among them), never across a
+       change of speaker. The result carries .spk (who speaks every sentence), .forced and .sep (how sure)."""
+    import speakers
+    chans = _channels(path)
+    an = speakers.analyse(chans)
+    x = an["x"]
     if keep is not None:
         keep[path] = x
     names = list(names) + couple_names(path)
     dur = len(x) / SR
     opts = dict(language=LANGS.get(lang, lang), condition_on_previous_text=False, word_timestamps=True,
                 initial_prompt=hint(path, lang))
+    run = _engine(model, opts)
     if isinstance(model, dict) and model.get("engine") == "mlx":
         try:
-            return _transcribe_mlx(x, model, opts, path, progress, names, lang)
-        except InterruptedError:
-            raise
+            run(np.zeros(SR, dtype=np.float32))          # the graphics chip engine answers at all?
         except Exception:
             logging.exception("mlx whisper failed: faster-whisper from now on")
             folder = Path(model["base"]) / "ai_model" / "whisper"
             (folder / "mlx_failed").write_text("mlx failed, see app.log")
-            model = _fw_model(folder, model["quality"])
-    segs, info = model.transcribe(x, vad_filter=True, beam_size=5, hallucination_silence_threshold=2.0, **opts)
-    kept = []
-    for s in segs:                                   # a generator: the work happens while reading it
+            run = _engine(_fw_model(folder, model["quality"]), opts)
+    ch = chunks(an["regions"])
+    words, hard = [], set()
+    for n, (a, b, lab, is_hard) in enumerate(ch):
         if cancel and cancel():
             raise InterruptedError("Cancelled")
-        if s.text.strip():
-            kept.append(s)
+        prev_end = ch[n - 1][1] if n else 0.0
+        next_start = ch[n + 1][0] if n + 1 < len(ch) else dur
+        lo = max(0.0, a - min(0.2, (a - prev_end) / 2))
+        hi = min(dur, b + min(0.2, (next_start - b) / 2))
+        y = np.ascontiguousarray(x[int(lo * SR):int(hi * SR)], dtype=np.float32)
+        if len(y) < SR // 5:
+            continue
+        try:
+            segs = run(y)
+        except Exception:
+            logging.exception("chunk %.1f-%.1f failed", a, b)
+            continue
+        got = []
+        for sg in _dedupe([sg for sg in segs if str(sg["text"]).strip() and not sg["bad"]]):
+            ws = [(lo + w0, lo + w1, t) for w0, w1, t in sg["words"]]
+            got += ws or estimate_words(lo + sg["start"], lo + min(sg["end"], hi - lo), sg["text"])
+        if got and is_hard:
+            hard.add(id(got[0]))
+        words += got
         if progress:
-            progress(f"{Path(path).name}: {int(s.end // 60)}:{int(s.end % 60):02d} of {int(dur // 60)}:{int(dur % 60):02d}",
-                     min(1.0, s.end / max(1.0, dur)))
-    words = []
-    for s in _dedupe([dict(text=s.text, seg=s) for s in kept]):
-        ws = [w for w in (s["seg"].words or []) if w.end > w.start]
-        words += [(w.start, w.end, w.word) for w in ws] or \
-            _again(x, s["seg"].start, s["seg"].end, s["seg"].text, lambda y: [
-                (w.start, w.end, w.word) for sg in model.transcribe(y, beam_size=5, **opts)[0] for w in (sg.words or [])
-                if w.end > w.start])
-    return sentences(words, x, names, lang)
-
-
-def _again(x, a, b, text, run):
-    """Point 5: a segment that came without word times is transcribed again alone (with word times); when that does
-    not give words either, the words get estimated times (moved to real pauses later)."""
-    pad = 0.3
-    lo = max(0.0, a - pad)
-    try:
-        ws = run(x[int(lo * SR):int((b + pad) * SR)])
-        ws = [(lo + w0, lo + w1, t) for w0, w1, t in ws if lo + w1 > a - 0.1 and lo + w0 < b + 0.1]
-        if ws and len(_norm("".join(w[2] for w in ws))) >= 0.6 * len(_norm(text)):
-            return ws
-    except Exception:
-        logging.exception("second pass for word times failed")
-    return estimate_words(a, b, text)
-
-
-def _transcribe_mlx(x, model, opts, path, progress, names=(), lang="ro"):
-    import mlx_whisper
-    if progress:
-        progress(f"{Path(path).name}: transcribing on the graphics chip…", 0.3)
-    r = mlx_whisper.transcribe(x, path_or_hf_repo=model["path"], verbose=None, hallucination_silence_threshold=2.0,
-                               **opts)
-    import mlx_whisper as mw
-
-    def again(y):
-        rr = mw.transcribe(y, path_or_hf_repo=model["path"], verbose=None, **opts)
-        return [(w["start"], w["end"], w["word"]) for sg in rr.get("segments", []) for w in sg.get("words", [])
-                if w.get("end", 0) > w.get("start", 0)]
-    words = []
-    for s in _dedupe([seg for seg in r.get("segments", []) if str(seg.get("text", "")).strip()]):
-        ws = [w for w in s.get("words", []) if w.get("end", 0) > w.get("start", 0)]
-        words += [(w["start"], w["end"], w["word"]) for w in ws] or _again(x, s["start"], s["end"], s["text"], again)
-    if progress:
-        progress(f"{Path(path).name}: done", 1.0)
-    return sentences(words, x, names, lang)
+            progress(f"{Path(path).name}: {int(b // 60)}:{int(b % 60):02d} of {int(dur // 60)}:{int(dur % 60):02d}",
+                     min(1.0, b / max(1.0, dur)))
+    if not words and dur > 1.0:                        # nothing came out of the chunks: the whole file at once
+        logging.warning("no words from the chunks of %s: whole file", path)
+        for sg in _dedupe([sg for sg in run(np.ascontiguousarray(x, dtype=np.float32))
+                           if str(sg["text"]).strip() and not sg["bad"]]):
+            words += sg["words"] or estimate_words(sg["start"], sg["end"], sg["text"])
+    out = _fragments(sentences(words, x, names, lang, hard), an["regions"], speakers.label_of)
+    out.spk = [speakers.label_of(sa, sb, an["regions"]) for sa, sb, _t in out]
+    out.sep = dict(method=an["method"], sure=an["sure"], gap=an["gap"], ref=an["ref"], two=an["two"])
+    return out
 
 
 def _ts(t, comma=True):
@@ -664,7 +778,12 @@ def write_files(path, segs, q=None, tr=lambda t: t):
         p.with_name(p.stem + "_raport.txt").write_text(quality_text(p.name, q, tr), encoding="utf-8")
     txt = p.with_suffix(".txt") if p.suffix.lower() != ".txt" else p.with_name(p.name + ".transcript.txt")
     srt = p.with_suffix(".srt")
-    txt.write_text("\n".join(f"[{_ts(a, False)[:10]}] {t}" for a, b, t in segs), encoding="utf-8")   # [00:00:05.2]
+    spk = list(getattr(segs, "spk", None) or [])
+    if len(spk) != len(segs):
+        spk = [""] * len(segs)
+    tag = {"v": "[QUESTION] ", "?": "(?) "} if any(lab in ("c", "v", "1", "2") for lab in spk) else {}
+    txt.write_text("\n".join(f"[{_ts(a, False)[:10]}] {tag.get(lab, '')}{t}" for (a, b, t), lab in zip(segs, spk)),
+                   encoding="utf-8")   # [00:00:05.2], the videographer's lines marked
     srt.write_text("\n".join(f"{k}\n{_ts(a)} --> {_ts(b)}\n{t}\n" for k, (a, b, t) in enumerate(segs, 1)), encoding="utf-8")
     return txt, srt
 

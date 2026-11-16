@@ -38,6 +38,17 @@ def is_question(text):
     return re.sub(r"[^\w\s]", "", t.lower()).strip() in INTERVIEWER
 
 
+def qflags(f):
+    """[True when the piece is the videographer's] for every piece of an interview (v3.10.0): measured from the sound
+    when the transcript has it (f["spk"]: 'v' = the videographer, 'c' / '1' / '2' = the couple); only where it is not
+    sure who speaks ('?') or there is no measurement does the text rule decide ('?' at the end, his short lines)."""
+    segs = f["segs"]
+    spk = f.get("spk") or []
+    if len(spk) != len(segs):
+        spk = [None] * len(segs)
+    return [lab == "v" or (lab not in ("c", "1", "2") and is_question(sg[2])) for sg, lab in zip(segs, spk)]
+
+
 def _mmss(t):
     return f"{int(t // 60)}:{int(t % 60):02d}"
 
@@ -58,9 +69,16 @@ def prompt(files, lang="ro"):
         nm = (f.get("name") or "").strip()
         head.append(f"- Interview {L}: {who}{', ' + nm if nm else ''} ({Path(f['path']).name})")
         body.append(f"\n=== INTERVIEW {L} ===")
+        qs = qflags(f)
+        spk = f.get("spk") or []
+        two = len(spk) == len(f["segs"]) and any(lab in ("1", "2") for lab in spk)
+        if two:
+            body.append(f"(Interview {L} has two people, each with a lavalier: [S1] = the person on the first "
+                        "lavalier, [S2] = on the second, measured from the sound; find out from what they say who is who.)")
         for i, (a, b, t) in enumerate(f["segs"], 1):
-            q = " [QUESTION]" if is_question(t) else ""
-            body.append(f"{L}{i} ({b - a:.1f} s){q} {t}")
+            q = " [QUESTION]" if qs[i - 1] else ""
+            sp = f" [S{spk[i - 1]}]" if two and spk[i - 1] in ("1", "2") and not qs[i - 1] else ""
+            body.append(f"{L}{i} ({b - a:.1f} s){q}{sp} {t}")
     extra = ""
     if unknown:
         extra = ((f"The couple: {names[0]} and {names[1]}.\n" if names else "") +
@@ -161,8 +179,8 @@ def parse_checked(answer, files):
         if b < a:
             errors.append(f"{code}: the range goes backwards.")
             continue
-        segs = files[fi]["segs"]
-        if is_question(segs[a - 1][2]) or is_question(segs[b - 1][2]):
+        qs = qflags(files[fi])
+        if qs[a - 1] or qs[b - 1]:
             errors.append(f"{code}: a [QUESTION] (the videographer) is used.")
             continue
         for k in range(a - 1, b):
@@ -172,7 +190,7 @@ def parse_checked(answer, files):
         txt = s.split("|", 1)[1].strip().strip("`*").strip() if "|" in s else None
         run, runs = [], []
         for k in range(a - 1, b):
-            if is_question(segs[k][2]):
+            if qs[k]:
                 warnings.append(f"{code}: the [QUESTION] {L}{k + 1} inside it was left out.")
                 if run:
                     runs.append(run)

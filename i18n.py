@@ -309,6 +309,17 @@ TEMPLATES.update({
 EXACT["Forced cuts"] = "Tăieri forțate"
 TEMPLATES["Forced cuts (no pause: cut at the quietest point between 5 and 8 s): {}"] = "Tăieri forțate (nicio pauză: tăiat în punctul cel mai liniștit între 5 și 8 s): {}"
 
+EXACT.update({"QUESTION": "ÎNTREBARE", "sure": "sigur", "medium": "mediu", "unsure": "nesigur", "not measured": "nemăsurat",
+    "lavalier vs camera mic": "lavalieră față de microfonul camerei", "one channel: level": "un singur canal: nivelul",
+    "[QUESTION] from the sound": "[ÎNTREBARE] din sunet", "Unsure who speaks": "Vorbitor nesigur"})
+TEMPLATES.update({
+    "Who speaks, measured from the sound: {} (the two voices {} dB apart, {})": "Cine vorbește, măsurat din sunet: {} (cele două voci la {} dB distanță, {})",
+    "Your lines marked [QUESTION] from the sound: {}": "Replicile tale marcate [QUESTION] din sunet: {}",
+    "Pieces where it is not sure who speaks (the text rule decides): {}": "Bucăți la care nu e sigur cine vorbește (decide regula de text): {}",
+})
+
+TEMPLATES["Borders between codes in a real pause (target 95 % or more, forced cuts not counted): {} % of {}"] = "Granițe între coduri în pauză reală (țintă cel puțin 95 %, fără tăierile forțate): {} % din {}"
+
 _PATS = []
 
 

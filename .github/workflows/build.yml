@@ -36,7 +36,9 @@ jobs:
           echo "MLX_FLAGS=--collect-all mlx --collect-all mlx_whisper --collect-all tiktoken --hidden-import tiktoken_ext.openai_public --collect-all llvmlite --collect-submodules numba" >> "$GITHUB_ENV"
       - name: Story XML structure test (stops the build if it differs from the reference)
         env: { PYTHONIOENCODING: utf-8 }
-        run: python tools/story_check.py
+        run: |
+          python tools/story_check.py
+          python tools/speakers_check.py
       - run: python make_icons.py
       - run: ${{ env.PYI }} $MLX_FLAGS --exclude-module torch --icon icon.icns --add-data "icon.png:." --osx-bundle-identifier com.moneymakingmachine.app app.py
       - name: Check bundled FFmpeg and ad-hoc sign
@@ -61,7 +63,9 @@ jobs:
       - run: pip install -r requirements.txt pyinstaller pillow
       - name: Story XML structure test (stops the build if it differs from the reference)
         env: { PYTHONIOENCODING: utf-8 }
-        run: python tools/story_check.py
+        run: |
+          python tools/story_check.py
+          python tools/speakers_check.py
       - run: python make_icons.py
       - run: ${{ env.PYI }} --icon icon.ico --add-data "icon.png;." app.py
       - uses: actions/upload-artifact@v4

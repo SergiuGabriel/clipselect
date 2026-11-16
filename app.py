@@ -49,7 +49,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.9.3"
+APP, VER = "MoneyMakingMachine", "v3.10.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -6344,7 +6344,13 @@ class TranscribePage(QWidget):
         if not f:
             self.text.setPlainText("")
         elif f.get("segs") is not None:
-            self.text.setPlainText("\n".join(f"[{int(a // 60)}:{a % 60:04.1f}] {t}" for a, b, t in f["segs"]) or i18n.T("No speech found."))
+            qs = story.qflags(f)
+            spk = f.get("spk") or []
+            measured = any(lab in ("c", "v", "1", "2") for lab in spk)
+            mark = lambda i: ("[" + i18n.T("QUESTION") + "] " if qs[i] else "") + \
+                ("(?) " if len(spk) == len(qs) and spk[i] == "?" and measured else "")
+            self.text.setPlainText("\n".join(f"[{int(a // 60)}:{a % 60:04.1f}] {mark(i)}{t}"
+                                              for i, (a, b, t) in enumerate(f["segs"])) or i18n.T("No speech found."))
         elif f.get("error"):
             self.text.setPlainText(i18n.T("Error: {}").format(i18n.T(f["error"])))
         else:
@@ -6487,6 +6493,7 @@ class TranscribePage(QWidget):
         f = next((x for x in self._files() if x["path"] == path), None)
         if f is not None:
             f["segs"] = [list(s) for s in segs] if segs is not None else None
+            f["spk"] = list(getattr(segs, "spk", None) or []) if segs is not None else []
             f["error"] = err or None
             if segs is not None:
                 f["tv"] = transcribe.VERSION

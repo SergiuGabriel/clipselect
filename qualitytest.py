@@ -32,6 +32,8 @@ METRICS = {
     "under08": ("Under 0.8 s", False),
     "glued": ("'?' inside", False),
     "forced": ("Forced cuts", False),
+    "vid": ("[QUESTION] from the sound", None),
+    "unsure": ("Unsure who speaks", False),
     "border_pct": ("Borders in a pause %", True),
     "cut_pct": ("Cuts in a pause %", True),
     "overlaps": ("Overlaps", False),
@@ -88,15 +90,16 @@ def run_project(name, files, src, model, lang, progress=None, stop=None, tr=lamb
         audio[k] = x
         q = transcribe.quality(segs, x, story.LETTERS[k])
         qs.append(q)
-        segs_all.append(dict(path=path, segs=[list(s) for s in segs]))
+        segs_all.append(dict(path=path, segs=[list(s) for s in segs], spk=list(getattr(segs, "spk", None) or [])))
         lines.append(transcribe.quality_text(Path(path).name, q, tr).rstrip())
     m = dict(codes=sum(q["codes"] for q in qs), over8=sum(len(q["over8"]) for q in qs),
              under08=sum(len(q["under08"]) for q in qs), glued=sum(len(q["glued"]) for q in qs),
-             forced=sum(len(q.get("forced", [])) for q in qs))
+             forced=sum(len(q.get("forced", [])) for q in qs), vid=sum(len(q.get("vid", [])) for q in qs),
+             unsure=sum(len(q.get("unsure", [])) for q in qs))
     nb = sum(q["borders"] for q in qs)
     m["border_pct"] = _pct(nb - sum(len(q["in_speech"]) for q in qs), nb)
     # a test story: every code that is not a question, alternating the interviews
-    queues = [[(k, i, i) for i, sg in enumerate(f["segs"]) if not story.is_question(sg[2])] for k, f in enumerate(segs_all)]
+    queues = [[(k, i, i) for i, q in enumerate(story.qflags(f)) if not q] for k, f in enumerate(segs_all)]
     pieces = []
     while any(queues):
         for qu in queues:

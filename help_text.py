@@ -507,9 +507,20 @@ fiecărui cuvânt, porțiunea e transcrisă încă o dată singură; dacă nici 
 mutată în cea mai apropiată pauză reală din sunet (±0,6 s). În listă, un interviu cu bucăți peste 8 s are ⚠. În .txt timpii au
 zecimi ([00:00:05.2]). Dacă Whisper
 intră în buclă și repetă aceeași frază, repetările sunt scoase.</li>
+<li><b>Cine vorbește, măsurat din sunet</b>: înainte de transcriere, aplicația găsește vorbirea și pauzele reale (detectorul
+Silero, pe acest calculator) și măsoară cine vorbește. Tu ești departe de lavalieră: dacă fișierul are și microfonul camerei (FX6),
+la tine lavaliera e aproape la fel de tare ca microfonul camerei, iar la miri e cu 10–19 dB mai tare; dacă are un singur canal, vocea
+ta e cu 10–15 dB mai slabă. Replicile tale (întrebări, „Bravo”, „Spune-i la persoana a doua”) sunt marcate [ÎNTREBARE] din
+sunet, chiar fără „?”, iar o întrebare spusă de miri („Ai scăpat?”) rămâne a lor. Unde diferența nu e clară, rândul are (?) și decide
+regula veche de text. Apoi fiecare bucată dintre pauze, cu un singur vorbitor, e transcrisă separat, deci întrebarea ta nu se mai lipește
+de răspuns. Frazele se taie doar în pauze reale (punctuația doar alege dintre ele); după „?” se taie mereu. La interviul cu amândoi
+odată, cu câte o lavalieră pe canale diferite, fiecare bucată primește [S1] sau [S2], iar Claude află din ce spun cine e cine; cu o
+singură lavalieră pentru amândoi, vocile lor nu se pot despărți din sunet (decide Claude din text).</li>
 <li><b>Calitate</b> (sub text) și <b>Raport de calitate</b>: după fiecare transcriere, aplicația se verifică singură, măsurând din
 sunet: câte coduri trec de 8 s (ținta e 0), câte sunt sub 0,8 s, câte au un „?” la mijloc (întrebare lipită de răspuns) și câte
-granițe între coduri cad într-o pauză reală (ținta: cel puțin 95 %), cu lista celor care cad în vorbire. Raportul se salvează lângă
+granițe între coduri au o pauză reală între ele (ținta: cel puțin 95 %; tăierile forțate sunt numărate separat), cu lista celor
+care cad în vorbire, plus cât de sigur se desparte vocea ta de a mirilor, câte replici de-ale tale au fost marcate [ÎNTREBARE] din
+sunet și câte bucăți sunt nesigure. Raportul se salvează lângă
 fișier (<i>nume</i>_raport.txt). Verde = toate țintele atinse, roșu = ceva de verificat. La poveste se măsoară la fel tăieturile in /
 out, iar raportul se salvează lângă XML.</li>
 <li><b>Test pe mai multe nunți…</b>: alegi un folder (de exemplu <i>teste</i>) cu câte un subfolder pentru fiecare nuntă (interviurile
@@ -1119,9 +1130,20 @@ transcribed again on its own; if that fails too, the times are estimated from th
 pause in the sound (±0.6 s). In the list, an interview with pieces over 8 s has ⚠. In the .txt the times have tenths
 ([00:00:05.2]). When Whisper
 loops and repeats one sentence, the repeats are removed.</li>
+<li><b>Who speaks, measured from the sound</b>: before transcribing, the app finds the speech and the real pauses (the Silero
+detector, on this computer) and measures who speaks. You are far from the lavalier: when the file also has the camera microphone
+(FX6), for you the lavalier is about as loud as the camera mic, for the couple 10–19 dB louder; with one channel only, your voice is
+10–15 dB weaker. Your lines (questions, "Bravo", "Say it in the second person") are marked [QUESTION] from the sound, even without a
+"?", and a question said by the couple ("Did you make it?") stays theirs. Where the difference is not clear the line has (?) and the old
+text rule decides. Then every stretch between pauses, with one speaker, is transcribed on its own, so your question no longer sticks to
+the answer. Sentences are cut only at real pauses (punctuation only chooses among them); after a "?" always. In the interview with both
+at once, with a lavalier each on different channels, every piece gets [S1] or [S2] and Claude finds out from what they say who is who;
+with one lavalier for both, their voices cannot be told apart from the sound (Claude decides from the text).</li>
 <li><b>Quality</b> (under the text) and <b>Quality report</b>: after every transcription the app checks itself, measuring from the
 sound: how many codes pass 8 s (target 0), how many are under 0.8 s, how many have a "?" in the middle (a question glued to an
-answer) and how many borders between codes fall in a real pause (target 95 % or more), with the list of those that fall in speech.
+answer) and how many borders between codes have a real pause between them (target 95 % or more; forced cuts are counted on their own), with the
+list of those that fall in speech, plus how surely your voice is told apart from the couple's, how many of your lines were marked
+[QUESTION] from the sound and how many pieces are unsure.
 The report is saved next to the file (<i>name</i>_raport.txt). Green = every target met, red = something to check. For the story the
 cut in / out points are measured the same way and the report is saved next to the XML.</li>
 <li><b>Test on several weddings…</b>: choose a folder (e.g. <i>teste</i>) with one sub-folder per wedding (the interviews + the source
