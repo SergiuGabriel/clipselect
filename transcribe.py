@@ -6,6 +6,7 @@ almost as good). Nothing is uploaded.
 Results, next to the file: <name>.txt (text with times), <name>.srt (subtitles); and on request an XML for Premiere /
 DaVinci: the clip with a marker on every sentence, the sentence in the marker.
 """
+import re
 import subprocess
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -29,19 +30,74 @@ def available():
 
 
 def load_model(base, quality="fast", progress=None):
+    """'best' runs at full precision (float32: slower, the most accurate words); 'fast' uses int8."""
     from faster_whisper import WhisperModel
     folder = Path(base) / "ai_model" / "whisper"
     folder.mkdir(parents=True, exist_ok=True)
     if progress:
         progress("Loading the speech model (the first time it is downloaded once, about 1.5-3 GB)…", 0.0)
+    ct = "float32" if quality == "best" else "int8"
     try:
-        return WhisperModel(MODELS.get(quality, MODELS["fast"]), device="auto", compute_type="int8", download_root=str(folder))
+        return WhisperModel(MODELS.get(quality, MODELS["fast"]), device="auto", compute_type=ct, download_root=str(folder))
     except Exception:
-        return WhisperModel(MODELS.get(quality, MODELS["fast"]), device="cpu", compute_type="int8", download_root=str(folder))
+        return WhisperModel(MODELS.get(quality, MODELS["fast"]), device="cpu", compute_type=ct, download_root=str(folder))
+
+
+def _channels(path):
+    """Every audio channel of the file as mono 16 kHz arrays (Sony MXF: one stream per channel, read in ONE pass)."""
+    import sync
+    import tempfile
+    exe = core.ffmpeg_exe()
+    streams = sync._audio_streams(str(path))
+    if not streams:
+        raise ValueError("No sound in this file")
+    out = []
+    with tempfile.TemporaryDirectory() as td:
+        cmd = [exe, "-v", "error", "-nostdin", "-i", str(path)]
+        files = []
+        for i, ch in enumerate(streams[:8]):
+            o = str(Path(td) / f"a{i}.raw")
+            cmd += ["-map", f"0:a:{i}", "-vn", "-ar", str(SR), "-f", "f32le", o]
+            files.append((o, min(ch, 8)))
+        subprocess.run(cmd, capture_output=True, **core._NOWIN)
+        for o, ch in files:
+            try:
+                x = np.fromfile(o, np.float32)
+            except Exception:
+                continue
+            if len(x) < SR // 2 * ch:
+                continue
+            x = x[:len(x) // ch * ch].reshape(-1, ch)
+            for k in range(ch):
+                out.append(np.ascontiguousarray(x[:, k]))
+    return out
+
+
+def clarity(x):
+    """How clearly speech stands out on a channel: loud parts (p90) above the quiet floor (p20), in dB. The
+    lavalier (close to the mouth) scores higher than the camera microphone (room sound)."""
+    n = SR // 20
+    m = len(x) // n
+    if m < 20:
+        return -1e9
+    e = np.sqrt((x[:m * n].reshape(m, n).astype(np.float64) ** 2).mean(1)) + 1e-9
+    if np.percentile(e, 90) < 1e-4:
+        return -1e9                                  # silent channel
+    db = 20 * np.log10(e)
+    return float(np.percentile(db, 90) - np.percentile(db, 20))
 
 
 def read_audio(path):
-    """The sound of a file (audio or video), mono 16 kHz."""
+    """The sound of a file (audio or video), mono 16 kHz, from its CLEAREST channel. Never a mix: on FX6 the camera
+    microphone and the lavalier are on different channels, and the mix made Whisper mishear words."""
+    try:
+        chans = _channels(path)
+    except Exception:
+        chans = []
+    good = [(clarity(x), k, x) for k, x in enumerate(chans)]
+    good = [g for g in good if g[0] > -1e8]
+    if good:
+        return max(good, key=lambda g: (g[0], -g[1]))[2]
     cmd = [core.ffmpeg_exe(), "-v", "error", "-nostdin", "-i", str(path), "-vn", "-ac", "1", "-ar", str(SR), "-f", "f32le", "-"]
     out = subprocess.run(cmd, capture_output=True, **core._NOWIN).stdout
     x = np.frombuffer(out, np.float32).copy()
@@ -50,19 +106,41 @@ def read_audio(path):
     return x
 
 
+def couple_names(path):
+    """The couple's names from the wedding folder ("NUNTA 22 AUGUST 2026 Florin si Miruna", "NUNTA 4 IULIE Alexandra si
+    Vlad 2026", "WEDDING 4 JULY Alexandra and Vlad 2026"), so Whisper writes them right."""
+    for part in reversed(Path(path).parts):
+        m = re.match(r"(?i)(?:nunta|wedding)\s+\d{1,2}\s+\S+\s+(?:\d{4}\s+)?(.+?)\s+(?:si|și|and|&)\s+(.+?)(?:\s+\d{4})?$",
+                     part.strip())
+        if m:
+            return [m.group(1).strip(), m.group(2).strip()]
+    return []
+
+
+def hint(path, lang):
+    names = couple_names(path)
+    if lang == "en":
+        return "A wedding interview." + (f" The couple: {names[0]} and {names[1]}." if names else "")
+    return ("Interviu de nuntă, în limba română, scris corect, cu diacritice." +
+            (f" Mirii: {names[0]} și {names[1]}." if names else "") + " Cuvinte: nunta, mireasa, mirele, biserica, nașii.")
+
+
 def transcribe(path, model, lang="ro", progress=None, cancel=None):
-    """[(start s, end s, text)] of one file."""
+    """[(start s, end s, text)] of one file. The times come from the first and last WORD (tighter cuts)."""
     x = read_audio(path)
     dur = len(x) / SR
     segs, info = model.transcribe(x, language=LANGS.get(lang, lang), vad_filter=True, beam_size=5,
-                                  condition_on_previous_text=False)
+                                  condition_on_previous_text=False, word_timestamps=True,
+                                  initial_prompt=hint(path, lang))
     out = []
     for s in segs:                                   # a generator: the work happens while reading it
         if cancel and cancel():
             raise InterruptedError("Cancelled")
         t = s.text.strip()
         if t:
-            out.append((float(s.start), float(s.end), t))
+            ws = [w for w in (s.words or []) if w.end > w.start]
+            a, b = (float(ws[0].start), float(ws[-1].end)) if ws else (float(s.start), float(s.end))
+            out.append((a, max(b, a + 0.1), t))
         if progress:
             progress(f"{Path(path).name}: {int(s.end // 60)}:{int(s.end % 60):02d} of {int(dur // 60)}:{int(dur % 60):02d}",
                      min(1.0, s.end / max(1.0, dur)))

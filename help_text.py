@@ -476,11 +476,20 @@ camere se continuă la fel, una după alta; cadrele cu cuplul pot sta la mijlocu
 <p>Interviurile, discursurile, vornicul sau predica devin text, pe acest calculator, gratuit (Whisper; nu se urcă nimic).</p>
 <h3>Pașii și opțiunile</h3>
 <ul>
-<li><b>+ Adaugă fișiere</b>: sunet (lavaliere, recorder) sau video. <b>Import XML</b>: clipurile unui timeline din Premiere (de exemplu
-sequence-ul cu interviurile), în ordinea de pe timeline (video; un timeline doar cu sunet dă fișierele de sunet).</li>
+<li><b>+ Adaugă fișiere</b>: sunet (lavaliere, recorder) sau video.</li>
+<li><b>Import XML</b> (recomandat pentru poveste): sequence-ul tău din Premiere cu interviurile puse unul după altul (File &gt; Export
+&gt; Final Cut Pro XML). Fiecare interviu e un segment (clipurile care încep și se termină odată), de exemplu mirele = Color Matte +
+lavaliera, mireasa = MXF-ul de FX6 cu cele 4 piste. Din fiecare segment intră în listă fișierul de transcris: lavaliera, dacă e
+separată, altfel camera. Povestea copiază apoi <b>exact clipurile tale</b> din acest sequence (aceleași piste de sunet, microfon și
+lavalieră, Color Matte), doar cu alți timpi.</li>
 <li><b>Limba</b>: Română, Engleză sau Detectează singur.</li>
-<li><b>Precizia</b>: <b>Rapid</b> (large-v3-turbo: de câteva ori mai rapid, aproape la fel de bun) sau <b>Cel mai precis</b> (large-v3:
+<li><b>Precizia</b>: <b>Rapid</b> (large-v3-turbo: de câteva ori mai rapid) sau <b>Cel mai precis</b> (large-v3 la precizie maximă:
 mai lent, cel mai bun la nume și cuvinte rare). Prima dată modelul se descarcă o singură dată (1,5–3 GB).</li>
+<li><b>Ce face ca să înțeleagă mai bine</b>: ascultă <b>canalul cel mai clar</b> al fișierului, nu un amestec. La FX6, microfonul camerei și
+lavaliera sunt pe canale diferite, iar aplicația o alege pe cea în care vorbirea iese cel mai clar peste zgomot (lavaliera). Din
+numele folderului nunții („NUNTA 22 AUGUST 2026 Florin si Miruna”) ia numele mirilor, ca să le scrie corect. Timpii fiecărei fraze
+vin de la primul și ultimul cuvânt (tăieturi mai exacte). Unele cuvinte tot pot ieși pocite: Claude le înțelege din context, iar în
+markerele poveștii scrie textul corectat.</li>
 <li><b>Transcriere</b>: lângă fiecare fișier apar un .txt (textul cu orele) și un .srt (subtitrare). Textul se vede în dreapta;
 <b>Copiază textul</b> îl pune în clipboard.</li>
 <li><b>Scoate</b> (sau tasta Delete): scoate fișierul selectat din listă. Fișierul și transcrierea lui rămân pe disc.</li>
@@ -1039,11 +1048,20 @@ With 3, 4 or 5 cameras it continues the same way, one after the other; couple sh
 <p>Interviews, speeches, the vornic or the sermon become text, on this computer, for free (Whisper; nothing is uploaded).</p>
 <h3>Steps and options</h3>
 <ul>
-<li><b>+ Add files</b>: sound (lavaliers, recorder) or video. <b>Import XML</b>: the clips of a Premiere timeline (e.g. the sequence
-with the interviews), in the timeline's order (video; a sound-only timeline gives its sound files).</li>
+<li><b>+ Add files</b>: sound (lavaliers, recorder) or video.</li>
+<li><b>Import XML</b> (recommended for the story): your Premiere sequence with the interviews one after the other (File &gt; Export &gt;
+Final Cut Pro XML). Every interview is a segment (the clips that start and end together), for example the groom = Color Matte +
+lavalier, the bride = the FX6 MXF with its 4 tracks. From every segment the file to transcribe goes into the list: the lavalier when it
+is separate, otherwise the camera. The story then copies <b>exactly your clips</b> from this sequence (the same sound tracks, mic and
+lavalier, Color Matte), only with other times.</li>
 <li><b>Language</b>: Romanian, English or Detect it.</li>
-<li><b>Precision</b>: <b>Fast</b> (large-v3-turbo: several times faster, almost as good) or <b>The most precise</b> (large-v3: slower,
+<li><b>Precision</b>: <b>Fast</b> (large-v3-turbo: several times faster) or <b>The most precise</b> (large-v3 at full precision: slower,
 best on names and rare words). The first time the model downloads once (1.5–3 GB).</li>
+<li><b>What it does to understand better</b>: it listens to the file's <b>clearest channel</b>, not a mix. On the FX6 the camera mic and
+the lavalier are on different channels, and the app picks the one where the speech stands out most over the noise (the lavalier). From
+the wedding folder's name ("NUNTA 22 AUGUST 2026 Florin si Miruna") it takes the couple's names, to write them right. Every sentence's
+times come from its first and last word (tighter cuts). Some words can still come out misspelled: Claude understands them from the
+context and writes the corrected text in the story's markers.</li>
 <li><b>Transcribe</b>: next to every file a .txt (the text with times) and a .srt (subtitles). The text shows on the right; <b>Copy the
 text</b> puts it on the clipboard.</li>
 <li><b>Remove</b> (or the Delete key): takes the selected file off the list. The file and its transcript stay on the disk.</li>

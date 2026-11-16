@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.8.6), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.8.7), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -499,6 +499,21 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   blocked): tested with a simulated API (ok, 404 -> next model, no credit).
 - Transcribe: Remove is a real button + Delete / Backspace on the list (clears story_paths if that file was sent);
   "Export XML with markers" hidden (owner: one interview with markers is useless).
+
+## v3.8.7 (his real interviews: groom = Color Matte + lavalier WAV, bride = FX6 MXF 4 channels)
+- Transcribe > Import XML = xmlimport.interviews: segments of HIS sequence (xmlimport.source_groups: clips with the same
+  start AND end = one segment), one file per segment, a separate sound file (lavalier) preferred over the camera; files
+  remember src_xml. Before, only video files were taken and the groom (a WAV under a Color Matte) was lost.
+- The story XML copies HIS clips (story.export_from_source = his make_story_xml.py principle, verified IDENTICAL to his
+  script's output on a Premiere-shaped test sequence: generatoritem, pproOriginalAudio, exploded stereo tracks,
+  premiereChannelType, pproTicks): only start / end / in / out / ticks, ids, links (clipindex) change; the first <file>
+  in document order is complete; old markers dropped, one marker per piece. Owner's rule from his notes: NEVER write the
+  multichannel FX6 description by hand (Premiere then hears one channel). Without an imported sequence: story.export_xml.
+- Whisper: transcribe.read_audio takes the CLEAREST channel (p90 - p20 frame dB; the lavalier beats the room mic), never
+  a mix; initial_prompt with the couple's names from the wedding folder (transcribe.couple_names) and wedding words;
+  word_timestamps (a sentence = first word start .. last word end); "best" = large-v3 float32 (slower, more accurate).
+- Claude writes the corrected text after "|" (story.parse returns it; markers and the story pane use it). Padding
+  -0.12 s / +0.20 s (his notes), never into the neighbour sentence.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

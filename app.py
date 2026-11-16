@@ -43,7 +43,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.8.6"
+APP, VER = "MoneyMakingMachine", "v3.8.7"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -5887,15 +5887,18 @@ class TranscribePage(QWidget):
         if not path:
             return
         try:
-            found, missing = xmlimport.media(path)
+            found, missing = xmlimport.interviews(path)    # one file per interview segment (camera or lavalier)
         except Exception as ex:
             logging.exception("transcribe xml import")
             notify(i18n.T("Import XML failed: {}").format(i18n.T(str(ex))), error=True)
             return
-        have = {f["path"] for f in self._files()}
+        have = {f["path"]: f for f in self._files()}
         new = [p for p in found if p not in have]
         for p in new:
-            self._files().append(dict(path=p, segs=None))
+            self._files().append(dict(path=p, segs=None, src_xml=path))
+        for p in found:
+            if p in have:
+                have[p]["src_xml"] = path                    # the story copies its clips from this sequence
         self.store.save_app()
         self._fill(select=len(self._files()) - 1 if new else None)
         if not found:
@@ -6010,13 +6013,26 @@ class TranscribePage(QWidget):
             out, _ = QFileDialog.getSaveFileName(self, "Save XML", start, "XML (*.xml)")
             if not out:
                 return
+        src = {f.get("src_xml") for f in fs}
+        src = src.pop() if len(src) == 1 else None
+        same = bool(src and Path(src).exists())         # all from the sequence he imported: copy HIS clips (his sound)
+
+        def write(o):
+            if same:
+                try:
+                    return story.export_from_source(cuts, fs, src, o, i18n.T("Interview story"), labels)
+                except OSError:
+                    raise
+                except Exception:
+                    logging.exception("story from his sequence failed, plain export")
+            return story.export_xml(cuts, fs, infos, o, i18n.T("Interview story"), labels)
         try:
-            r = story.export_xml(cuts, fs, infos, out, i18n.T("Interview story"), labels)
+            r = write(out)
         except OSError:
             out, _ = QFileDialog.getSaveFileName(self, "Save XML", str(Path.home() / Path(start).name), "XML (*.xml)")
             if not out:
                 return
-            r = story.export_xml(cuts, fs, infos, out, i18n.T("Interview story"), labels)
+            r = write(out)
         except Exception as e:
             logging.exception("story export failed")
             notify(i18n.T("Export failed: {}").format(i18n.T(str(e))), error=True)

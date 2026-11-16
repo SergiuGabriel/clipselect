@@ -19,7 +19,7 @@ import core
 
 SEQ_FPS = 25.0
 LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-PAD_IN, PAD_OUT = 0.15, 0.30          # breath before / after a piece (never into the next sentence)
+PAD_IN, PAD_OUT = 0.12, 0.20          # breath before / after a piece (owner: -0.12 s / +0.2 s, never into the next sentence)
 WHO_RO = {"bride": "mireasa", "groom": "mirele", "both": "mirii împreună", "other": "altcineva", "": "nu știu cine"}
 WHO_EN = {"bride": "the bride", "groom": "the groom", "both": "the couple together", "other": "someone else", "": "unknown"}
 
@@ -72,10 +72,14 @@ def prompt(files, lang="ro"):
             "povestea, lasă afară ce nu adaugă nimic.\n"
             "4. Folosește DOAR fraze care există, întregi, exact cum sunt. Nu inventa, nu rescrie, nu tăia o frază la "
             "jumătate. Poți lua mai multe fraze la rând (de ex. A12-A14). Evită ezitările, repetițiile, frazele "
-            "neterminate și ce nu se înțelege fără întrebarea mea.\n\n"
+            "neterminate și ce nu se înțelege fără întrebarea mea.\n"
+            "5. Scoate înjurăturile și glumele vulgare, chiar dacă sunt amuzante.\n"
+            "6. Deschide puternic (ziua, emoția) și încheie emoționant, eventual cu un zâmbet.\n\n"
+            "Transcrierea automată mai pocește cuvinte: înțelege-le din context.\n\n"
             "Răspunsul tău: întâi 1-2 propoziții cu povestea pe scurt, apoi lista, exact între rândurile STORY_START și "
             "STORY_END, un rând pe bucată, în ordinea din film: codul (A12) sau codurile la rând (A12-A14), apoi \" | \" și "
-            "începutul textului. Exemplu:\n"
+            "textul acelor fraze scris corect (cuvintele pocite de transcriere corectate, cu diacritice, fără să schimbi "
+            "ce au spus). Exemplu:\n"
             "STORY_START\nB3 | Prima dată când am văzut-o…\nA7-A8 | Eu nu credeam că…\nSTORY_END\n"
         )
     else:
@@ -102,10 +106,14 @@ def prompt(files, lang="ro"):
             "that is good and tells the story, leave out what adds nothing.\n"
             "4. Use ONLY sentences that exist, whole, exactly as they are. Do not invent, rewrite or cut a sentence in "
             "half. You may take several sentences in a row (e.g. A12-A14). Avoid hesitations, repetitions, unfinished "
-            "sentences and anything that needs my question to make sense.\n\n"
+            "sentences and anything that needs my question to make sense.\n"
+            "5. Leave out swearing and vulgar jokes, even when they are funny.\n"
+            "6. Open strong (the day, the emotion) and end emotionally, maybe with a smile.\n\n"
+            "The automatic transcript misspells some words: understand them from the context.\n\n"
             "Your answer: first 1-2 sentences with the story in short, then the list, exactly between the lines "
             "STORY_START and STORY_END, one line per piece, in film order: the code (A12) or the codes in a row (A12-A14), "
-            "then \" | \" and the beginning of the text. Example:\n"
+            "then \" | \" and the text of those sentences written correctly (words the transcript misheard fixed, without "
+            "changing what they said). Example:\n"
             "STORY_START\nB3 | The first time I saw her…\nA7-A8 | I never thought…\nSTORY_END\n"
         )
     return intro + "\n".join(body) + "\n"
@@ -115,7 +123,8 @@ _LINE = re.compile(r"^\W*([A-Z])\s*(\d+)(?:\s*[-–—]\s*([A-Z])?\s*(\d+))?\b")
 
 
 def parse(answer, files):
-    """Claude's answer -> ([(file index, first sentence, last sentence)] in order (0-based, inclusive), [bad lines])."""
+    """Claude's answer -> ([(file index, first sentence, last sentence, corrected text or None)] in order (0-based,
+    inclusive), [bad lines]). The text after '|' is Claude's corrected wording (used for the markers)."""
     text = answer.replace("\r", "")
     m = re.search(r"STORY_START(.*?)(STORY_END|$)", text, re.S)
     block = m.group(1) if m else text
@@ -135,16 +144,19 @@ def parse(answer, files):
         if (L2 and L2 != L) or fi < 0 or fi >= len(files) or not (1 <= a <= b <= len(files[fi]["segs"])):
             bad.append(s[:60])
             continue
-        run = []                                        # a range never carries a question inside it
+        txt = s.split("|", 1)[1].strip().strip("`*").strip() if "|" in s else None
+        run, runs = [], []                              # a range never carries a question inside it
         for k in range(a - 1, b):
             if is_question(files[fi]["segs"][k][2]):
                 if run:
-                    pieces.append((fi, run[0], run[-1]))
+                    runs.append(run)
                 run = []
             else:
                 run.append(k)
         if run:
-            pieces.append((fi, run[0], run[-1]))
+            runs.append(run)
+        for r in runs:                                  # split around a question: Claude's text no longer fits
+            pieces.append((fi, r[0], r[-1], txt if len(runs) == 1 and len(r) == b - a + 1 else None))
     return pieces, bad
 
 
@@ -152,7 +164,9 @@ def ranges(pieces, files, durs):
     """Pieces -> [(file index, t0, t1, text)]: from the first sentence's start to the last one's end, with a breath on
     both sides that never reaches into the sentence before / after."""
     out = []
-    for fi, a, b in pieces:
+    for p in pieces:
+        fi, a, b = p[:3]
+        fixed = p[3] if len(p) > 3 else None
         segs = files[fi]["segs"]
         t0, t1 = float(segs[a][0]), float(segs[b][1])
         lo = float(segs[a - 1][1]) if a > 0 else 0.0
@@ -160,7 +174,7 @@ def ranges(pieces, files, durs):
         t0 = max(lo, 0.0, t0 - PAD_IN)
         t1 = min(hi, durs[fi], t1 + PAD_OUT)
         if t1 - t0 >= 0.2:
-            out.append((fi, t0, t1, " ".join(str(s[2]) for s in segs[a:b + 1])))
+            out.append((fi, t0, t1, fixed or " ".join(str(s[2]) for s in segs[a:b + 1])))
     return out
 
 
@@ -285,3 +299,135 @@ def ask_claude(text, key, cancel=None):
         except urllib.error.URLError:
             raise RuntimeError("no internet connection") from None
     raise RuntimeError(last)
+
+
+
+# ---- the story from HIS sequence (owner's make_story_xml.py principle): the clips are copied EXACTLY from the sequence
+# he exported from Premiere (multichannel FX6 description, exploded stereo tracks, lavalier, Color Matte...) and only
+# times, ids and links change. Premiere is very sensitive to how a multichannel file is described: copying is the only
+# way the sound comes out exactly as he laid it out (mic and lavalier on their own tracks).
+TICKS_PER_SEC = 254016000000
+
+
+def export_from_source(cuts, files, src_xml, out_path, name, labels=None):
+    import copy
+    import xml.etree.ElementTree as ET
+    import xmlimport
+    tree, seq, fps, groups = xmlimport.source_groups(src_xml)
+    tpf = TICKS_PER_SEC // int(round(fps))
+    media = seq.find("media")
+    vtr = media.find("video").findall("track") if media.find("video") is not None else []
+    atr = media.find("audio").findall("track") if media.find("audio") is not None else []
+    full = {f.get("id"): f for f in seq.iter("file") if len(f)}
+
+    def group_for(path, fin):
+        cands = [g for g in groups if path in g["paths"]]
+        for g in cands:                              # the segment whose source range holds this moment
+            ref = g["paths"][path]
+            if ref <= fin < ref + (g["key"][1] - g["key"][0]):
+                return g
+        return cands[0] if cands else None
+
+    plan, pos = [], 0
+    for fi, t0, t1, text in cuts:
+        path = files[fi]["path"]
+        fin, fout = int(round(t0 * fps)), int(round(t1 * fps))
+        g = group_for(path, fin)
+        if g is None or fout <= fin:
+            raise ValueError(f"{Path(path).name} is not in the imported sequence")
+        plan.append((g, path, fin, fout - fin, text, fi))
+    for t in vtr + atr:                              # empty every track (keeps the track settings)
+        for it in [c for c in t if c.tag in xmlimport.ITEM_TAGS + ("transitionitem",)]:
+            t.remove(it)
+    for m in seq.findall("marker"):
+        seq.remove(m)
+    written, n, markers = set(), 0, []
+    for g, path, fin, dur, text, fi in plan:
+        shift = fin - g["paths"][path]               # how far into the segment this cut starts
+        idmap, clones = {}, []
+        for kind, ti, it in g["items"]:
+            c = copy.deepcopy(it)
+            n += 1
+            idmap[it.get("id")] = f"clipitem-{n}"
+            c.set("id", f"clipitem-{n}")
+            clones.append((kind, ti, it, c))
+        for kind, ti, orig, c in clones:
+            c.find("start").text = str(pos)
+            c.find("end").text = str(pos + dur)
+            oin = int(orig.findtext("in") or 0)
+            nin = max(0, oin + shift) if c.tag != "generatoritem" else oin
+            c.find("in").text = str(nin)
+            c.find("out").text = str(nin + dur)
+            if c.find("pproTicksIn") is not None:
+                c.find("pproTicksIn").text = str(nin * tpf)
+            if c.find("pproTicksOut") is not None:
+                c.find("pproTicksOut").text = str((nin + dur) * tpf)
+            f = c.find("file")
+            if f is not None and f.get("id"):
+                for ch in list(f):
+                    f.remove(ch)
+                if f.get("id") not in written and f.get("id") in full:
+                    for ch in full[f.get("id")]:
+                        f.append(copy.deepcopy(ch))
+                    written.add(f.get("id"))
+            for link in c.findall("link"):
+                ref = link.findtext("linkclipref")
+                if ref in idmap:
+                    link.find("linkclipref").text = idmap[ref]
+                else:
+                    c.remove(link)
+            dest = (vtr if kind == "video" else atr)[ti - 1]
+            en = dest.find("enabled")
+            dest.insert(list(dest).index(en) if en is not None else len(dest), c)
+        lab = (labels or {}).get(fi)
+        markers.append((pos, dur, (lab + ": " if lab else "") + text))
+        pos += dur
+    seen = set()                                     # in DOCUMENT order: the first <file> is complete, the rest id only
+    for kind, trs in (("video", vtr), ("audio", atr)):
+        for t in trs:
+            for it in [c for c in t if c.tag in xmlimport.ITEM_TAGS]:
+                f = it.find("file")
+                if f is None or not f.get("id") or f.get("id") not in full:
+                    continue
+                for ch in list(f):
+                    f.remove(ch)
+                if f.get("id") not in seen:
+                    for ch in full[f.get("id")]:
+                        f.append(copy.deepcopy(ch))
+                    seen.add(f.get("id"))
+    where = {}                                       # clipindex = position in its track
+    for kind, trs in (("video", vtr), ("audio", atr)):
+        for ti, t in enumerate(trs, 1):
+            for ci, it in enumerate([c for c in t if c.tag in xmlimport.ITEM_TAGS], 1):
+                where[it.get("id")] = (kind, ti, ci)
+    for link in seq.iter("link"):
+        k, ti, ci = where[link.findtext("linkclipref")]
+        (link.find("mediatype") if link.find("mediatype") is not None else ET.SubElement(link, "mediatype")).text = k
+        (link.find("trackindex") if link.find("trackindex") is not None else ET.SubElement(link, "trackindex")).text = str(ti)
+        (link.find("clipindex") if link.find("clipindex") is not None else ET.SubElement(link, "clipindex")).text = str(ci)
+    rate = seq.find("rate")
+    idx = list(seq).index(rate) + 1 if rate is not None else 0
+    for k, (st, dur, txt) in enumerate(markers):
+        m = ET.Element("marker")
+        ET.SubElement(m, "name").text = txt[:60]
+        ET.SubElement(m, "comment").text = txt
+        ET.SubElement(m, "in").text = str(st)
+        ET.SubElement(m, "out").text = str(st + dur)
+        seq.insert(idx + k, m)
+    if seq.find("duration") is not None:
+        seq.find("duration").text = str(pos)
+    if seq.find("name") is not None:
+        seq.find("name").text = name
+    u = seq.find("uuid")
+    if u is not None:
+        seq.remove(u)
+    seq.set("id", "sequence-story")
+    root = tree.getroot()
+    if root.tag == "xmeml" and root.find("sequence") is not seq:  # a project export: keep only this sequence
+        for ch in list(root):
+            root.remove(ch)
+        root.append(seq)
+    with open(out_path, "wb") as fh:
+        fh.write(b'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n')
+        tree.write(fh, encoding="utf-8", xml_declaration=False)
+    return dict(pieces=len(plan), seconds=pos / fps)

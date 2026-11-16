@@ -202,3 +202,67 @@ def footage(xml_path):
     order = list(dict.fromkeys(p for _, _, p in sorted(found)))
     missing = [p for p in order if not Path(p).exists()]
     return [p for p in order if p not in missing], missing
+
+
+
+ITEM_TAGS = ("clipitem", "generatoritem")
+
+
+def source_groups(xml_path):
+    """The interview segments of a sequence the owner exported from Premiere: every group of clips (video, audio,
+    generators like a Color Matte) that start AND end at the same moment is one segment (his layout: the groom's
+    interview, then the bride's). Returns (tree, seq, fps, groups); group = dict(key=(start, end), items=[(kind, track
+    number, element)], paths={path: source in frame})."""
+    tree = ET.parse(xml_path)
+    root = tree.getroot()
+    seqs = [s for s in root.iter("sequence") if s.find("media") is not None]
+    if not seqs:
+        raise ValueError("No sequence found in this XML.")
+    seq = max(seqs, key=lambda s: sum(1 for t in s.find("media").iter("track") for c in t if c.tag in ITEM_TAGS))
+    fps = _rate(seq, 25.0)
+    files = {f.get("id"): _path(f.findtext("pathurl")) for f in root.iter("file") if f.get("id") and f.findtext("pathurl")}
+    groups = {}
+    media = seq.find("media")
+    for kind in ("video", "audio"):
+        sect = media.find(kind)
+        for ti, tr in enumerate(sect.findall("track") if sect is not None else [], 1):
+            for it in tr:
+                if it.tag not in ITEM_TAGS:
+                    continue
+                try:
+                    key = (int(it.findtext("start")), int(it.findtext("end")))
+                except (TypeError, ValueError):
+                    continue
+                if key[0] < 0 or key[1] <= key[0]:
+                    continue
+                g = groups.setdefault(key, dict(key=key, items=[], paths={}))
+                g["items"].append((kind, ti, it))
+                f = it.find("file")
+                path = files.get(f.get("id")) if f is not None else None
+                if path and path not in g["paths"]:
+                    try:
+                        g["paths"][path] = int(it.findtext("in"))
+                    except (TypeError, ValueError):
+                        g["paths"][path] = 0
+    return tree, seq, fps, [groups[k] for k in sorted(groups)]
+
+
+def interviews(xml_path):
+    """Transcribe > Import XML: one file to transcribe per segment of the timeline, in its order. A separate sound file
+    (lavalier, recorder) is preferred over the camera's own sound (cleaner speech); a segment with no video file (a
+    Color Matte + the lavalier) gives its sound file. Returns (paths on this computer, paths not found)."""
+    _, _, _, groups = source_groups(xml_path)
+    order = []
+    for g in groups:
+        paths = list(g["paths"])
+        if not paths:
+            continue                                   # only generators / titles
+        audio = [p for p in paths if Path(p).suffix.lower() in AUDIO_EXT]
+        video = [p for p in paths if Path(p).suffix.lower() in core.VIDEO_EXT]
+        pick = audio[0] if audio else video[0] if video else None
+        if pick and pick not in order:
+            order.append(pick)
+    if not order:
+        raise ValueError("No video or sound clips found in this XML.")
+    missing = [p for p in order if not Path(p).exists()]
+    return [p for p in order if p not in missing], missing
