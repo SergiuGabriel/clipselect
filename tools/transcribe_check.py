@@ -151,6 +151,37 @@ for key in ("codes", "over8", "under08", "glued", "pause_pct", "forced", "remove
     check(key in q, f"8: report without '{key}'")
 check("1 stretches" in transcribe.quality_line(q), "8: the quality line does not show the speech without text")
 
+# 9. a long thinking pause (2.5 s) in the middle of a sentence does not cut it; one after a finished thought does
+ws = W("Dar în ultima săptămână au fost tot felul de peripeții.", pauses={6: 2.5})
+x = audio(ws, ws[-1][1] + 1)
+p = pieces(ws, x)
+check(len(p) == 1, f"9: a long pause after 'tot' cut the sentence: {[s[2] for s in p]}")
+ws = W("Mi-a scris pe Instagram Într-un an nu i-am răspuns la mesaj", pauses={4: 2.5, 9: 2.5})
+x = audio(ws, ws[-1][1] + 1)
+p = pieces(ws, x)
+check(any(t.endswith("Instagram") for _a, _b, t in p), f"9: no cut at a long pause before a capital: {[s[2] for s in p]}")
+check(not any(t.strip() == "la mesaj" for _a, _b, t in p), f"9: 'la mesaj' cut off: {[s[2] for s in p]}")
+
+# 10. another alphabet removed, English words kept
+segs = [dict(start=1.0, end=2.0, text=" выш", nsp=0.0, logp=-0.5, comp=1.0, words=[(1.0, 1.4, " выш", 0.4)]),
+        dict(start=2.0, end=3.5, text=" Era un vibe foarte nice.", nsp=0.0, logp=-0.3, comp=1.0,
+             words=[(2.0, 2.2, " Era", 0.9), (2.2, 2.4, " un", 0.9), (2.4, 2.7, " vibe", 0.9), (2.7, 3.0, " foarte", 0.9),
+                    (3.0, 3.4, " nice.", 0.9)])]
+words, removed = transcribe.clean(segs, [(0.9, 3.6, "c")], "ro")
+txt = " ".join(w[2].strip() for w in words)
+check("выш" not in txt and "vibe" in txt and "nice." in txt, f"10: alphabet filter wrong: {txt}")
+
+# 11. Whisper's windows: at most 28 s, borders only between speech regions
+regs, t = [], 0.3
+while t < 95:
+    regs.append((t, t + 4.0, "c"))
+    t += 4.0 + float(rng.uniform(0.3, 1.5))
+xx = 0.001 * rng.standard_normal(int(100 * SR)).astype(np.float32)
+wins = transcribe.windows(regs, xx)
+check(all(b - a <= transcribe.WINDOW + 1e-6 for a, b in wins), f"11: a window over 28 s: {wins}")
+check(not any(ra < a < rb for a, _b in wins[1:] for ra, rb, _l in regs), "11: a window border inside speech")
+check(abs(wins[0][0]) < 1e-6 and abs(wins[-1][1] - 100.0) < 0.01, "11: the windows do not cover the file")
+
 for m in probs:
     print("WRONG:", m)
 print("interview engine:", "OK" if not probs else f"{len(probs)} problem(s)")

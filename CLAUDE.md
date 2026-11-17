@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.11.1), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.11.2), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -694,6 +694,20 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   mlx-metal (it holds libmlx.dylib), so "import mlx.core" failed ("Library not loaded: @rpath/libmlx.dylib"), the step
   was continue-on-error and the app silently transcribed on the processor (faster-whisper). Now mlx-metal is installed
   too. Check the Actions log line "mlx ok" after every build.
+
+## v3.11.2 (his first real test of v3.11.1, large-v3 "best" on his Mac)
+- His transcripts came out without full stops and with capitals mid-sentence ("Instagram Într-un an Nu i-am"), and the
+  groom's content was worse ("destructivă", "eu am fost operat"). Cause: with condition_on_previous_text off, Whisper
+  (openai / mlx code) keeps the initial prompt ONLY for its first 30 s window. Now transcribe.windows(): windows of at
+  most WINDOW 28 s cut in the middle of the longest real gap between speech regions (never inside speech), each with
+  the prompt. On the bench this fixed the groom ("a fost operată", "cea mai distractivă") and the punctuation.
+  It also gives MLX real progress (per window).
+- Long thinking pauses cut sentences ("au fost tot | felul", "nu i-am răspuns | la mesaj", "cel mai | mare"): a silence
+  > 2 s now cuts only when the previous word can end a phrase (not NO_END) AND the next word starts like a sentence
+  (capital or link word); > 5 s cuts anyway (still not after NO_END). Stray speaker runs: < 1 s (was 0.6) -> '?'.
+  _split_long: -1.5 before a preposition / NO_END word without a comma ("felul | de", "bucur | de tot"); NO_END +
+  ultima / primul... (owner: keep English words) clean(..., lang): only words in ANOTHER ALPHABET (not Latin) are removed
+  for ro / en ("выш"); foreign Latin words stay. CI tests 9-11 (long pause, alphabet, windows).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

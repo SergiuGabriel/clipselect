@@ -8,8 +8,8 @@ v4 engine (rewritten from zero, v3.11.0). Nothing about a particular wedding, vo
 threshold is measured on the recording itself.
   1. Who speaks when (speakers.analyse): speech regions (VAD) and, per region, the interviewee / the videographer,
      measured from the levels of the microphones.
-  2. Whisper hears the WHOLE file in one go (its own 30 s windows keep the context, so words are not lost or misheard
-     at chunk edges), always with word times.
+  2. Whisper hears the file in windows of at most 28 s, cut only in real gaps between speech, each window with the
+     guiding prompt (punctuation, diacritics, the couple's names), always with word times.
   3. Cleaning: Whisper's loops, its typical "subtitle" inventions and anything heard where the VAD found no speech are
      removed (counted in the report). Speech regions with no word at all are transcribed again on their own, so a word
      like "Superb!" between a question and an answer is never lost.
@@ -337,6 +337,7 @@ NO_END = {"de", "la", "cu", "pe", "în", "in", "din", "pentru", "lui", "că", "c
           "m-a", "ne-am", "ne-a", "v-ați", "v-ati", "v-a", "i-am", "i-a", "mi-a", "mi-am", "ți-a", "ti-a", "ți-am", "l-am",
           "l-a", "le-am", "le-a", "și-a", "si-a", "și-au", "s-ar", "n-am", "n-a", "fiecare", "orice", "oricare", "acel", "acea",
           "acest", "această", "aceste", "acești", "același", "aceeași", "aceleași", "niște", "nişte", "câțiva", "câteva",
+          "ultima", "ultimul", "ultimele", "ultimii", "prima", "primul", "primele", "primii",
           "every", "each", "this", "these", "those", "some", "any", "very", "the", "a", "an", "of", "to", "with", "and", "for", "on", "at", "my", "your", "his", "her",
           "our", "their", "from", "by", "about", "is", "are", "was", "be", "i", "we", "you", "that", "than", "if", "when"}
 # words after which a phrase cannot end: a cut there leaves "Sunt | sigură", "… o | să fie", "într-un | an", "s-au | așezat"
@@ -475,7 +476,14 @@ def _complete_words(s, text, shift=0.0):
     return ws
 
 
-def clean(segs, regions):
+def _other_script(t):
+    """A word written in another alphabet than the Latin one (Cyrillic, Greek, Chinese...): in a Romanian / English
+    interview that is Whisper hearing noise ("выш"). English words stay (couples use them)."""
+    import unicodedata
+    return any(ch.isalpha() and "LATIN" not in unicodedata.name(ch, "") for ch in str(t))
+
+
+def clean(segs, regions, lang="ro"):
     """Whisper's segments -> (words [(start, end, text, probability, estimated)], removed [text]).
     Removed: segments Whisper itself marks as no speech, loops, a segment equal to one of the two before it, the
     typical subtitle inventions, and words heard where the speech detection found no speech (a group of such words is
@@ -491,6 +499,11 @@ def clean(segs, regions):
             continue
         last = (last + [n])[-2:]
         ws = _complete_words(s, text)
+        if lang in ("ro", "en"):
+            odd = [w for w in ws if _other_script(w[2])]
+            if odd:
+                removed.append("".join(w[2] for w in odd).strip())
+                ws = [w for w in ws if not _other_script(w[2])]
         if not ws:
             continue
         cover = _speech_cover(ws[0][0], ws[-1][1], regions) if regions else 1.0
@@ -614,14 +627,14 @@ def _word_labels(words, regions):
             if d < dist:
                 best, dist = lab, d
         out.append(best)
-    # a run of another speaker shorter than 0.6 s inside one speaker's words (two words heard on the other mic,
+    # a run of another speaker shorter than 1 s inside one speaker's words (a few words heard on the other mic, a "mhm",
     # inexact word times) is unsure, unless it is a whole question
     k = 0
     while k < len(out):
         j = k
         while j + 1 < len(out) and out[j + 1] == out[k]:
             j += 1
-        if out[k] != "?" and words[j][1] - words[k][0] < 0.6 and not _asks(words[j][2]):
+        if out[k] != "?" and words[j][1] - words[k][0] < 1.0 and not _asks(words[j][2]):
             left = next((out[i] for i in range(k - 1, -1, -1) if out[i] != "?"), None)
             right = next((out[i] for i in range(j + 1, len(out)) if out[i] != "?"), None)
             if left is not None and left == right and left != out[k]:
@@ -634,7 +647,9 @@ def _word_labels(words, regions):
 def _sentences(words, labels, x, voc):
     """Words -> sentences: cut at the end of a sentence (Whisper's punctuation), at a forgotten full stop (a capital
     letter after a real pause), after every question, at a change of a definite speaker that punctuation does not
-    already separate, and at every silence longer than LONG_SILENCE. Never at a pause alone."""
+    already separate, and at a silence longer than LONG_SILENCE only when the sentence can end there (not after
+    "tot / mai / la...") and the next word starts like a new sentence (capital letter or a linking word); a silence over
+    5 s ends it anyway (still never after "la / mai..."). A thinking pause never cuts a sentence."""
     groups, cur, who = [], [], "?"
     for k, w in enumerate(words):
         if cur:
@@ -646,7 +661,10 @@ def _sentences(words, labels, x, voc):
                 near = [words[j][2] for j in range(max(0, k - 3), min(len(words), k + 2)) if j != k - 1]
                 if any(_ends(t) for t in near):
                     change = False
-            cut = (_asks(prev) or change or gap > LONG_SILENCE or _ends(prev) or
+            c = _core(w[2])
+            ends_ok = _core(prev).lower() not in NO_END
+            long_cut = ends_ok and (gap > 5.0 or (gap > LONG_SILENCE and (c[:1].isupper() or _norm(w[2]).startswith(LINKS))))
+            cut = (_asks(prev) or change or long_cut or _ends(prev) or
                    (_cap_start(prev, w[2], voc) and _pause_len(x, cur[-1], w, 0.2) >= 0.1))
             if cut:
                 groups.append(cur)
@@ -692,6 +710,8 @@ def _split_long(ws, x, forced):
             s -= 3.0
         if _core(nxt).lower() in NO_START:
             s -= 3.0
+        if _core(nxt).lower() in NO_END and not _norm(nxt).startswith(LINKS) and not prev.endswith((",", ";", ":")):
+            s -= 1.5                               # "tot felul | de peripeții", "mă bucur | de tot"
         left, right = ws[k - 1][1] - t0, t1 - ws[k][0]
         s -= 0.08 * abs(left - right)
         if max(left, right) > SPLIT_AT:
@@ -820,6 +840,30 @@ def chunks(regions):
 
 # ------------------------------------------------------------------ the whole transcription
 
+WINDOW = 28.0          # Whisper hears the file in windows of at most this, cut in real pauses between speech
+
+
+def windows(regions, x, max_len=WINDOW):
+    """The file cut into windows of at most max_len seconds, each border in the middle of a real gap between speech
+    regions (the longest one, preferring a later one), never inside speech. Every window gets the guiding prompt
+    (punctuation, diacritics, the couple's names): with condition_on_previous_text off, Whisper keeps the prompt only
+    for its FIRST 30 s and then drifts (no full stops, capitals in the middle of sentences: seen on his v3.11 test)."""
+    dur = len(x) / SR
+    gaps = [((regions[i][1] + regions[i + 1][0]) / 2, regions[i + 1][0] - regions[i][1]) for i in range(len(regions) - 1)
+            if regions[i + 1][0] - regions[i][1] > 0.15]
+    cuts, start = [0.0], 0.0
+    while dur - start > max_len:
+        cand = [(m, g) for m, g in gaps if start + 6.0 < m <= start + max_len]
+        if cand:
+            m = max(cand, key=lambda z: z[1] + 0.02 * (z[0] - start))[0]
+        else:
+            m = _quietest(x, start + max_len - 6.0, start + max_len)
+        cuts.append(m)
+        start = m
+    cuts.append(dur)
+    return [(a, b) for a, b in zip(cuts, cuts[1:]) if b - a > 0.3]
+
+
 def transcribe(path, model, lang="ro", progress=None, cancel=None, names=(), keep=None):
     """[(start s, end s, text)] of one file, one entry per piece (see the module text). The result carries .spk (who
     speaks each piece), .forced, .sep (how sure the speaker measurement is), .removed and .lost."""
@@ -845,8 +889,23 @@ def transcribe(path, model, lang="ro", progress=None, cancel=None, names=(), kee
                      0.05 + 0.8 * f)
         if cancel and cancel():
             raise InterruptedError("Cancelled")
+    regions = an["regions"]
+    wins = windows(regions, x)
+
+    def listen(run):
+        raw = []
+        for a, b in wins:
+            part = run(np.ascontiguousarray(y[int(a * SR):int(b * SR)]),
+                       lambda f, a=a, b=b: report(min(1.0, (a + f * (b - a)) / dur)))
+            for sg in part:
+                sg["start"] += a
+                sg["end"] += a
+                sg["words"] = [(w[0] + a, w[1] + a) + tuple(w[2:]) for w in sg["words"]]
+            raw += part
+            report(b / dur)
+        return raw
     try:
-        raw = run(y, report)
+        raw = listen(run)
     except InterruptedError:
         raise
     except Exception:
@@ -855,15 +914,14 @@ def transcribe(path, model, lang="ro", progress=None, cancel=None, names=(), kee
             folder = Path(model["base"]) / "ai_model" / "whisper"
             (folder / "mlx_failed").write_text("mlx failed, see app.log")
             run = _engine(_fw_model(folder, model["quality"]), opts)
-            raw = run(y, report)
+            raw = listen(run)
         else:
             raise
     if cancel and cancel():
         raise InterruptedError("Cancelled")
     if progress:
         progress(f"{Path(path).name}: checking every word…", 0.85)
-    regions = an["regions"]
-    words, removed = clean(raw, regions)
+    words, removed = clean(raw, regions, lang)
     words, shift = calibrate(words, x)
     words, lost = recover(words, regions, x, run, cancel)
     out = sentences(words, x, names, lang, regions)
