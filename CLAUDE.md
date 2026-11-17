@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.11.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.11.1), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -688,6 +688,12 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   inside a pause (a naive "pause end" border fails it), recover, report keys.
 - NOT tested here: faster-whisper / MLX themselves (same call shape as v3.10.0 + word probability). Whole-file
   transcription on MLX gives no progress until the end (mlx_whisper has no callback).
+
+## v3.11.1
+- MLX was NEVER in the Apple Silicon build (since v3.8.8): the CI step installed mlx with --no-deps, which skipped
+  mlx-metal (it holds libmlx.dylib), so "import mlx.core" failed ("Library not loaded: @rpath/libmlx.dylib"), the step
+  was continue-on-error and the app silently transcribed on the processor (faster-whisper). Now mlx-metal is installed
+  too. Check the Actions log line "mlx ok" after every build.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower
