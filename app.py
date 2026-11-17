@@ -49,7 +49,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.11.3"
+APP, VER = "MoneyMakingMachine", "v3.11.4"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -5031,8 +5031,9 @@ class CreateProjectPage(QWidget):
         left.addWidget(self.seq_lbl)
         left.addSpacing(6)
         left.addWidget(lbl("CAMERAS", "section"))
-        left.addWidget(lbl("For every folder choose which camera it is: the sequence goes A, B, C…, then the drone; "
-                           "\"Leave out\" keeps a folder out of the project.", "muted", True))
+        left.addWidget(lbl("For every folder choose which camera it is: the sequence goes A, B, C…, then the drone and the "
+                           "sound folders (lavaliere, recorder), 20 minutes apart; \"Leave out\" keeps a folder out of the "
+                           "project.", "muted", True))
         self.list = QTableWidget(0, 2)
         self.list.setHorizontalHeaderLabels([i18n.T("Folder"), i18n.T("Camera")])
         self.list.verticalHeader().hide()
@@ -5044,10 +5045,6 @@ class CreateProjectPage(QWidget):
         left.addWidget(self.list, 1)
         self.sound = lbl("", "muted", True)
         left.addWidget(self.sound)
-        self.with_sound = QCheckBox(i18n.T("Also the sound folders (recorder, lavaliere) as bins"))
-        self.with_sound.setChecked(self.cfg.get("with_sound", True))
-        self.with_sound.toggled.connect(lambda on: (self.cfg.update(with_sound=on), self.store.save_app()))
-        left.addWidget(self.with_sound)
         left.addSpacing(6)
         body.addLayout(left, 1)
         right = QVBoxLayout()
@@ -5114,8 +5111,6 @@ class CreateProjectPage(QWidget):
         c = self._custom()
         self.cfg["mode"] = "custom" if c else "auto"
         self.store.save_app()
-        self.with_sound.setVisible(c)
-        self.sound.setVisible(not c)
         self.seq_lbl.setText(i18n.T("No sequence: in Premiere you give every camera its label, select the clips and make "
                                     "the sequence yourself.") if c else
                              i18n.T("The sequence is called \"{}\".").format(self._seq_name()))
@@ -5143,11 +5138,11 @@ class CreateProjectPage(QWidget):
             self.store.save_app()
         else:
             self.name.setText(self.cfg.get("project", ""))
-        self.cams = projectsetup.find_cameras(folder)
+        self.cams = projectsetup.all_folders(folder)
         saved = self.cfg.get("slots", {}) if self.cfg.get("slots_for") == folder else {}
         slots = [saved.get(c["folder"], d) for c, d in zip(self.cams, projectsetup.default_slots(self.cams))]
         choices = [(s, i18n.T("Camera {}").format(s)) for s in projectsetup.SLOTS] + \
-            [("drone", i18n.T("Drone")), ("out", i18n.T("Leave out"))]
+            [("drone", i18n.T("Drone")), ("sound", i18n.T("Sound")), ("out", i18n.T("Leave out"))]
         self.list.setRowCount(len(self.cams))
         self.combos = []
         for r, (c, sl) in enumerate(zip(self.cams, slots)):
@@ -5167,8 +5162,7 @@ class CreateProjectPage(QWidget):
             self.combos.append(cb)
         self.list.resizeColumnsToContents()
         self.list.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        snd = projectsetup.sound_folders(folder)
-        self.sound.setText(i18n.T("Sound only, left out like in your selects: {}").format(", ".join(snd)) if snd else "")
+        self.sound.setText("")
         if not self.cams:
             notify(i18n.T("No video found in this folder."), error=True)
         self._ui()
@@ -5192,7 +5186,7 @@ class CreateProjectPage(QWidget):
         self.result.setText("")
         self.b_show.hide()
         self.pp.start(i18n.T("Reading the clips…"))
-        extra = projectsetup.sound_files(self.cfg["folder"]) if self._custom() and self.with_sound.isChecked() else []
+        extra = []
         self.worker = _ProbeWorker([c for c, _ in cams] + extra, lambda: self._stop)
         self.worker.progress.connect(lambda t, f: self.pp.set(i18n.T(t), f))
         self.worker.done.connect(lambda infos, cams=cams, extra=extra: self._done(cams, infos, extra))
@@ -5220,8 +5214,8 @@ class CreateProjectPage(QWidget):
         project = self.name.text().strip() or base.name
         if self._custom():
             return self._done_custom(cams, infos, extra, base, project)
-        binned = [dict(c, name=(i18n.T("Drone") if sl == "drone" else i18n.T("Camera {}").format(sl)) + f" - {c['name']}")
-                  for c, sl in cams]
+        binned = [dict(c, name=(i18n.T("Drone") if sl == "drone" else i18n.T("Sound") if sl == "sound" else
+                                i18n.T("Camera {}").format(sl)) + f" - {c['name']}") for c, sl in cams]
         lay, bad = projectsetup.layout(binned, infos)
         if not lay:
             notify(i18n.T("None of the clips could be read."), error=True)
@@ -5255,13 +5249,13 @@ class CreateProjectPage(QWidget):
         self.result.setText(txt)
         self.b_show.show()
         self.b_open.setVisible(bool(_premiere_app()))
-        notify(i18n.T("Project ready: {} clips in {} camera bins and the sequence \"{}\". Open it in Premiere Pro.").format(
+        notify(i18n.T("Project ready: {} clips in {} bins and the sequence \"{}\". Open it in Premiere Pro.").format(
             r["clips"], len(r["cameras"]), name))
         logging.info("create project %s: %s clips, %s unreadable", out, r["clips"], len(bad))
 
     def _done_custom(self, cams, infos, extra, base, project):
         groups = [(c["name"], projectsetup.chrono([f for f in c["files"] if infos.get(f, {}).get("dur")], infos))
-                  for c, _sl in cams] + [(c["name"], c["files"]) for c in extra]
+                  for c, _sl in cams]
         safe = re.sub(r'[\\/:*?"<>|]+', "-", project).strip() or "project"
         out = projectsetup.free_path(base / f"{safe}.xml")
         try:
@@ -6855,7 +6849,7 @@ class Main(QMainWindow):
                     "info": btn("Info / How to use", "nav", lambda: self.go("info"))}
         for b in self.nav.values():
             sv.addWidget(b)
-        for key in ("project", "teaser", "long"):     # owner: no NEW on Card Offload / Transcribe any more
+        for key in ("teaser", "long"):     # owner: no NEW on Card Offload / Transcribe / Create Project any more
             nb = QHBoxLayout(self.nav[key])
             nb.setContentsMargins(0, 0, 8, 0)
             nb.addStretch()

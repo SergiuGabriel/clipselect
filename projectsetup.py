@@ -16,7 +16,7 @@ from xml.sax.saxutils import escape
 import core
 
 SEQ_FPS = 25.0
-GAP = 10.0                    # seconds of empty timeline between two cameras (you see where a camera starts)
+GAP = 1200.0                  # 20 min of empty timeline between two cameras (owner: you must see where one starts)
 SKIP_DIRS = {".Spotlight-V100", ".Trashes", ".fseventsd", ".TemporaryItems", "System Volume Information", "$RECYCLE.BIN"}
 # his folder names (Card Offload makes them) in the order he places them; unknown folders after these, the drone after
 # them and folders called trash / gunoi at the very end
@@ -110,6 +110,69 @@ def sound_folders(root):
     return out
 
 
+def all_folders(root):
+    """Every folder of the wedding: the camera folders (find_cameras) and the sound folders (lavaliere, recorder:
+    sound=True), owner: "everything that is in the wedding folder goes into the project"."""
+    return find_cameras(root) + [dict(c, sound=True) for c in sound_files(root)]
+
+
+def groups(ach):
+    """The sound of a file the way Premiere lays it out (measured on his Premiere exports and his reference sequence
+    "cum trebuie sa arate cadrele ca si sunet si setari"): the channels in STEREO PAIRS, one track per pair
+    (FX6 4 channels = A1 stereo 1+2, A2 stereo 3+4; FX3 / A7 / osmo 2 channels = ONE stereo track), an odd last
+    channel = a mono track (a mono lavalier = one mono track). -> [("stereo", [1, 2]), ("mono", [3])...]"""
+    out = [("stereo", [k, k + 1]) for k in range(1, ach, 2)]
+    if ach % 2:
+        out.append(("mono", [ach]))
+    return out
+
+
+def _file_xml(f, i, files):
+    """The <file> of a clip, written whole the first time, then <file id/>. The sound described like Premiere does:
+    more than 2 channels -> pproOriginalAudio with all of them, then one <audio> per stereo pair / mono channel."""
+    if f in files:
+        return f'<file id="{files[f]}"/>'
+    files[f] = f"file-{len(files) + 1}"
+    frate, ffps = core._rate(i["fps"] if i.get("video") else SEQ_FPS)
+    sc = f'<samplecharacteristics><depth>16</depth><samplerate>{i.get("arate", 48000)}</samplerate></samplecharacteristics>'
+    aud = ""
+    if i.get("ach"):
+        if i["ach"] > 2:
+            aud += f'<pproOriginalAudio>{sc}<channelcount>{i["ach"]}</channelcount></pproOriginalAudio>'
+        aud += "".join(f'<audio>{sc}<channelcount>{len(chs)}</channelcount></audio>' for _k, chs in groups(i["ach"]))
+    vid = f'<video>{core._sc(frate, i["w"], i["h"], "none")}</video>' if i.get("video") else ""
+    return (f'<file id="{files[f]}"><name>{escape(Path(f).name)}</name><pathurl>{escape(core._url(f))}</pathurl>'
+            f'{frate}<duration>{int(i["dur"] * ffps)}</duration><media>{vid}{aud}</media></file>')
+
+
+def _track_attrs(kind, ex):
+    """Premiere's exploded-track attributes: a stereo track = two xmeml tracks (index 0 and 1 of 2)."""
+    n = 2 if kind == "stereo" else 1
+    return f' currentExplodedTrackIndex="{ex}" totalExplodedTrackCount="{n}" premiereTrackType="Mono"'
+
+
+def _master(f, i, mid, files):
+    """A bin clip (master clip): picture + its sound in stereo pairs / mono, exactly like the timeline."""
+    frate, ffps = core._rate(i["fps"] if i.get("video") else SEQ_FPS)
+    nm = escape(Path(f).name)
+    fx = _file_xml(f, i, files)
+    vid = ""
+    if i.get("video"):
+        vid = (f'<video><track><clipitem id="{mid}-v"><masterclipid>{mid}</masterclipid><name>{nm}</name>{frate}'
+               f'<alphatype>none</alphatype>{fx}</clipitem></track></video>')
+        fx = f'<file id="{files[f]}"/>'
+    aud = []
+    for g, (kind, chs) in enumerate(groups(i.get("ach", 0))):
+        for ex, ch in enumerate(chs):
+            aud.append(f'<track{_track_attrs(kind, ex)}><clipitem id="{mid}-a{ch}" premiereChannelType="{kind}">'
+                       f'<masterclipid>{mid}</masterclipid><name>{nm}</name>{frate}{fx}<sourcetrack><mediatype>audio'
+                       f'</mediatype><trackindex>{ch}</trackindex></sourcetrack></clipitem></track>')
+            fx = f'<file id="{files[f]}"/>'
+    return (f'<clip id="{mid}" explodedTracks="true"><masterclipid>{mid}</masterclipid><ismasterclip>TRUE</ismasterclip>'
+            f'<duration>{int(i["dur"] * ffps)}</duration>{frate}<name>{nm}</name><media>{vid}'
+            f'<audio>{"".join(aud)}</audio></media></clip>')
+
+
 def probe(path):
     """Duration, picture, frame rate, sound channels and the camera's recording time of one file (one FFmpeg call)."""
     import subprocess
@@ -188,7 +251,8 @@ def layout(cams, infos, gap=GAP):
     """[(camera name, [(path, start frame, length in frames)])] at 25 fps, plus the clips that could not be read."""
     sf, pos, out, bad = SEQ_FPS, 0, [], []
     for c in cams:
-        ok = [f for f in c["files"] if infos.get(f, {}).get("video") and int(infos[f]["dur"] * sf) >= 1]
+        ok = [f for f in c["files"] if (infos.get(f, {}).get("video") or infos.get(f, {}).get("ach"))
+              and int(infos[f]["dur"] * sf) >= 1]
         bad += [f for f in c["files"] if f not in ok]
         row = []
         for f in chrono(ok, infos):
@@ -205,11 +269,14 @@ SLOTS = ["A", "B", "C", "D", "E", "F", "G", "H"]
 
 
 def default_slots(cams):
-    """Every camera folder -> its place: 'A', 'B'... in his order, 'drone' for the drone, 'out' for trash / gunoi."""
+    """Every folder -> its place: 'A', 'B'... in his order, 'drone' for the drone, 'sound' for the sound folders
+    (lavaliere, recorder), 'out' for trash / gunoi."""
     out, k = [], 0
     for c in cams:
         r = rank(c["name"])[0]
-        if r == 4:
+        if c.get("sound"):
+            out.append("sound")
+        elif r == 4:
             out.append("out")
         elif r == 2:
             out.append("drone")
@@ -221,108 +288,94 @@ def default_slots(cams):
 
 def by_slot(cams, slots):
     """The cameras that go into the project, in the order of their places (A, B, ... then the drone)."""
-    key = {s: i for i, s in enumerate(SLOTS + ["drone"])}
+    key = {s: i for i, s in enumerate(SLOTS + ["drone", "sound"])}
     picked = [(key[s], i, c, s) for i, (c, s) in enumerate(zip(cams, slots)) if s in key]
     return [(c, s) for _, _, c, s in sorted(picked)]
 
 
 def export_xml(lay, infos, out_path, name, project=None):
-    """One 25 fps sequence: every clip whole on V1, its sound channel k on track Ak (source channel k), LINKED to the
-    picture (link = clip's track + its position in that track, the sound in one group).
-    With project (v3.10.1): the XML is a whole project: one BIN per camera (lay's names) holding its clips as master
-    clips, and the sequence next to them; the sequence's clips point to those master clips (masterclipid), so
-    Premiere does not add a second copy of every clip. Premiere: File > Open the XML = a new project."""
+    """One 25 fps sequence: every camera whole, one after the other (20 min between cameras), picture on V1, sound in
+    STEREO PAIRS like Premiere (groups(): FX6 = A1 stereo 1+2 + A2 stereo 3+4, 2-channel cameras = A1 stereo, a mono
+    file = a mono track), every pair written as Premiere writes it (two exploded tracks, premiereChannelType="stereo",
+    sourcetrack = the channel), all of a clip LINKED (link = track + position in that track, sound in one group).
+    Sound folders (lavaliere, recorder) go on the timeline as sound only.
+    With project: one BIN per folder holding its clips as master clips, and the sequence next to them (masterclipid)."""
     rate_xml, sf = core._rate(SEQ_FPS)
     clips = [(f, st, n) for _, row in lay for f, st, n in row]
     if not clips:
-        raise ValueError("No video clips to put on the timeline.")
-    first = lay[0][1]
+        raise ValueError("No clips to put on the timeline.")
+    vids = [f for f, _, _ in clips if infos[f].get("video")]
     sizes = {}
-    for f, _, _ in first:
+    for f in vids[:200]:
         k = (infos[f]["w"], infos[f]["h"])
         sizes[k] = sizes.get(k, 0) + 1
-    sw, sh = max(sizes, key=sizes.get)                   # the main camera's picture size (his: 1920x1080)
-    nach = max([infos[f]["ach"] for f, _, _ in clips] + [0])
-    ids, n = {}, 0
+    sw, sh = max(sizes, key=sizes.get) if sizes else (1920, 1080)
+    # the audio slots: (pair / mono group number, kind) -> xmeml tracks (2 for stereo)
+    slots = sorted({(g, kind) for f, _, _ in clips for g, (kind, _c) in enumerate(groups(infos[f].get("ach", 0)))},
+                   key=lambda t: (t[1] != "stereo", t[0]))   # stereo tracks first (A1, A2), mono after
+    tracks, tix = [], {}
+    for sl in slots:
+        for ex in range(2 if sl[1] == "stereo" else 1):
+            tix[(sl, ex)] = len(tracks) + 1
+            tracks.append((sl, ex))
+    ids, n, vpos = {}, 0, 0
+    tpos = {t: 0 for t in tix.values()}
     for ci, (f, st, ln) in enumerate(clips, 1):
-        n += 1
-        ids[("v", ci)] = (f"clipitem-{n}", 1, ci)
-    for k in range(1, nach + 1):
-        pos = 0
-        for ci, (f, st, ln) in enumerate(clips, 1):
-            if infos[f]["ach"] >= k:
-                pos += 1
+        if infos[f].get("video"):
+            n += 1
+            vpos += 1
+            ids[("v", ci)] = (f"clipitem-{n}", 1, vpos)
+    for ci, (f, st, ln) in enumerate(clips, 1):
+        for g, (kind, chs) in enumerate(groups(infos[f].get("ach", 0))):
+            for ex, ch in enumerate(chs):
+                t = tix[((g, kind), ex)]
                 n += 1
-                ids[("a", k, ci)] = (f"clipitem-{n}", k, pos)
-    files = {}
-
-    def file_xml(f):
-        if f in files:
-            return f'<file id="{files[f]}"/>'
-        files[f] = f"file-{len(files) + 1}"
-        i = infos[f]
-        frate, ffps = core._rate(i["fps"])
-        aud = (f'<audio><samplecharacteristics><depth>16</depth><samplerate>{i["arate"]}</samplerate></samplecharacteristics>'
-               f'<channelcount>{i["ach"]}</channelcount></audio>') if i["ach"] else ""
-        return (f'<file id="{files[f]}"><name>{escape(Path(f).name)}</name><pathurl>{escape(core._url(f))}</pathurl>'
-                f'{frate}<duration>{int(i["dur"] * ffps)}</duration><media><video>{core._sc(frate, i["w"], i["h"], "none")}'
-                f'</video>{aud}</media></file>')
-
-    def links(ci, f):
-        if not infos[f]["ach"]:
-            return ""
-        v = ids[("v", ci)]
-        out = [f'<link><linkclipref>{v[0]}</linkclipref><mediatype>video</mediatype><trackindex>1</trackindex>'
-               f'<clipindex>{v[2]}</clipindex></link>']
-        for k in range(1, infos[f]["ach"] + 1):
-            a = ids[("a", k, ci)]
-            out.append(f'<link><linkclipref>{a[0]}</linkclipref><mediatype>audio</mediatype><trackindex>{k}</trackindex>'
-                       f'<clipindex>{a[2]}</clipindex><groupindex>1</groupindex></link>')
-        return "".join(out)
-
-    master = {}
-    bins_xml = []
+                tpos[t] += 1
+                ids[("a", ci, ch)] = (f"clipitem-{n}", t, tpos[t], kind)
+    files, master, bins_xml = {}, {}, []
     if project is not None:                       # the bins first: every file is written whole the first time here
         for cam, row in lay:
             items = []
             for f, _st, _ln in row:
-                if f in master:
-                    continue
-                mid = f"masterclip-{len(master) + 1}"
-                master[f] = mid
-                i = infos[f]
-                frate, ffps = core._rate(i["fps"])
-                fd = int(i["dur"] * ffps)
-                mc = (f'<clipitem id="{mid}-v"><masterclipid>{mid}</masterclipid><name>{escape(Path(f).name)}</name>'
-                      f'{frate}<alphatype>none</alphatype>{file_xml(f)}</clipitem>')
-                aud = "".join(
-                    f'<track><clipitem id="{mid}-a{k}"><masterclipid>{mid}</masterclipid><name>{escape(Path(f).name)}'
-                    f'</name>{frate}<file id="{files[f]}"/><sourcetrack><mediatype>audio</mediatype><trackindex>{k}'
-                    f'</trackindex></sourcetrack></clipitem></track>' for k in range(1, i["ach"] + 1))
-                items.append(f'<clip id="{mid}" explodedTracks="true"><masterclipid>{mid}</masterclipid>'
-                             f'<ismasterclip>TRUE</ismasterclip><duration>{fd}</duration>{frate}'
-                             f'<name>{escape(Path(f).name)}</name><media><video><track>{mc}</track></video>'
-                             f'<audio>{aud}</audio></media></clip>')
+                if f not in master:
+                    master[f] = f"masterclip-{len(master) + 1}"
+                    items.append(_master(f, infos[f], master[f], files))
             bins_xml.append(f'<bin><name>{escape(cam)}</name><children>{"".join(items)}</children></bin>')
 
-    def head(cid, f, st, ln):
-        mc = f"<masterclipid>{master[f]}</masterclipid>" if f in master else ""
-        return (f'<clipitem id="{cid}">{mc}<name>{escape(Path(f).name)}</name><duration>{ln}</duration>{rate_xml}'
-                f'<start>{st}</start><end>{st + ln}</end><in>0</in><out>{ln}</out>')
+    def links(ci, f):
+        out = []
+        if ("v", ci) in ids:
+            v = ids[("v", ci)]
+            out.append(f'<link><linkclipref>{v[0]}</linkclipref><mediatype>video</mediatype><trackindex>1</trackindex>'
+                       f'<clipindex>{v[2]}</clipindex></link>')
+        for _g, (_kind, chs) in enumerate(groups(infos[f].get("ach", 0))):
+            for ch in chs:
+                a = ids[("a", ci, ch)]
+                out.append(f'<link><linkclipref>{a[0]}</linkclipref><mediatype>audio</mediatype><trackindex>{a[1]}'
+                           f'</trackindex><clipindex>{a[2]}</clipindex><groupindex>1</groupindex></link>')
+        return "".join(out) if len(out) > 1 else ""
 
-    vx = [head(ids[("v", ci)][0], f, st, ln) + file_xml(f) + links(ci, f) + "</clipitem>"
-          for ci, (f, st, ln) in enumerate(clips, 1)]
-    ax = []
-    for k in range(1, nach + 1):
-        items = [head(ids[("a", k, ci)][0], f, st, ln) + file_xml(f) +
-                 f'<sourcetrack><mediatype>audio</mediatype><trackindex>{k}</trackindex></sourcetrack>' + links(ci, f) +
-                 "</clipitem>" for ci, (f, st, ln) in enumerate(clips, 1) if infos[f]["ach"] >= k]
-        ax.append(items)
+    def head(cid, f, st, ln, attr=""):
+        mc = f"<masterclipid>{master[f]}</masterclipid>" if f in master else ""
+        return (f'<clipitem id="{cid}"{attr}>{mc}<name>{escape(Path(f).name)}</name><enabled>TRUE</enabled>'
+                f'<duration>{ln}</duration>{rate_xml}<start>{st}</start><end>{st + ln}</end><in>0</in><out>{ln}</out>')
+
+    vx = [head(ids[("v", ci)][0], f, st, ln) + _file_xml(f, infos[f], files) + links(ci, f) + "</clipitem>"
+          for ci, (f, st, ln) in enumerate(clips, 1) if ("v", ci) in ids]
+    ax = {t: [] for t in tix.values()}
+    for ci, (f, st, ln) in enumerate(clips, 1):
+        for _g, (kind, chs) in enumerate(groups(infos[f].get("ach", 0))):
+            for ch in chs:
+                cid, t, _pos, _k = ids[("a", ci, ch)]
+                ax[t].append(head(cid, f, st, ln, f' premiereChannelType="{kind}"') + _file_xml(f, infos[f], files) +
+                             f'<sourcetrack><mediatype>audio</mediatype><trackindex>{ch}</trackindex></sourcetrack>' +
+                             links(ci, f) + "</clipitem>")
     total = clips[-1][1] + clips[-1][2]
-    arate = next((infos[f]["arate"] for f, _, _ in clips if infos[f]["ach"]), 48000)
-    trk = lambda its: f'<track>{"".join(its)}<enabled>TRUE</enabled><locked>FALSE</locked></track>'
+    arate = next((infos[f]["arate"] for f, _, _ in clips if infos[f].get("ach")), 48000)
+    trk = lambda its, attrs="": f'<track{attrs}>{"".join(its)}<enabled>TRUE</enabled><locked>FALSE</locked></track>'
     audio = (f'<audio><numOutputChannels>2</numOutputChannels><format><samplecharacteristics><depth>16</depth>'
-             f'<samplerate>{arate}</samplerate></samplecharacteristics></format>{"".join(trk(a) for a in ax)}</audio>')
+             f'<samplerate>{arate}</samplerate></samplecharacteristics></format>'
+             f'{"".join(trk(ax[tix[(sl, ex)]], _track_attrs(sl[1], ex)) for sl, ex in tracks)}</audio>')
     seq = (f'<sequence id="sequence-1"><name>{escape(name)}</name><duration>{total}</duration>{rate_xml}'
            f'<media><video><format>{core._sc(rate_xml, sw, sh, "none")}</format>{trk(vx)}</video>{audio}</media>'
            f'</sequence>')
@@ -349,46 +402,20 @@ def sound_files(root):
     return out
 
 
-def export_bins(groups, infos, out_path, project):
-    """CUSTOM project (v3.10.1, the workflow of a videographer who labels the cameras and makes the sequence himself):
-    only bins, one per folder, every clip whole as a master clip (video with all its sound channels, or sound only),
-    NO sequence. groups = [(bin name, [files])]. Premiere: File > Open the XML = the new project."""
+def export_bins(folders, infos, out_path, project):
+    """CUSTOM project (the workflow of a videographer who labels the cameras and makes the sequence himself): only
+    bins, one per folder (cameras AND sound folders), every clip whole as a master clip with its sound in stereo pairs
+    / mono like Premiere (groups()), NO sequence. folders = [(bin name, [files])]."""
     files, bins, n_clips, bad = {}, [], 0, []
-
-    def file_xml(f, i):
-        if f in files:
-            return f'<file id="{files[f]}"/>'
-        files[f] = f"file-{len(files) + 1}"
-        frate, ffps = core._rate(i["fps"] if i.get("video") else SEQ_FPS)
-        aud = (f'<audio><samplecharacteristics><depth>16</depth><samplerate>{i["arate"]}</samplerate></samplecharacteristics>'
-               f'<channelcount>{i["ach"]}</channelcount></audio>') if i["ach"] else ""
-        vid = f'<video>{core._sc(frate, i["w"], i["h"], "none")}</video>' if i.get("video") else ""
-        return (f'<file id="{files[f]}"><name>{escape(Path(f).name)}</name><pathurl>{escape(core._url(f))}</pathurl>'
-                f'{frate}<duration>{int(i["dur"] * ffps)}</duration><media>{vid}{aud}</media></file>')
-
-    for name, fs in groups:
+    for name, fs in folders:
         items = []
         for f in fs:
             i = infos.get(f) or {}
             if not i.get("dur") or not (i.get("video") or i.get("ach")):
                 bad.append(f)
                 continue
-            mid = f"masterclip-{n_clips + 1}"
             n_clips += 1
-            frate, ffps = core._rate(i["fps"] if i.get("video") else SEQ_FPS)
-            nm = escape(Path(f).name)
-            fx = file_xml(f, i)
-            first_audio = not i.get("video")
-            vid = (f'<video><track><clipitem id="{mid}-v"><masterclipid>{mid}</masterclipid><name>{nm}</name>{frate}'
-                   f'<alphatype>none</alphatype>{fx}</clipitem></track></video>') if i.get("video") else ""
-            aud = "".join(
-                f'<track><clipitem id="{mid}-a{k}"><masterclipid>{mid}</masterclipid><name>{nm}</name>{frate}'
-                f'{fx if first_audio and k == 1 else f"<file id={chr(34)}{files[f]}{chr(34)}/>"}'
-                f'<sourcetrack><mediatype>audio</mediatype><trackindex>{k}</trackindex></sourcetrack></clipitem></track>'
-                for k in range(1, i["ach"] + 1))
-            items.append(f'<clip id="{mid}" explodedTracks="true"><masterclipid>{mid}</masterclipid>'
-                         f'<ismasterclip>TRUE</ismasterclip><duration>{int(i["dur"] * ffps)}</duration>{frate}'
-                         f'<name>{nm}</name><media>{vid}<audio>{aud}</audio></media></clip>')
+            items.append(_master(f, i, f"masterclip-{n_clips}", files))
         if items:
             bins.append((name, len(items), f'<bin><name>{escape(name)}</name><children>{"".join(items)}</children></bin>'))
     if not bins:

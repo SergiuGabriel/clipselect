@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.11.3), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.11.4), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -726,6 +726,23 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 - A real .prproj cannot be written (closed format): Premiere File > Open on the XML makes the project (Larry Jordan /
   Adobe docs), he saves it. NOT verified in Premiere here: that bins + masterclipid import without duplicate clips, and
   that "open -a Premiere file.xml" opens it as a project (vs. asking). DaVinci Import Timeline with <project> not verified.
+
+## v3.11.4 (his check of v3.11.3 Create Project + his reference sequence in Premiere)
+- Sound laid out like PREMIERE (read from his project NUNTA 25 OCTOMBRIE 2026 Ralu si Berti.prproj, sequence "cum trebuie
+  sa arate cadrele ca si sunet si setari(cand ai 4 piste audio)": FX6 = A1 STEREO channels 1+2, A2 STEREO 3+4; and from
+  his Premiere xmeml exports (4 iulie selects, Mada & Radu) = how a stereo track is WRITTEN: two exploded tracks
+  currentExplodedTrackIndex 0/1, totalExplodedTrackCount 2, premiereTrackType="Mono" (as Premiere writes it),
+  clipitems premiereChannelType="stereo", sourcetrack trackindex = the channel; the <file> of a 4-channel MXF =
+  pproOriginalAudio channelcount 4 + one <audio> channelcount 2 per pair; a 2-channel MP4 = one <audio> 2 (no
+  pproOriginalAudio)). projectsetup.groups(ach): pairs as stereo, an odd last channel mono -> FX3 / A7 / osmo = ONE
+  stereo track (owner: "FX3 must be one track"), mono lavalier = one mono track. Stereo slots first (A1, A2), mono after.
+  _file_xml / _master / _track_attrs shared by Auto (export_xml) and Custom (export_bins): same rules in both.
+- GAP = 20 min between cameras (owner: 10 s glued them together visually).
+- EVERY folder of the wedding goes in (owner): projectsetup.all_folders = cameras + sound folders (sound=True, slot
+  "sound": lavaliere, recorder) -> bins in both modes, and in Auto at the end of the sequence (sound only, mono / stereo
+  tracks). The "Also the sound folders" tick is gone (Leave out in the picker instead).
+- Create Project has no NEW badge any more. Logi Options+ popping up in Premiere: Logitech's own plugin, starts with
+  Premiere; the app only writes an XML and runs "open -a Premiere file.xml".
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

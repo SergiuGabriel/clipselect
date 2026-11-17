@@ -78,8 +78,8 @@ copii pe jumătate care să pară bune.</li>
 
 <h2>Creează proiectul (Premiere / DaVinci)</h2>
 <p><b>Două moduri.</b> <b>Auto</b> (ce e descris mai jos): bin-uri pe camere plus secvența de selecție gata făcută. <b>Custom</b>: pentru
-cine lucrează altfel. Proiectul are doar folderele ca bin-uri (câte unul pentru fiecare folder de cameră, cu numele folderului, plus,
-dacă bifezi, folderele de sunet: recorder, lavaliere), fiecare clip întreg cu tot sunetul lui, <b>fără secvență</b>, ca și cum ai trage
+cine lucrează altfel. Proiectul are doar folderele ca bin-uri (câte unul pentru fiecare folder de cameră, cu numele folderului, plus
+folderele de sunet: lavaliere, recorder), fiecare clip întreg cu tot sunetul lui, <b>fără secvență</b>, ca și cum ai trage
 folderele în Premiere. Acolo dai fiecărei camere un label, selectezi clipurile și faci tu secvența. Selectorul de cameră alege și aici
 ordinea bin-urilor și ce lași afară („Nu include”).</p>
 <p>După descărcarea cardurilor: toate filmările nunții pe un singur timeline, <b>cum le așezi tu pentru selecție</b> (măsurat pe
@@ -89,8 +89,8 @@ selecțiile tale de la 4 iulie și de la Mădălina &amp; Radu).</p>
 conține un singur folder cu camerele (de exemplu „Video”), aplicația intră singură în el.</li>
 <li><b>Camerele</b> apar în ordinea ta: fx6, fx3, a74, osmo, apoi alte foldere necunoscute, apoi drona (drona, mavic, dji), iar
 folderele „trash” / „gunoi” la final. Lângă fiecare folder alegi <b>ce cameră e</b>: Camera A…H, Drona sau <b>Nu include</b>.
-Secvența merge A, B, C…, apoi drona (alegerea se ține minte pentru nunta asta). Sub listă vezi folderele doar cu sunet (recorder,
-lavaliere): rămân afară, ca în selecțiile tale.</li>
+Secvența merge A, B, C…, apoi drona (alegerea se ține minte pentru nunta asta). Folderele doar cu sunet (lavaliere, recorder) apar și ele
+în listă, cu „Sunet”: intră în proiect (bin-uri) și, la Auto, la finalul secvenței.</li>
 <li><b>Numele proiectului</b>: implicit numele folderului nunții; scrie ce vrei. Secvența se numește „selectie” (în engleză
 „select”).</li>
 <li><b>Creează proiectul.</b> Aplicația citește fiecare clip (câteva deodată) și face proiectul: câte un <b>bin pentru fiecare
@@ -98,12 +98,14 @@ cameră</b> („Camera A - fx6”, „Camera B - a7siii”, „Drona - dji”), 
 </ol>
 <h3>Cum arată timeline-ul</h3>
 <ul>
-<li>O cameră după alta pe <b>V1</b>, cu <b>10 secunde libere</b> între camere (vezi unde începe fiecare).</li>
+<li>O cameră după alta pe <b>V1</b>, cu <b>20 de minute libere</b> între camere (vezi clar unde începe fiecare), apoi drona și
+folderele de sunet.</li>
 <li>Clipurile fiecărei camere <b>în ordinea în care au fost filmate</b>: după ceasul camerei din fișier, dacă toate clipurile camerei
 îl au; altfel după data fișierului (copiile o păstrează). Dacă două sunt egale, după nume. Numerotarea care o ia de la capăt
 (C9999 → C0001) nu încurcă ordinea.</li>
-<li>Fiecare clip <b>întreg</b>, cu <b>tot sunetul lui</b>: canalul 1 pe A1, canalul 2 pe A2 etc. (FX6: 4 canale pe A1–A4, celelalte
-camere A1–A2, drona fără sunet), sunetul legat de imagine.</li>
+<li>Fiecare clip <b>întreg</b>, cu <b>tot sunetul lui</b>, așezat ca în Premiere: canalele <b>câte două, ca stereo</b>. FX6 (4
+canale): A1 stereo = canalele 1+2, A2 stereo = canalele 3+4. FX3, A7, osmo (2 canale): o singură pistă stereo, A1. O lavalieră mono:
+o pistă mono. Drona fără sunet. Sunetul e legat de imagine. Aceleași reguli și în Custom, în bin-uri.</li>
 <li>Sequence 25 fps, mărimea camerei principale (la tine 1920×1080).</li>
 <li>Proxy-urile (SUB/…S03, foldere PROXY, .LRF) și fișierele XML de lângă clipuri nu intră.</li>
 </ul>
@@ -726,7 +728,7 @@ look good are left behind.</li>
 
 <h2>Create Project (Premiere / DaVinci)</h2>
 <p><b>Two modes.</b> <b>Auto</b> (described below): camera bins plus the selects sequence ready made. <b>Custom</b>: for those who work
-differently. The project has only the folders as bins (one per camera folder, named like the folder, plus, when ticked, the sound
+differently. The project has only the folders as bins (one per camera folder, named like the folder, plus the sound
 folders: recorder, lavaliere), every clip whole with all its sound, <b>no sequence</b>, as if you dragged the folders into Premiere.
 There you give every camera a label, select the clips and make the sequence yourself. The camera picker still sets the bins' order and
 what stays out ("Leave out").</p>
@@ -737,8 +739,8 @@ what stays out ("Leave out").</p>
 that holds a single folder with the cameras (e.g. "Video"), the app goes into it by itself.</li>
 <li>The <b>cameras</b> come in your order: fx6, fx3, a74, osmo, then other unknown folders, then the drone (drona, mavic, dji), and
 "trash" / "gunoi" folders last. Next to every folder you choose <b>which camera it is</b>: Camera A…H, Drone or <b>Leave out</b>. The
-sequence goes A, B, C…, then the drone (the choice is remembered for this wedding). Under the list you see the sound-only folders
-(recorder, lavaliere): they stay out, like in your selects.</li>
+sequence goes A, B, C…, then the drone (the choice is remembered for this wedding). The sound-only folders (lavaliere, recorder) are in the list
+too, as "Sound": they go into the project (bins) and, in Auto, at the end of the sequence.</li>
 <li><b>Project name</b>: the wedding folder's name by default; type what you want. The sequence is called "select" (in Romanian
 "selectie").</li>
 <li><b>Create the project.</b> The app reads every clip (several at a time) and builds the project: one <b>bin per camera</b> ("Camera
@@ -746,12 +748,14 @@ A - fx6", "Camera B - a7siii", "Drone - dji") with its clips in the order they w
 </ol>
 <h3>What the timeline looks like</h3>
 <ul>
-<li>One camera after the other on <b>V1</b>, with <b>10 empty seconds</b> between cameras (you see where each one starts).</li>
+<li>One camera after the other on <b>V1</b>, with <b>20 empty minutes</b> between cameras (you clearly see where each one starts),
+then the drone and the sound folders.</li>
 <li>Every camera's clips <b>in the order they were filmed</b>: by the camera's clock in the file when every clip of that camera has
 it; otherwise by the file date (copies keep it). When two are equal, by name. Numbering that starts again (C9999 → C0001) does not
 mix up the order.</li>
-<li>Every clip <b>whole</b>, with <b>all its sound</b>: channel 1 on A1, channel 2 on A2 etc. (FX6: 4 channels on A1–A4, the other
-cameras A1–A2, the drone no sound), linked to the picture.</li>
+<li>Every clip <b>whole</b>, with <b>all its sound</b>, laid out like Premiere: the channels <b>two by two, as stereo</b>. FX6 (4
+channels): A1 stereo = channels 1+2, A2 stereo = channels 3+4. FX3, A7, osmo (2 channels): one stereo track, A1. A mono lavalier: a mono
+track. The drone has no sound. The sound is linked to the picture. The same rules in Custom, in the bins.</li>
 <li>25 fps sequence, the main camera's size (yours: 1920×1080).</li>
 <li>Proxies (SUB/…S03, PROXY folders, .LRF) and the XML files next to the clips stay out.</li>
 </ul>

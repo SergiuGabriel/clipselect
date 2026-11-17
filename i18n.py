@@ -370,6 +370,12 @@ EXACT["Choose the wedding folder and give the project a name. Auto: a new Premie
 
 EXACT.update({"Auto (camera bins + the sequence)": "Auto (bin-uri pe camere + secvența)", "Custom (only the folders, you make the sequence)": "Custom (doar folderele, secvența o faci tu)"})
 
+EXACT.update({"Sound": "Sunet",
+    "For every folder choose which camera it is: the sequence goes A, B, C…, then the drone and the sound folders (lavaliere, recorder), 20 minutes apart; \"Leave out\" keeps a folder out of the project.":
+        "Pentru fiecare folder alege ce cameră e: secvența merge A, B, C…, apoi drona și folderele de sunet (lavaliere, recorder), la 20 de minute una de alta; „Nu include” lasă folderul în afara proiectului."})
+
+TEMPLATES["Project ready: {} clips in {} bins and the sequence \"{}\". Open it in Premiere Pro."] = "Proiect gata: {} clipuri în {} bin-uri și secvența „{}”. Deschide-l în Premiere Pro."
+
 _PATS = []
 
 
