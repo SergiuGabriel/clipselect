@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (QPlainTextEdit, QTextBrowser, QAbstractItemView, 
                                QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
                                QMainWindow, QProgressBar, QPushButton, QScrollArea, QSlider, QStackedWidget,
                                QTabWidget, QVBoxLayout, QWidget, QSizePolicy, QTableWidget, QTableWidgetItem,
-                               QHeaderView, QCheckBox)
+                               QHeaderView, QCheckBox, QRadioButton)
 
 import core
 import director
@@ -49,7 +49,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.11.2"
+APP, VER = "MoneyMakingMachine", "v3.11.3"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -4955,6 +4955,19 @@ class _ProbeWorker(QThread):
             self.failed.emit(str(e))
 
 
+def _premiere_app():
+    """The newest Premiere Pro installed (Mac: the .app, Windows: the .exe), or ""."""
+    import glob
+    if sys.platform == "darwin":
+        found = glob.glob("/Applications/Adobe Premiere Pro*/Adobe Premiere Pro*.app")
+    elif os.name == "nt":
+        found = glob.glob(os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), "Adobe",
+                                       "Adobe Premiere Pro*", "Adobe Premiere Pro.exe"))
+    else:
+        found = []
+    return sorted(found)[-1] if found else ""
+
+
 class CreateProjectPage(QWidget):
     """The wedding folder -> one timeline the way he lays out the footage for the selection (see projectsetup.py)."""
 
@@ -4969,14 +4982,32 @@ class CreateProjectPage(QWidget):
         top = QHBoxLayout()
         top.addWidget(lbl("Create Project", "h1"))
         top.addStretch()
-        self.b_go = btn("Create the XML", "primary", self.start)
+        self.b_go = btn("Create the project", "primary", self.start)
         top.addWidget(self.b_go)
         v.addLayout(top)
-        v.addWidget(lbl("Choose the wedding folder: every camera goes on one timeline, the way you lay them out for the "
-                        "selection: fx6, fx3, a74, osmo, then the drone, one camera after the other, every camera's clips "
-                        "in the order they were filmed, whole and with their sound. The XML goes into the project you "
-                        "have open in Premiere Pro or DaVinci Resolve.", "muted", True))
-        v.addSpacing(10)
+        v.addWidget(lbl("Choose the wedding folder and give the project a name. Auto: a new Premiere Pro project with one "
+                        "bin for every camera and the selects sequence (camera A, B, C…, then the drone, every camera's "
+                        "clips in the order they were filmed, whole and with their sound). Custom: only the folders as bins, "
+                        "like dragging them into Premiere; you label the cameras and make the sequence yourself.",
+                        "muted", True))
+        mr = QHBoxLayout()
+        mr.setSpacing(18)
+        mr.addWidget(lbl("MODE", "section"))
+        self.m_auto = QRadioButton(i18n.T("Auto (camera bins + the sequence)"))
+        self.m_custom = QRadioButton(i18n.T("Custom (only the folders, you make the sequence)"))
+        (self.m_custom if self.cfg.get("mode") == "custom" else self.m_auto).setChecked(True)
+        for rb_ in (self.m_auto, self.m_custom):
+            rb_.setStyleSheet("QRadioButton{spacing:8px;padding:4px 0}"
+                              "QRadioButton::indicator{width:15px;height:15px;border:1px solid #8a8a8a;border-radius:8px;"
+                              "background:#232323}"
+                              f"QRadioButton::indicator:checked{{background:qradialgradient(cx:0.5,cy:0.5,radius:0.5,fx:0.5,fy:0.5,"
+                              f"stop:0 {C['HOT']},stop:0.55 {C['HOT']},stop:0.6 #232323,stop:1 #232323);"
+                              f"border:1px solid {C['HOT']}}}")
+            rb_.toggled.connect(self._mode_changed)
+            mr.addWidget(rb_)
+        mr.addStretch()
+        v.addLayout(mr)
+        v.addSpacing(6)
         body = QHBoxLayout()
         body.setSpacing(24)
         v.addLayout(body, 1)
@@ -4991,23 +5022,33 @@ class CreateProjectPage(QWidget):
         fr.addWidget(btn("Choose folder", slot=self.pick))
         left.addLayout(fr)
         left.addSpacing(6)
+        left.addWidget(lbl("PROJECT NAME", "section"))
+        self.name = QLineEdit()
+        self.name.setPlaceholderText(i18n.T("e.g. Florin and Miruna"))
+        self.name.textChanged.connect(lambda t: (self.cfg.update(project=t), self.store.save_app()))
+        left.addWidget(self.name)
+        self.seq_lbl = lbl(i18n.T("The sequence is called \"{}\".").format(self._seq_name()), "muted", True)
+        left.addWidget(self.seq_lbl)
+        left.addSpacing(6)
         left.addWidget(lbl("CAMERAS", "section"))
-        left.addWidget(lbl("Drag a camera to change the order; untick one to leave it out.", "muted", True))
-        self.list = QListWidget()
-        self.list.setDragDropMode(QAbstractItemView.InternalMove)
-        self.list.setDefaultDropAction(Qt.MoveAction)
-        box = (f"background:#181818;border:1px solid {C['BORDER']};border-radius:6px;padding:6px;")
-        self.list.setStyleSheet(f"QListWidget{{{box}}} QListWidget::item{{padding:7px 4px}}"
-                                f"QListWidget::indicator{{width:16px;height:16px;border:1px solid #6a6a6a;border-radius:4px;background:#232323}}"
-                                f"QListWidget::indicator:checked{{background:{C['HOT']};border-color:{C['HOT']};image:url({_check_png()})}}")
+        left.addWidget(lbl("For every folder choose which camera it is: the sequence goes A, B, C…, then the drone; "
+                           "\"Leave out\" keeps a folder out of the project.", "muted", True))
+        self.list = QTableWidget(0, 2)
+        self.list.setHorizontalHeaderLabels([i18n.T("Folder"), i18n.T("Camera")])
+        self.list.verticalHeader().hide()
+        self.list.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.list.setSelectionMode(QAbstractItemView.NoSelection)
+        self.list.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.list.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.list.setStyleSheet(f"QTableWidget{{background:#181818;border:1px solid {C['BORDER']};border-radius:6px}}")
         left.addWidget(self.list, 1)
         self.sound = lbl("", "muted", True)
         left.addWidget(self.sound)
+        self.with_sound = QCheckBox(i18n.T("Also the sound folders (recorder, lavaliere) as bins"))
+        self.with_sound.setChecked(self.cfg.get("with_sound", True))
+        self.with_sound.toggled.connect(lambda on: (self.cfg.update(with_sound=on), self.store.save_app()))
+        left.addWidget(self.with_sound)
         left.addSpacing(6)
-        left.addWidget(lbl("SEQUENCE NAME", "section"))
-        self.name = QLineEdit(self.cfg.get("name") or ("selectie" if i18n.LANG == "ro" else "selects"))
-        self.name.textChanged.connect(lambda t: (self.cfg.update(name=t), self.store.save_app()))
-        left.addWidget(self.name)
         body.addLayout(left, 1)
         right = QVBoxLayout()
         right.setSpacing(8)
@@ -5016,16 +5057,22 @@ class CreateProjectPage(QWidget):
         how.setWordWrap(True)
         how.setTextFormat(Qt.RichText)
         how.setStyleSheet(f"background:#181818;border:1px solid {C['BORDER']};border-radius:6px;padding:12px;line-height:140%")
-        how.setText("<b>Premiere Pro:</b> with your project open, drag the XML into the Project panel (or File &gt; Import). "
-                    "A new sequence with every clip in order appears, with the clips in a bin."
+        how.setText("<b>Premiere Pro, a new project:</b> press <b>Open in Premiere Pro</b>, or in Premiere's start screen "
+                    "File &gt; Open and choose the XML. The project opens with one bin per camera and the selects "
+                    "sequence; save it (Cmd+S / Ctrl+S) next to the XML with the same name."
+                    "<br><br><b>Into a project you already have open:</b> drag the XML into the Project panel (or File "
+                    "&gt; Import): a bin with the project's name appears, with the camera bins and the sequence inside."
                     "<br><br><b>DaVinci Resolve:</b> File &gt; Import &gt; Timeline and choose the XML."
-                    "<br><br>The XML is saved in the wedding folder; <b>Show in Finder</b> opens it there, ready to drag.")
+                    "<br><br>The XML is saved in the wedding folder; <b>Show in Finder</b> opens it there.")
         right.addWidget(how)
         right.addSpacing(6)
         self.result = lbl("", "", True)
         self.result.setTextFormat(Qt.RichText)
         right.addWidget(self.result)
         rb = QHBoxLayout()
+        self.b_open = btn("Open in Premiere Pro", "primary", self.open_premiere)
+        self.b_open.hide()
+        rb.addWidget(self.b_open)
         self.b_show = btn("Show in Finder", slot=self.show_file)
         self.b_show.hide()
         rb.addWidget(self.b_show)
@@ -5044,6 +5091,7 @@ class CreateProjectPage(QWidget):
             start = str(guess)                        # the wedding Card Offload copied last
         if start and Path(start).is_dir():
             self.load(start)
+        self._mode_changed()
         self._ui()
 
     def _drop(self, paths):
@@ -5055,6 +5103,22 @@ class CreateProjectPage(QWidget):
 
     def _busy(self):
         return bool(self.worker and self.worker.isRunning())
+
+    def _seq_name(self):
+        return "selectie" if i18n.LANG == "ro" else "select"
+
+    def _custom(self):
+        return self.m_custom.isChecked()
+
+    def _mode_changed(self, *_):
+        c = self._custom()
+        self.cfg["mode"] = "custom" if c else "auto"
+        self.store.save_app()
+        self.with_sound.setVisible(c)
+        self.sound.setVisible(not c)
+        self.seq_lbl.setText(i18n.T("No sequence: in Premiere you give every camera its label, select the clips and make "
+                                    "the sequence yourself.") if c else
+                             i18n.T("The sequence is called \"{}\".").format(self._seq_name()))
 
     def _ui(self):
         busy = self._busy()
@@ -5072,44 +5136,66 @@ class CreateProjectPage(QWidget):
         self.folder.setText(folder)
         self.result.setText("")
         self.b_show.hide()
+        self.b_open.hide()
+        if self.cfg.get("project_for") != folder or not self.cfg.get("project"):
+            self.name.setText(Path(folder).name)        # a new wedding: its folder name, changed at will
+            self.cfg["project_for"] = folder
+            self.store.save_app()
+        else:
+            self.name.setText(self.cfg.get("project", ""))
         self.cams = projectsetup.find_cameras(folder)
-        self.list.clear()
-        for c in self.cams:
+        saved = self.cfg.get("slots", {}) if self.cfg.get("slots_for") == folder else {}
+        slots = [saved.get(c["folder"], d) for c, d in zip(self.cams, projectsetup.default_slots(self.cams))]
+        choices = [(s, i18n.T("Camera {}").format(s)) for s in projectsetup.SLOTS] + \
+            [("drone", i18n.T("Drone")), ("out", i18n.T("Leave out"))]
+        self.list.setRowCount(len(self.cams))
+        self.combos = []
+        for r, (c, sl) in enumerate(zip(self.cams, slots)):
             n = len(c["files"])
-            it = QListWidgetItem(i18n.T("{}  ·  {} clips").format(c["name"], n) if n != 1 else i18n.T("{}  ·  1 clip").format(c["name"]))
+            it = QTableWidgetItem(i18n.T("{}  ·  {} clips").format(c["name"], n) if n != 1 else
+                                  i18n.T("{}  ·  1 clip").format(c["name"]))
             it.setToolTip(c["folder"])
-            it.setData(Qt.UserRole, c["folder"])
-            it.setFlags((it.flags() | Qt.ItemIsUserCheckable | Qt.ItemIsDragEnabled) & ~Qt.ItemIsDropEnabled)
-            it.setCheckState(Qt.Checked)
-            self.list.addItem(it)
+            self.list.setItem(r, 0, it)
+            cb = QComboBox()
+            for key, text in choices:
+                cb.addItem(text, key)
+            cb.setCurrentIndex(max(0, cb.findData(sl)))
+            cb.currentIndexChanged.connect(self._slots_changed)
+            cb.setMinimumWidth(150)
+            self.list.setCellWidget(r, 1, cb)
+            self.list.setRowHeight(r, max(40, cb.sizeHint().height() + 6))
+            self.combos.append(cb)
+        self.list.resizeColumnsToContents()
+        self.list.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         snd = projectsetup.sound_folders(folder)
         self.sound.setText(i18n.T("Sound only, left out like in your selects: {}").format(", ".join(snd)) if snd else "")
         if not self.cams:
             notify(i18n.T("No video found in this folder."), error=True)
         self._ui()
 
+    def _slots_changed(self):
+        self.cfg["slots_for"] = self.cfg.get("folder", "")
+        self.cfg["slots"] = {c["folder"]: cb.currentData() for c, cb in zip(self.cams, self.combos)}
+        self.store.save_app()
+
     def chosen(self):
-        by = {c["folder"]: c for c in self.cams}
-        out = []
-        for i in range(self.list.count()):
-            it = self.list.item(i)
-            if it.checkState() == Qt.Checked and it.data(Qt.UserRole) in by:
-                out.append(by[it.data(Qt.UserRole)])
-        return out
+        """[(camera, slot)] in the order of their places (A, B, … then the drone)."""
+        return projectsetup.by_slot(self.cams, [cb.currentData() for cb in getattr(self, "combos", [])])
 
     def start(self):
         cams = self.chosen()
         if not cams or self._busy():
             if not cams:
-                notify(i18n.T("Tick at least one camera."), error=True)
+                notify(i18n.T("Choose a camera for at least one folder."), error=True)
             return
         self._stop = False
         self.result.setText("")
         self.b_show.hide()
         self.pp.start(i18n.T("Reading the clips…"))
-        self.worker = _ProbeWorker(cams, lambda: self._stop)
+        extra = projectsetup.sound_files(self.cfg["folder"]) if self._custom() and self.with_sound.isChecked() else []
+        self.worker = _ProbeWorker([c for c, _ in cams] + extra, lambda: self._stop)
         self.worker.progress.connect(lambda t, f: self.pp.set(i18n.T(t), f))
-        self.worker.done.connect(lambda infos, cams=cams: self._done(cams, infos))
+        self.worker.done.connect(lambda infos, cams=cams, extra=extra: self._done(cams, infos, extra))
         self.worker.failed.connect(self._failed)
         self.worker.finished.connect(self._ui)          # done/failed run while the thread is still running
         self.worker.start()
@@ -5126,26 +5212,31 @@ class CreateProjectPage(QWidget):
         else:
             notify(i18n.T("Create Project failed: {}").format(i18n.T(why)), error=True)
 
-    def _done(self, cams, infos):
+    def _done(self, cams, infos, extra=()):
         self.pp.hide()
         self._ui()
-        name = self.name.text().strip() or ("selectie" if i18n.LANG == "ro" else "selects")
-        lay, bad = projectsetup.layout(cams, infos)
+        name = self._seq_name()
+        base = Path(self.cfg["folder"])
+        project = self.name.text().strip() or base.name
+        if self._custom():
+            return self._done_custom(cams, infos, extra, base, project)
+        binned = [dict(c, name=(i18n.T("Drone") if sl == "drone" else i18n.T("Camera {}").format(sl)) + f" - {c['name']}")
+                  for c, sl in cams]
+        lay, bad = projectsetup.layout(binned, infos)
         if not lay:
             notify(i18n.T("None of the clips could be read."), error=True)
             return
-        base = Path(self.cfg["folder"])
-        safe = re.sub(r'[\\/:*?"<>|]+', "-", f"{base.name} - {name}").strip() or "project"
+        safe = re.sub(r'[\\/:*?"<>|]+', "-", project).strip() or "project"
         out = projectsetup.free_path(base / f"{safe}.xml")
         try:
-            r = projectsetup.export_xml(lay, infos, out, name)
+            r = projectsetup.export_xml(lay, infos, out, name, project=project)
         except OSError:
             alt, _ = QFileDialog.getSaveFileName(self, "Save the XML", str(Path.home() / out.name), "XML (*.xml)")
             if not alt:
                 return
             out = Path(alt)
             try:
-                r = projectsetup.export_xml(lay, infos, out, name)
+                r = projectsetup.export_xml(lay, infos, out, name, project=project)
             except Exception as e:
                 logging.exception("create project export")
                 notify(i18n.T("Create Project failed: {}").format(i18n.T(str(e))), error=True)
@@ -5163,8 +5254,55 @@ class CreateProjectPage(QWidget):
                 len(bad), escape(", ".join(Path(b).name for b in bad[:6]) + (" …" if len(bad) > 6 else ""))) + "</span>"
         self.result.setText(txt)
         self.b_show.show()
-        notify(i18n.T("XML ready: {} clips in your order. Drag it into Premiere's Project panel.").format(r["clips"]))
+        self.b_open.setVisible(bool(_premiere_app()))
+        notify(i18n.T("Project ready: {} clips in {} camera bins and the sequence \"{}\". Open it in Premiere Pro.").format(
+            r["clips"], len(r["cameras"]), name))
         logging.info("create project %s: %s clips, %s unreadable", out, r["clips"], len(bad))
+
+    def _done_custom(self, cams, infos, extra, base, project):
+        groups = [(c["name"], projectsetup.chrono([f for f in c["files"] if infos.get(f, {}).get("dur")], infos))
+                  for c, _sl in cams] + [(c["name"], c["files"]) for c in extra]
+        safe = re.sub(r'[\\/:*?"<>|]+', "-", project).strip() or "project"
+        out = projectsetup.free_path(base / f"{safe}.xml")
+        try:
+            try:
+                r = projectsetup.export_bins(groups, infos, out, project)
+            except OSError:
+                alt, _ = QFileDialog.getSaveFileName(self, "Save the XML", str(Path.home() / out.name), "XML (*.xml)")
+                if not alt:
+                    return
+                out = Path(alt)
+                r = projectsetup.export_bins(groups, infos, out, project)
+        except Exception as e:
+            logging.exception("create project custom")
+            notify(i18n.T("Create Project failed: {}").format(i18n.T(str(e))), error=True)
+            return
+        self.out = str(out)
+        txt = (i18n.T("{} clips in {} bins: {}.").format(r["clips"], len(r["bins"]), escape(", ".join(
+            f"{b} {k}" for b, k in r["bins"]))) + "<br>" + i18n.T("Saved: {}").format(escape(out.name)))
+        if r["bad"]:
+            txt += f'<br><span style="color:{C["POOR"]}">' + i18n.T("{} files could not be read and were left out: {}").format(
+                len(r["bad"]), escape(", ".join(Path(b).name for b in r["bad"][:6]) + (" …" if len(r["bad"]) > 6 else ""))) + "</span>"
+        self.result.setText(txt)
+        self.b_show.show()
+        self.b_open.setVisible(bool(_premiere_app()))
+        notify(i18n.T("Project ready: {} clips in {} bins. Open it in Premiere Pro, label the cameras and make the sequence.")
+               .format(r["clips"], len(r["bins"])))
+        logging.info("create project custom %s: %s clips", out, r["clips"])
+
+    def open_premiere(self):
+        app = _premiere_app()
+        if not (self.out and app):
+            return
+        try:
+            if sys.platform == "darwin":
+                updater.launch(["open", "-a", app, self.out])
+            else:
+                updater.launch([app, self.out])
+            notify(i18n.T("Premiere Pro is opening the project. Save it with Cmd+S / Ctrl+S."))
+        except Exception as e:
+            logging.exception("open premiere")
+            notify(i18n.T("Premiere Pro could not be opened: {}").format(e), error=True)
 
     def show_file(self):
         if not self.out:
@@ -5355,7 +5493,8 @@ class OffloadPage(QWidget):
                           ("folders", "Keep the card's folders"),
                           ("proxies", "Skip the camera proxies (.LRF, .LRV, .THM)"),
                           ("report", "Write a report next to the footage"),
-                          ("eject", "Eject the cards when everything is copied")):
+                          ("eject", "Eject the cards when everything is copied"),
+                          ("project", "Then make the Premiere project (Create Project, in the mode chosen there)")):
             cb = QCheckBox(text)
             cb.setChecked(bool(self.cfg.get(key)))
             cb.toggled.connect(lambda on, k=key: (self.cfg.update({k: on}), self.store.save_app(), self._plan(), self._where()))
@@ -5692,6 +5831,9 @@ class OffloadPage(QWidget):
         else:
             n = sum((s["result"] or {}).get("files", 0) for s in self.state.values() if not s["check"])
             notify(f"Every card copied and checked: {n} files")
+            if self.opts["project"].isChecked() and hasattr(self.window(), "auto_project"):
+                root = str(self._root())
+                QTimer.singleShot(1200, lambda: self.window().auto_project(root))
             if self.opts["eject"].isChecked():
                 for s in self.state.values():
                     if str(s["src"]).startswith("/Volumes/"):
@@ -6851,6 +6993,18 @@ class Main(QMainWindow):
                           or (k == "offload" and w is self.offload) or (k == "transcribe" and w is self.transcribe)
                           or (k == "project" and w is self.cproject))
             repolish(b)
+
+    def auto_project(self, folder):
+        """After Card Offload: Create Project on the copied wedding, in the mode chosen on its page (runs in the queue)."""
+        cp = self.cproject
+        if cp._busy() or not Path(folder).is_dir():
+            return
+        cp.load(folder)
+        if not cp.chosen():
+            notify(i18n.T("Create Project: no camera folder with video in {}").format(Path(folder).name), error=True)
+            return
+        notify(i18n.T("Making the Premiere project of {}…").format(Path(folder).name))
+        cp.start()
 
     def go(self, where):
         if where == "dash":

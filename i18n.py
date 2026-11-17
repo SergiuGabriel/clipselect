@@ -332,6 +332,43 @@ TEMPLATES.update({
     "{}: done": "{}: gata",
 })
 EXACT.update({"Speech without text": "Vorbire fără text", "Removed inventions": "Invenții scoase"})
+EXACT.update({
+    "Create the project": "Creează proiectul", "Folder": "Folder", "Camera": "Camera", "Drone": "Drona", "Leave out": "Nu include",
+    "PROJECT NAME": "NUMELE PROIECTULUI", "e.g. Florin and Miruna": "ex. Florin și Miruna", "Open in Premiere Pro": "Deschide în Premiere Pro",
+    "Choose a camera for at least one folder.": "Alege o cameră pentru cel puțin un folder.",
+    "Premiere Pro is opening the project. Save it with Cmd+S / Ctrl+S.": "Premiere Pro deschide proiectul. Salvează-l cu Cmd+S / Ctrl+S.",
+    "Choose the wedding folder and give the project a name: in Premiere Pro you get a new project with one bin for every camera and the selects sequence with every camera one after the other (camera A, B, C…, then the drone), every camera's clips in the order they were filmed, whole and with their sound.":
+        "Alege folderul nunții și dă-i un nume proiectului: în Premiere Pro primești un proiect nou, cu câte un folder (bin) pentru fiecare cameră și secvența de selecție cu camerele una după alta (camera A, B, C…, apoi drona), clipurile fiecărei camere în ordinea în care au fost filmate, întregi și cu sunetul lor.",
+    "For every folder choose which camera it is: the sequence goes A, B, C…, then the drone; \"Leave out\" keeps a folder out of the project.":
+        "Pentru fiecare folder alege ce cameră e: secvența merge A, B, C…, apoi drona; „Nu include” lasă folderul în afara proiectului.",
+    "<b>Premiere Pro, a new project:</b> press <b>Open in Premiere Pro</b>, or in Premiere's start screen File &gt; Open and choose the XML. The project opens with one bin per camera and the selects sequence; save it (Cmd+S / Ctrl+S) next to the XML with the same name.<br><br><b>Into a project you already have open:</b> drag the XML into the Project panel (or File &gt; Import): a bin with the project's name appears, with the camera bins and the sequence inside.<br><br><b>DaVinci Resolve:</b> File &gt; Import &gt; Timeline and choose the XML.<br><br>The XML is saved in the wedding folder; <b>Show in Finder</b> opens it there.":
+        "<b>Premiere Pro, proiect nou:</b> apasă <b>Deschide în Premiere Pro</b>, sau în ecranul de start din Premiere File &gt; Open și alege XML-ul. Proiectul se deschide cu câte un bin pentru fiecare cameră și secvența de selecție; salvează-l (Cmd+S / Ctrl+S) lângă XML, cu același nume.<br><br><b>Într-un proiect deja deschis:</b> trage XML-ul în panoul Project (sau File &gt; Import): apare un bin cu numele proiectului, cu bin-urile camerelor și secvența înăuntru.<br><br><b>DaVinci Resolve:</b> File &gt; Import &gt; Timeline și alege XML-ul.<br><br>XML-ul se salvează în folderul nunții; <b>Arată în Finder</b> îl deschide acolo.",
+})
+TEMPLATES.update({
+    "Camera {}": "Camera {}", "The sequence is called \"{}\".": "Secvența se numește „{}”.",
+    "Project ready: {} clips in {} camera bins and the sequence \"{}\". Open it in Premiere Pro.": "Proiect gata: {} clipuri în {} bin-uri de camere și secvența „{}”. Deschide-l în Premiere Pro.",
+    "Premiere Pro could not be opened: {}": "Premiere Pro nu a putut fi deschis: {}",
+})
+
+EXACT.update({
+    "MODE": "MOD", "Auto: camera bins + the selects sequence": "Auto: bin-uri pe camere + secvența de selecție",
+    "Custom: only the folders as bins, you make the sequence": "Custom: doar folderele ca bin-uri, secvența o faci tu",
+    "Also the sound folders (recorder, lavaliere) as bins": "Și folderele de sunet (recorder, lavaliere) ca bin-uri",
+    "No sequence: in Premiere you give every camera its label, select the clips and make the sequence yourself.":
+        "Fără secvență: în Premiere dai fiecărei camere un label, selectezi clipurile și faci tu secvența.",
+    "Then make the Premiere project (Create Project, in the mode chosen there)": "Apoi fă proiectul de Premiere (Creează proiectul, în modul ales acolo)",
+})
+TEMPLATES.update({
+    "{} clips in {} bins: {}.": "{} clipuri în {} bin-uri: {}.",
+    "Project ready: {} clips in {} bins. Open it in Premiere Pro, label the cameras and make the sequence.":
+        "Proiect gata: {} clipuri în {} bin-uri. Deschide-l în Premiere Pro, dă label camerelor și fă secvența.",
+    "Create Project: no camera folder with video in {}": "Creează proiectul: niciun folder de cameră cu video în {}",
+    "Making the Premiere project of {}…": "Fac proiectul de Premiere pentru {}…",
+})
+
+EXACT["Choose the wedding folder and give the project a name. Auto: a new Premiere Pro project with one bin for every camera and the selects sequence (camera A, B, C…, then the drone, every camera's clips in the order they were filmed, whole and with their sound). Custom: only the folders as bins, like dragging them into Premiere; you label the cameras and make the sequence yourself."] = "Alege folderul nunții și dă-i un nume proiectului. Auto: un proiect nou de Premiere Pro, cu câte un bin pentru fiecare cameră și secvența de selecție (camera A, B, C…, apoi drona, clipurile fiecărei camere în ordinea filmării, întregi și cu sunetul lor). Custom: doar folderele ca bin-uri, ca și cum le-ai trage în Premiere; tu dai label camerelor și faci secvența."
+
+EXACT.update({"Auto (camera bins + the sequence)": "Auto (bin-uri pe camere + secvența)", "Custom (only the folders, you make the sequence)": "Custom (doar folderele, secvența o faci tu)"})
 
 _PATS = []
 

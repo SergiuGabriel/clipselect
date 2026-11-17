@@ -64,6 +64,8 @@ Debifat: toate fișierele ajung direct în folderul camerei.</li>
 <li><b>Sari peste proxy-urile camerelor</b> (.LRF, .LRV, .THM): fișierele mici de previzualizare nu se copiază.</li>
 <li><b>Scrie un raport lângă filmări</b> (bifat): _offload_report.txt, cu fiecare fișier, mărimea, suma de control și starea.</li>
 <li><b>Scoate cardurile când totul e copiat</b>: le scoate (eject) când totul e copiat, ca să le poți lua imediat.</li>
+<li><b>Apoi fă proiectul de Premiere</b>: după ce totul e copiat și verificat, <b>Creează proiectul</b> pornește singur pe nunta
+copiată, în modul ales acolo (Auto sau Custom), cu numele proiectului = numele folderului nunții. Îl vezi în Coada de analiză.</li>
 </ul>
 <h3>Siguranță</h3>
 <ul>
@@ -75,16 +77,24 @@ copii pe jumătate care să pară bune.</li>
 </ul>
 
 <h2>Creează proiectul (Premiere / DaVinci)</h2>
+<p><b>Două moduri.</b> <b>Auto</b> (ce e descris mai jos): bin-uri pe camere plus secvența de selecție gata făcută. <b>Custom</b>: pentru
+cine lucrează altfel. Proiectul are doar folderele ca bin-uri (câte unul pentru fiecare folder de cameră, cu numele folderului, plus,
+dacă bifezi, folderele de sunet: recorder, lavaliere), fiecare clip întreg cu tot sunetul lui, <b>fără secvență</b>, ca și cum ai trage
+folderele în Premiere. Acolo dai fiecărei camere un label, selectezi clipurile și faci tu secvența. Selectorul de cameră alege și aici
+ordinea bin-urilor și ce lași afară („Nu include”).</p>
 <p>După descărcarea cardurilor: toate filmările nunții pe un singur timeline, <b>cum le așezi tu pentru selecție</b> (măsurat pe
 selecțiile tale de la 4 iulie și de la Mădălina &amp; Radu).</p>
 <ol>
 <li><b>Alege folderul</b> nunții. După Descărcare carduri e deja ales. Fiecare folder cu video e o cameră; dacă alegi un folder care
 conține un singur folder cu camerele (de exemplu „Video”), aplicația intră singură în el.</li>
 <li><b>Camerele</b> apar în ordinea ta: fx6, fx3, a74, osmo, apoi alte foldere necunoscute, apoi drona (drona, mavic, dji), iar
-folderele „trash” / „gunoi” la final. <b>Tragi</b> o cameră ca să schimbi ordinea sau o <b>debifezi</b> ca s-o lași afară. Sub listă
-vezi folderele doar cu sunet (recorder, lavaliere): rămân afară, ca în selecțiile tale.</li>
-<li><b>Numele sequence-ului</b>: implicit „selectie”.</li>
-<li><b>Creează XML-ul.</b> Aplicația citește fiecare clip (câteva deodată) și face timeline-ul.</li>
+folderele „trash” / „gunoi” la final. Lângă fiecare folder alegi <b>ce cameră e</b>: Camera A…H, Drona sau <b>Nu include</b>.
+Secvența merge A, B, C…, apoi drona (alegerea se ține minte pentru nunta asta). Sub listă vezi folderele doar cu sunet (recorder,
+lavaliere): rămân afară, ca în selecțiile tale.</li>
+<li><b>Numele proiectului</b>: implicit numele folderului nunții; scrie ce vrei. Secvența se numește „selectie” (în engleză
+„select”).</li>
+<li><b>Creează proiectul.</b> Aplicația citește fiecare clip (câteva deodată) și face proiectul: câte un <b>bin pentru fiecare
+cameră</b> („Camera A - fx6”, „Camera B - a7siii”, „Drona - dji”), cu clipurile ei în ordinea filmării, plus secvența de selecție.</li>
 </ol>
 <h3>Cum arată timeline-ul</h3>
 <ul>
@@ -98,10 +108,12 @@ camere A1–A2, drona fără sunet), sunetul legat de imagine.</li>
 <li>Proxy-urile (SUB/…S03, foldere PROXY, .LRF) și fișierele XML de lângă clipuri nu intră.</li>
 </ul>
 <h3>Cum îl pui în proiect</h3>
-<p>XML-ul se salvează în folderul nunții („NUNTA … - selectie.xml”; dacă există, primește „ (2)”). <b>Arată în Finder</b> deschide
-folderul cu XML-ul selectat. <b>Premiere Pro</b>: cu proiectul tău deschis, tragi XML-ul în panoul Project (sau File &gt; Import):
-apare un sequence nou cu toate clipurile, plus un bin cu ele. <b>DaVinci Resolve</b>: File &gt; Import &gt; Timeline. Aplicația nu poate
-apăsa singură butoane în Premiere, deci importul e un singur drag.</p>
+<p>Proiectul se salvează în folderul nunții ca „<i>numele proiectului</i>.xml” (dacă există, primește „ (2)”).
+<b>Proiect nou în Premiere Pro</b>: apeși <b>Deschide în Premiere Pro</b> (apare când Premiere e instalat), sau în ecranul de start
+din Premiere File &gt; Open și alegi XML-ul. Proiectul se deschide cu bin-urile camerelor și secvența; îl salvezi (Cmd+S) lângă XML,
+cu același nume, și ai fișierul .prproj. <b>Într-un proiect deja deschis</b>: tragi XML-ul în panoul Project (sau File &gt; Import):
+apare un bin cu numele proiectului, cu bin-urile camerelor și secvența înăuntru. <b>DaVinci Resolve</b>: File &gt; Import &gt;
+Timeline. Fișierul .prproj nu poate fi scris direct de aplicație (e formatul închis al Adobe), de aceea trece prin XML.</p>
 
 <h2>Footage Selection: cum alege cadrele</h2>
 <p>Un proiect Footage Selection se uită la fiecare clip și păstrează (sau notează) părțile bune. Apoi exportă un XML pe care îl
@@ -699,6 +711,8 @@ every file goes straight into the camera folder.</li>
 <li><b>Skip the camera proxies</b> (.LRF, .LRV, .THM): the small preview files are not copied.</li>
 <li><b>Write a report next to the footage</b> (ticked): _offload_report.txt, with every file, its size, checksum and status.</li>
 <li><b>Eject the cards when everything is copied</b>: so you can take them right away.</li>
+<li><b>Then make the Premiere project</b>: when everything is copied and checked, <b>Create Project</b> starts by itself on the copied
+wedding, in the mode chosen there (Auto or Custom), the project named like the wedding folder. You see it in the Analysis Queue.</li>
 </ul>
 <h3>Safety</h3>
 <ul>
@@ -711,16 +725,24 @@ look good are left behind.</li>
 </ul>
 
 <h2>Create Project (Premiere / DaVinci)</h2>
+<p><b>Two modes.</b> <b>Auto</b> (described below): camera bins plus the selects sequence ready made. <b>Custom</b>: for those who work
+differently. The project has only the folders as bins (one per camera folder, named like the folder, plus, when ticked, the sound
+folders: recorder, lavaliere), every clip whole with all its sound, <b>no sequence</b>, as if you dragged the folders into Premiere.
+There you give every camera a label, select the clips and make the sequence yourself. The camera picker still sets the bins' order and
+what stays out ("Leave out").</p>
 <p>After the card offload: all the wedding's footage on one timeline, <b>the way you lay it out for the selection</b> (measured on your
 4 July and Madalina &amp; Radu selects).</p>
 <ol>
 <li><b>Choose the wedding folder</b>. After Card Offload it is already chosen. Every folder with video is a camera; if you pick a folder
 that holds a single folder with the cameras (e.g. "Video"), the app goes into it by itself.</li>
 <li>The <b>cameras</b> come in your order: fx6, fx3, a74, osmo, then other unknown folders, then the drone (drona, mavic, dji), and
-"trash" / "gunoi" folders last. <b>Drag</b> a camera to change the order or <b>untick</b> it to leave it out. Under the list you see the
-sound-only folders (recorder, lavaliere): they stay out, like in your selects.</li>
-<li><b>Sequence name</b>: "selects" by default.</li>
-<li><b>Create the XML.</b> The app reads every clip (several at a time) and builds the timeline.</li>
+"trash" / "gunoi" folders last. Next to every folder you choose <b>which camera it is</b>: Camera A…H, Drone or <b>Leave out</b>. The
+sequence goes A, B, C…, then the drone (the choice is remembered for this wedding). Under the list you see the sound-only folders
+(recorder, lavaliere): they stay out, like in your selects.</li>
+<li><b>Project name</b>: the wedding folder's name by default; type what you want. The sequence is called "select" (in Romanian
+"selectie").</li>
+<li><b>Create the project.</b> The app reads every clip (several at a time) and builds the project: one <b>bin per camera</b> ("Camera
+A - fx6", "Camera B - a7siii", "Drone - dji") with its clips in the order they were filmed, plus the selects sequence.</li>
 </ol>
 <h3>What the timeline looks like</h3>
 <ul>
@@ -734,10 +756,12 @@ cameras A1–A2, the drone no sound), linked to the picture.</li>
 <li>Proxies (SUB/…S03, PROXY folders, .LRF) and the XML files next to the clips stay out.</li>
 </ul>
 <h3>How to put it into your project</h3>
-<p>The XML is saved in the wedding folder ("WEDDING … - selects.xml"; if it exists, it gets " (2)"). <b>Show in Finder</b> opens the
-folder with the XML selected. <b>Premiere Pro</b>: with your project open, drag the XML into the Project panel (or File &gt; Import): a
-new sequence with every clip appears, plus a bin with them. <b>DaVinci Resolve</b>: File &gt; Import &gt; Timeline. The app cannot press
-buttons inside Premiere by itself, so the import is one drag.</p>
+<p>The project is saved in the wedding folder as "<i>project name</i>.xml" (if it exists, it gets " (2)"). <b>A new project in Premiere
+Pro</b>: press <b>Open in Premiere Pro</b> (shown when Premiere is installed), or in Premiere's start screen File &gt; Open and choose the
+XML. The project opens with the camera bins and the sequence; save it (Cmd+S) next to the XML with the same name and you have the
+.prproj. <b>Into a project already open</b>: drag the XML into the Project panel (or File &gt; Import): a bin with the project's name
+appears, with the camera bins and the sequence inside. <b>DaVinci Resolve</b>: File &gt; Import &gt; Timeline. The app cannot write the
+.prproj itself (Adobe's closed format), so it goes through the XML.</p>
 
 <h2>Footage Selection: how it picks shots</h2>
 <p>A Footage Selection project looks at every clip and keeps (or grades) the good parts, then exports an XML you open in Premiere or

@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.11.2), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.11.3), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -708,6 +708,24 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   _split_long: -1.5 before a preposition / NO_END word without a comma ("felul | de", "bucur | de tot"); NO_END +
   ultima / primul... (owner: keep English words) clean(..., lang): only words in ANOTHER ALPHABET (not Latin) are removed
   for ro / en ("выш"); foreign Latin words stay. CI tests 9-11 (long pause, alphabet, windows).
+## v3.11.3 (Create Project = a whole Premiere project: camera bins + "selectie" / "select", named by him)
+- projectsetup.export_xml(lay, infos, out, name, project=...): <xmeml><project><name>…</name><children> one <bin> per
+  camera ("Camera A - fx6", "Drona - dji") with every clip as a master clip (<clip id="masterclip-N"
+  explodedTracks="true"> ismasterclip, video clipitem with the FULL <file>, one audio clipitem per source channel), then
+  the sequence; sequence clipitems carry <masterclipid> so Premiere links them to the bin clips. Files defined once.
+  default_slots / by_slot: every camera folder -> 'A'..'H' (his ORDER), 'drone', 'out' (trash / gunoi).
+- CreateProjectPage: PROJECT NAME field (default = wedding folder name, per folder), the sequence name is automatic
+  ("selectie" RO / "select" EN), a QTableWidget Folder | Camera (combo A..H / Drone / Leave out, remembered per folder in
+  cfg slots / slots_for), XML = "<project>.xml" in the wedding folder, "Open in Premiere Pro" (_premiere_app: newest
+  /Applications/Adobe Premiere Pro*/…app, Windows Program Files\Adobe; mac: open -a app xml).
+- Auto / Custom modes (cfg mode). Custom = projectsetup.export_bins(groups, infos, out, project): bins only, one per
+  camera folder (folder name, chrono order) + optionally the sound folders (sound_files: recorder / lavaliere, audio-only
+  master clips, file rate 25), NO sequence (a friend's workflow: he labels the cameras and makes the sequence himself).
+- Card Offload option "project": after a clean offload Main.auto_project(root) loads the copied wedding in Create
+  Project and starts it (mode chosen there; shows in the queue as the Create Project job).
+- A real .prproj cannot be written (closed format): Premiere File > Open on the XML makes the project (Larry Jordan /
+  Adobe docs), he saves it. NOT verified in Premiere here: that bins + masterclipid import without duplicate clips, and
+  that "open -a Premiere file.xml" opens it as a project (vs. asking). DaVinci Import Timeline with <project> not verified.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

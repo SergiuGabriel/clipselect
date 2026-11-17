@@ -201,9 +201,37 @@ def layout(cams, infos, gap=GAP):
     return out, bad
 
 
-def export_xml(lay, infos, out_path, name):
+SLOTS = ["A", "B", "C", "D", "E", "F", "G", "H"]
+
+
+def default_slots(cams):
+    """Every camera folder -> its place: 'A', 'B'... in his order, 'drone' for the drone, 'out' for trash / gunoi."""
+    out, k = [], 0
+    for c in cams:
+        r = rank(c["name"])[0]
+        if r == 4:
+            out.append("out")
+        elif r == 2:
+            out.append("drone")
+        else:
+            out.append(SLOTS[min(k, len(SLOTS) - 1)])
+            k += 1
+    return out
+
+
+def by_slot(cams, slots):
+    """The cameras that go into the project, in the order of their places (A, B, ... then the drone)."""
+    key = {s: i for i, s in enumerate(SLOTS + ["drone"])}
+    picked = [(key[s], i, c, s) for i, (c, s) in enumerate(zip(cams, slots)) if s in key]
+    return [(c, s) for _, _, c, s in sorted(picked)]
+
+
+def export_xml(lay, infos, out_path, name, project=None):
     """One 25 fps sequence: every clip whole on V1, its sound channel k on track Ak (source channel k), LINKED to the
-    picture (link = clip's track + its position in that track, the sound in one group)."""
+    picture (link = clip's track + its position in that track, the sound in one group).
+    With project (v3.10.1): the XML is a whole project: one BIN per camera (lay's names) holding its clips as master
+    clips, and the sequence next to them; the sequence's clips point to those master clips (masterclipid), so
+    Premiere does not add a second copy of every clip. Premiere: File > Open the XML = a new project."""
     rate_xml, sf = core._rate(SEQ_FPS)
     clips = [(f, st, n) for _, row in lay for f, st, n in row]
     if not clips:
@@ -252,8 +280,34 @@ def export_xml(lay, infos, out_path, name):
                        f'<clipindex>{a[2]}</clipindex><groupindex>1</groupindex></link>')
         return "".join(out)
 
+    master = {}
+    bins_xml = []
+    if project is not None:                       # the bins first: every file is written whole the first time here
+        for cam, row in lay:
+            items = []
+            for f, _st, _ln in row:
+                if f in master:
+                    continue
+                mid = f"masterclip-{len(master) + 1}"
+                master[f] = mid
+                i = infos[f]
+                frate, ffps = core._rate(i["fps"])
+                fd = int(i["dur"] * ffps)
+                mc = (f'<clipitem id="{mid}-v"><masterclipid>{mid}</masterclipid><name>{escape(Path(f).name)}</name>'
+                      f'{frate}<alphatype>none</alphatype>{file_xml(f)}</clipitem>')
+                aud = "".join(
+                    f'<track><clipitem id="{mid}-a{k}"><masterclipid>{mid}</masterclipid><name>{escape(Path(f).name)}'
+                    f'</name>{frate}<file id="{files[f]}"/><sourcetrack><mediatype>audio</mediatype><trackindex>{k}'
+                    f'</trackindex></sourcetrack></clipitem></track>' for k in range(1, i["ach"] + 1))
+                items.append(f'<clip id="{mid}" explodedTracks="true"><masterclipid>{mid}</masterclipid>'
+                             f'<ismasterclip>TRUE</ismasterclip><duration>{fd}</duration>{frate}'
+                             f'<name>{escape(Path(f).name)}</name><media><video><track>{mc}</track></video>'
+                             f'<audio>{aud}</audio></media></clip>')
+            bins_xml.append(f'<bin><name>{escape(cam)}</name><children>{"".join(items)}</children></bin>')
+
     def head(cid, f, st, ln):
-        return (f'<clipitem id="{cid}"><name>{escape(Path(f).name)}</name><duration>{ln}</duration>{rate_xml}'
+        mc = f"<masterclipid>{master[f]}</masterclipid>" if f in master else ""
+        return (f'<clipitem id="{cid}">{mc}<name>{escape(Path(f).name)}</name><duration>{ln}</duration>{rate_xml}'
                 f'<start>{st}</start><end>{st + ln}</end><in>0</in><out>{ln}</out>')
 
     vx = [head(ids[("v", ci)][0], f, st, ln) + file_xml(f) + links(ci, f) + "</clipitem>"
@@ -269,12 +323,80 @@ def export_xml(lay, infos, out_path, name):
     trk = lambda its: f'<track>{"".join(its)}<enabled>TRUE</enabled><locked>FALSE</locked></track>'
     audio = (f'<audio><numOutputChannels>2</numOutputChannels><format><samplecharacteristics><depth>16</depth>'
              f'<samplerate>{arate}</samplerate></samplecharacteristics></format>{"".join(trk(a) for a in ax)}</audio>')
-    xml = (f'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4"><sequence id="sequence-1">'
-           f'<name>{escape(name)}</name><duration>{total}</duration>{rate_xml}'
+    seq = (f'<sequence id="sequence-1"><name>{escape(name)}</name><duration>{total}</duration>{rate_xml}'
            f'<media><video><format>{core._sc(rate_xml, sw, sh, "none")}</format>{trk(vx)}</video>{audio}</media>'
-           f'</sequence></xmeml>')
+           f'</sequence>')
+    if project is not None:
+        seq = f'<project><name>{escape(project)}</name><children>{"".join(bins_xml)}{seq}</children></project>'
+    xml = f'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4">{seq}</xmeml>'
     Path(out_path).write_text(xml, encoding="utf-8")
     return dict(clips=len(clips), cameras=[(c, len(r)) for c, r in lay], seconds=total / sf)
+
+
+def sound_files(root):
+    """[dict(name, folder, files)] of the first-level folders with sound only (recorder, lavaliere): the Custom
+    project imports them too, like dragging the folders into Premiere."""
+    out = []
+    for name in sound_folders(root):
+        d = Path(root) / name
+        fs = []
+        for dirpath, dirnames, filenames in os.walk(d):
+            dirnames[:] = sorted(x for x in dirnames if not x.startswith("."))
+            fs += [str(Path(dirpath) / f) for f in sorted(filenames)
+                   if not f.startswith(".") and Path(f).suffix.lower() in AUDIO]
+        if fs:
+            out.append(dict(name=name, folder=str(d), files=fs))
+    return out
+
+
+def export_bins(groups, infos, out_path, project):
+    """CUSTOM project (v3.10.1, the workflow of a videographer who labels the cameras and makes the sequence himself):
+    only bins, one per folder, every clip whole as a master clip (video with all its sound channels, or sound only),
+    NO sequence. groups = [(bin name, [files])]. Premiere: File > Open the XML = the new project."""
+    files, bins, n_clips, bad = {}, [], 0, []
+
+    def file_xml(f, i):
+        if f in files:
+            return f'<file id="{files[f]}"/>'
+        files[f] = f"file-{len(files) + 1}"
+        frate, ffps = core._rate(i["fps"] if i.get("video") else SEQ_FPS)
+        aud = (f'<audio><samplecharacteristics><depth>16</depth><samplerate>{i["arate"]}</samplerate></samplecharacteristics>'
+               f'<channelcount>{i["ach"]}</channelcount></audio>') if i["ach"] else ""
+        vid = f'<video>{core._sc(frate, i["w"], i["h"], "none")}</video>' if i.get("video") else ""
+        return (f'<file id="{files[f]}"><name>{escape(Path(f).name)}</name><pathurl>{escape(core._url(f))}</pathurl>'
+                f'{frate}<duration>{int(i["dur"] * ffps)}</duration><media>{vid}{aud}</media></file>')
+
+    for name, fs in groups:
+        items = []
+        for f in fs:
+            i = infos.get(f) or {}
+            if not i.get("dur") or not (i.get("video") or i.get("ach")):
+                bad.append(f)
+                continue
+            mid = f"masterclip-{n_clips + 1}"
+            n_clips += 1
+            frate, ffps = core._rate(i["fps"] if i.get("video") else SEQ_FPS)
+            nm = escape(Path(f).name)
+            fx = file_xml(f, i)
+            first_audio = not i.get("video")
+            vid = (f'<video><track><clipitem id="{mid}-v"><masterclipid>{mid}</masterclipid><name>{nm}</name>{frate}'
+                   f'<alphatype>none</alphatype>{fx}</clipitem></track></video>') if i.get("video") else ""
+            aud = "".join(
+                f'<track><clipitem id="{mid}-a{k}"><masterclipid>{mid}</masterclipid><name>{nm}</name>{frate}'
+                f'{fx if first_audio and k == 1 else f"<file id={chr(34)}{files[f]}{chr(34)}/>"}'
+                f'<sourcetrack><mediatype>audio</mediatype><trackindex>{k}</trackindex></sourcetrack></clipitem></track>'
+                for k in range(1, i["ach"] + 1))
+            items.append(f'<clip id="{mid}" explodedTracks="true"><masterclipid>{mid}</masterclipid>'
+                         f'<ismasterclip>TRUE</ismasterclip><duration>{int(i["dur"] * ffps)}</duration>{frate}'
+                         f'<name>{nm}</name><media>{vid}<audio>{aud}</audio></media></clip>')
+        if items:
+            bins.append((name, len(items), f'<bin><name>{escape(name)}</name><children>{"".join(items)}</children></bin>'))
+    if not bins:
+        raise ValueError("No clips could be read.")
+    xml = (f'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4"><project><name>'
+           f'{escape(project)}</name><children>{"".join(b for _, _, b in bins)}</children></project></xmeml>')
+    Path(out_path).write_text(xml, encoding="utf-8")
+    return dict(clips=n_clips, bins=[(nm, k) for nm, k, _ in bins], bad=bad)
 
 
 def free_path(p):
