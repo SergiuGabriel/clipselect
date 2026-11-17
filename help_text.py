@@ -491,36 +491,42 @@ lavalieră, Color Matte), doar cu alți timpi.</li>
 mai lent, cel mai bun la nume și cuvinte rare). Prima dată modelul se descarcă o singură dată (1,5–3 GB).</li>
 <li><b>Ce face ca să înțeleagă mai bine</b>: ascultă <b>canalul cel mai clar</b> al fișierului, nu un amestec. La FX6, microfonul camerei și
 lavaliera sunt pe canale diferite, iar aplicația o alege pe cea în care vorbirea iese cel mai clar peste zgomot (lavaliera). Din
-numele folderului nunții („NUNTA 22 AUGUST 2026 Florin si Miruna”) ia numele mirilor, ca să le scrie corect. Timpii fiecărei fraze
-vin de la primul și ultimul cuvânt (tăieturi mai exacte). Textul e împărțit <b>pe fraze</b>: tăiat la . ? ! și la pauzele de peste
-0,6 s; o bucată are cel mult 8 s (una mai lungă e tăiată la cea mai bună pauză reală, de preferat la virgulă sau la un cuvânt de
-legătură „și”, „dar”, „pentru că”…; dacă nu există nicio pauză, e o <b>tăiere forțată</b>, în punctul cel mai liniștit din sunet
-între 5 și 8 s, și apare așa în raport), ca să poată fi intercalată. Bucățile sub 0,8 s și cele doar cu „ăă”, „deci”, „așa” sunt lipite de vecina cea mai
-apropiată (cât timp rămân sub 8 s); o frază scurtă dar întreagă („Da, cu siguranță.”) rămâne singură. Replicile tale scurte
-(„Perfect”, „Bravo”, „Mulțumesc”) sunt marcate ca întrebări. Când Whisper uită punctul („din nou Mi-a dat”), un cuvânt cu literă
-mare în mijlocul rândului, după un cuvânt fără punctuație, începe o frază nouă (în afară de nume: un cuvânt care în tot interviul apare doar cu literă mare, ca „Mamaia”, „TikTok” sau numele nașului, e
-recunoscut singur ca nume; un cuvânt uzual al limbii, din primele 5000, care apare o singură dată cu literă mare, ca „Asta” sau
-„Mi-a”, e început de frază; după „cu”, „pe”, „la”, „și” nu se începe niciodată frază nouă; numele mirilor din folder și prenumele
-scrise în listă sunt mereu nume),
-deci o întrebare lipită de un răspuns ajunge separat. O bucată scurtă nu e lipită niciodată de o întrebare. Când Whisper nu dă timpul
-fiecărui cuvânt, porțiunea e transcrisă încă o dată singură; dacă nici atunci, timpii sunt estimați după litere și fiecare tăietură e
-mutată în cea mai apropiată pauză reală din sunet (±0,6 s). În listă, un interviu cu bucăți peste 8 s are ⚠. În .txt timpii au
-zecimi ([00:00:05.2]). Dacă Whisper
-intră în buclă și repetă aceeași frază, repetările sunt scoase.</li>
+numele folderului nunții („NUNTA 22 AUGUST 2026 Florin si Miruna”) ia numele mirilor, ca să le scrie corect. Whisper ascultă
+<b>tot fișierul dintr-o dată</b> (cu propriile lui ferestre de 30 s), ca să păstreze contextul: cuvintele nu se mai pierd și nu mai sunt
+auzite greșit la marginea bucăților. Timpii fiecărei fraze vin de la primul și ultimul cuvânt.</li>
+<li><b>Curățenie</b>: buclele lui Whisper (aceeași frază repetată), frazele inventate tipice din subtitrări („Nu uitați să dați like”,
+„Mulțumesc pentru vizionare”, „Subtitrare…”) și cuvintele auzite departe de orice vorbire (peste 1 s de vorbirea găsită în sunet, sau
+lângă ea dar de care Whisper însuși nu e sigur) sunt scoase și numărate în raport. Timpii cuvintelor nu sunt niciodată exacți (pe interviuri
+reale cuvintele adevărate ieșeau și la 0,5 s în afara vorbirii detectate), de aceea un cuvânt de lângă vorbire rămâne. Orice bucată de
+vorbire din sunet care a rămas fără niciun cuvânt (un „Superb!” scurt între întrebare și răspuns) e transcrisă încă o dată singură, cu
+1 s de sunet în jur, ca să nu se piardă nimic. Dacă Whisper dă toate cuvintele unei fraze decalate la fel, decalajul e măsurat
+pe sunet (unde începe pauza după fiecare sfârșit de frază) și corectat.</li>
+<li><b>Frazele (codurile)</b>: o bucată se termină la sfârșitul unei fraze (. ? ! …), după fiecare întrebare, la fiecare schimbare de
+vorbitor măsurată din sunet și la o tăcere de peste 2 s. <b>O pauză singură nu taie niciodată o frază</b>: oamenii se opresc să se gândească
+în mijlocul frazei („Sunt… sigură că…”), iar fraza rămâne întreagă. Când Whisper uită punctul („din nou Mi-a dat”), un cuvânt cu literă
+mare după un cuvânt fără punctuație începe o frază nouă, dar doar dacă acolo e o pauză reală (în afară de nume: un cuvânt care în tot
+interviul apare doar cu literă mare, ca „Mamaia”, „TikTok” sau numele nașului, e recunoscut singur ca nume; un cuvânt uzual al limbii,
+din primele 5000, care apare o singură dată cu literă mare, ca „Asta” sau „Mi-a”, e început de frază; numele mirilor din folder și
+prenumele scrise în listă sunt mereu nume). <b>Doar o frază mai lungă de 7,5 s</b> e tăiată din nou, în cel mai bun punct al ei: o
+pauză reală, după virgulă, înainte de „și”, „dar”, „așa că”, „pentru că”; niciodată după un cuvânt cu care nu se poate termina o
+bucată („o”, „să”, „că”, „la”, „într-un”, „s-au”, „fiecare”…) și niciodată înainte de „decât”, iar nicio parte nu are sub 1,5 s. Dacă
+nu există nicio pauză, e o <b>tăiere forțată</b>, în punctul cel mai liniștit dintre cuvinte, și apare așa în raport. Fiecare
+graniță e mutată apoi în cea mai apropiată pauză reală din sunet (până la 0,6 s, după o frază terminată până la 1 s); un cuvânt
+rostit încet, ca „că”, rămâne cu bucata lui chiar dacă pare pauză; unde nu e nicio pauză, granița merge în momentul cel mai liniștit.
+Nicio bucată nu trece de 8 s. În listă, un interviu cu bucăți peste 8 s are ⚠. În .txt timpii au zecimi ([00:00:05.2]).</li>
 <li><b>Cine vorbește, măsurat din sunet</b>: înainte de transcriere, aplicația găsește vorbirea și pauzele reale (detectorul
 Silero, pe acest calculator) și măsoară cine vorbește. Tu ești departe de lavalieră: dacă fișierul are și microfonul camerei (FX6),
 la tine lavaliera e aproape la fel de tare ca microfonul camerei, iar la miri e cu 10–19 dB mai tare; dacă are un singur canal, vocea
 ta e cu 10–15 dB mai slabă. Replicile tale (întrebări, „Bravo”, „Spune-i la persoana a doua”) sunt marcate [ÎNTREBARE] din
 sunet, chiar fără „?”, iar o întrebare spusă de miri („Ai scăpat?”) rămâne a lor. Unde diferența nu e clară, rândul are (?) și decide
-regula veche de text. Apoi fiecare bucată dintre pauze, cu un singur vorbitor, e transcrisă separat, deci întrebarea ta nu se mai lipește
-de răspuns. Frazele se taie doar în pauze reale (punctuația doar alege dintre ele); după „?” se taie mereu. La interviul cu amândoi
+regula veche de text. Două cuvinte auzite scurt pe celălalt microfon în mijlocul răspunsului nu taie fraza. La interviul cu amândoi
 odată, cu câte o lavalieră pe canale diferite, fiecare bucată primește [S1] sau [S2], iar Claude află din ce spun cine e cine; cu o
 singură lavalieră pentru amândoi, vocile lor nu se pot despărți din sunet (decide Claude din text).</li>
 <li><b>Calitate</b> (sub text) și <b>Raport de calitate</b>: după fiecare transcriere, aplicația se verifică singură, măsurând din
 sunet: câte coduri trec de 8 s (ținta e 0), câte sunt sub 0,8 s, câte au un „?” la mijloc (întrebare lipită de răspuns) și câte
 granițe între coduri au o pauză reală între ele (ținta: cel puțin 95 %; tăierile forțate sunt numărate separat), cu lista celor
 care cad în vorbire, plus cât de sigur se desparte vocea ta de a mirilor, câte replici de-ale tale au fost marcate [ÎNTREBARE] din
-sunet și câte bucăți sunt nesigure. Raportul se salvează lângă
+sunet și câte bucăți sunt nesigure, ce a fost scos (invenții Whisper, bucle) și câte bucăți de vorbire au rămas fără text (ținta e 0). Raportul se salvează lângă
 fișier (<i>nume</i>_raport.txt). Verde = toate țintele atinse, roșu = ceva de verificat. La poveste se măsoară la fel tăieturile in /
 out, iar raportul se salvează lângă XML.</li>
 <li><b>Test pe mai multe nunți…</b>: alegi un folder (de exemplu <i>teste</i>) cu câte un subfolder pentru fiecare nuntă (interviurile
@@ -1113,37 +1119,43 @@ lavalier, Color Matte), only with other times.</li>
 best on names and rare words). The first time the model downloads once (1.5–3 GB).</li>
 <li><b>What it does to understand better</b>: it listens to the file's <b>clearest channel</b>, not a mix. On the FX6 the camera mic and
 the lavalier are on different channels, and the app picks the one where the speech stands out most over the noise (the lavalier). From
-the wedding folder's name ("NUNTA 22 AUGUST 2026 Florin si Miruna") it takes the couple's names, to write them right. Every sentence's
-times come from its first and last word (tighter cuts). The text is split <b>into sentences</b>: cut at . ? ! and at pauses longer
-than 0.6 s; a piece lasts at most 8 s (a longer one is cut at the best real pause, preferably at a comma or a linking word "and", "but",
-"because"…; when there is no pause at all it is a <b>forced cut</b>, at the quietest point of the sound between 5 and 8 s, listed as
-such in the report), so it
-can be interleaved. Pieces under 0.8 s and pieces with only "uh", "so", "like" are joined to the closest neighbour (as long as they
-stay under 8 s); a short but whole sentence ("Yes, definitely.") stays alone. Your short lines ("Perfect", "Bravo", "Thank you") are
-marked as questions. When Whisper forgets the full stop ("again Then she"), a word with a capital letter in the middle of a line, after
-a word without punctuation, starts a new sentence (except names: a word that appears only with a capital letter in the whole interview, like "Mamaia", "TikTok" or the
-godfather's name, is recognised as a name by itself; a common word of the language, one of the first 5000, that appears only once with
-a capital letter, like "Asta" or "Mi-a", starts a sentence; a sentence never starts right after "cu", "pe", "la", "și"; the couple's
-names from the folder and the first names typed in the list are always names), so a question glued to an
-answer ends up separate. A short piece is never glued to a question. When Whisper gives no time for each word, that part is
-transcribed again on its own; if that fails too, the times are estimated from the letters and every cut is moved to the closest real
-pause in the sound (±0.6 s). In the list, an interview with pieces over 8 s has ⚠. In the .txt the times have tenths
-([00:00:05.2]). When Whisper
-loops and repeats one sentence, the repeats are removed.</li>
+the wedding folder's name ("NUNTA 22 AUGUST 2026 Florin si Miruna") it takes the couple's names, to write them right. Whisper listens to
+the <b>whole file at once</b> (with its own 30 s windows), so it keeps the context: words are no longer lost or misheard at the edges of
+pieces. Every sentence's times come from its first and last word.</li>
+<li><b>Cleaning</b>: Whisper's loops (one sentence again and again), its typical subtitle inventions ("Don't forget to like",
+"Thanks for watching", "Subtitles by…") and words heard far from any speech (more than 1 s from the speech found in the sound, or next to it
+but doubted by Whisper itself) are removed and counted in the report. Word times are never exact (on real interviews real words came out
+up to 0.5 s outside the detected speech), so a word next to speech stays. Any stretch of speech in the sound left without a single word
+(a short "Superb!" between a question and an answer) is transcribed again on its own, with 1 s of sound around it, so nothing is lost.
+When Whisper gives all the words shifted the same way, the shift is measured on the sound (where the pause starts after every end of a
+sentence) and corrected.</li>
+<li><b>Sentences (codes)</b>: a piece ends at the end of a sentence (. ? ! …), after every question, at every change of speaker measured
+from the sound and at a silence over 2 s. <b>A pause alone never cuts a sentence</b>: people stop to think in the middle of a sentence
+("I'm… sure that…") and the sentence stays whole. When Whisper forgets the full stop ("again Then she"), a word with a capital letter after
+a word without punctuation starts a new sentence, but only when there is a real pause there (except names: a word that appears only with a
+capital letter in the whole interview, like "Mamaia", "TikTok" or the godfather's name, is recognised as a name by itself; a common word of
+the language, one of the first 5000, that appears only once with a capital letter, like "Asta" or "Mi-a", starts a sentence; the couple's
+names from the folder and the first names typed in the list are always names). <b>Only a sentence longer than 7.5 s</b> is cut again, at
+its best point: a real pause, after a comma, before "and", "but", "so", "because"; never after a word a piece cannot end with ("a", "to",
+"that", "the", "every"…) and never before "than", and no part under 1.5 s. When there is no pause at all it is a <b>forced cut</b>, at the
+quietest point between the words, listed as such in the report. Every border is then moved into the closest real pause of the sound (up to
+0.6 s, after a finished sentence up to 1 s); a softly spoken word stays with its piece even when it looks like a pause; where there is no
+pause, the border goes to the quietest moment. No piece passes 8 s. In the list, an interview with pieces over 8 s has ⚠. In the .txt the
+times have tenths ([00:00:05.2]).</li>
 <li><b>Who speaks, measured from the sound</b>: before transcribing, the app finds the speech and the real pauses (the Silero
 detector, on this computer) and measures who speaks. You are far from the lavalier: when the file also has the camera microphone
 (FX6), for you the lavalier is about as loud as the camera mic, for the couple 10–19 dB louder; with one channel only, your voice is
 10–15 dB weaker. Your lines (questions, "Bravo", "Say it in the second person") are marked [QUESTION] from the sound, even without a
 "?", and a question said by the couple ("Did you make it?") stays theirs. Where the difference is not clear the line has (?) and the old
-text rule decides. Then every stretch between pauses, with one speaker, is transcribed on its own, so your question no longer sticks to
-the answer. Sentences are cut only at real pauses (punctuation only chooses among them); after a "?" always. In the interview with both
-at once, with a lavalier each on different channels, every piece gets [S1] or [S2] and Claude finds out from what they say who is who;
+text rule decides. Two words heard briefly on the other microphone in the middle of an answer do not cut the sentence. In the interview with
+both at once, with a lavalier each on different channels, every piece gets [S1] or [S2] and Claude finds out from what they say who is who;
 with one lavalier for both, their voices cannot be told apart from the sound (Claude decides from the text).</li>
 <li><b>Quality</b> (under the text) and <b>Quality report</b>: after every transcription the app checks itself, measuring from the
 sound: how many codes pass 8 s (target 0), how many are under 0.8 s, how many have a "?" in the middle (a question glued to an
 answer) and how many borders between codes have a real pause between them (target 95 % or more; forced cuts are counted on their own), with the
 list of those that fall in speech, plus how surely your voice is told apart from the couple's, how many of your lines were marked
-[QUESTION] from the sound and how many pieces are unsure.
+[QUESTION] from the sound and how many pieces are unsure, what was removed (Whisper inventions, loops) and how many stretches of speech
+were left without text (target 0).
 The report is saved next to the file (<i>name</i>_raport.txt). Green = every target met, red = something to check. For the story the
 cut in / out points are measured the same way and the report is saved next to the XML.</li>
 <li><b>Test on several weddings…</b>: choose a folder (e.g. <i>teste</i>) with one sub-folder per wedding (the interviews + the source

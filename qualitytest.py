@@ -34,6 +34,8 @@ METRICS = {
     "forced": ("Forced cuts", False),
     "vid": ("[QUESTION] from the sound", None),
     "unsure": ("Unsure who speaks", False),
+    "lost": ("Speech without text", False),
+    "removed": ("Removed inventions", None),
     "border_pct": ("Borders in a pause %", True),
     "cut_pct": ("Cuts in a pause %", True),
     "overlaps": ("Overlaps", False),
@@ -95,7 +97,8 @@ def run_project(name, files, src, model, lang, progress=None, stop=None, tr=lamb
     m = dict(codes=sum(q["codes"] for q in qs), over8=sum(len(q["over8"]) for q in qs),
              under08=sum(len(q["under08"]) for q in qs), glued=sum(len(q["glued"]) for q in qs),
              forced=sum(len(q.get("forced", [])) for q in qs), vid=sum(len(q.get("vid", [])) for q in qs),
-             unsure=sum(len(q.get("unsure", [])) for q in qs))
+             unsure=sum(len(q.get("unsure", [])) for q in qs), lost=sum(len(q.get("lost", [])) for q in qs),
+             removed=sum(len(q.get("removed", [])) for q in qs))
     nb = sum(q["borders"] for q in qs)
     m["border_pct"] = _pct(nb - sum(len(q["in_speech"]) for q in qs), nb)
     # a test story: every code that is not a question, alternating the interviews

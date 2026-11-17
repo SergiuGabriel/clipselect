@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.10.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.11.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -648,6 +648,46 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   remaining 10 % of borders off a pause are 0.1-0.3 s from one): bride borders in a pause 49 -> 90 %, groom 76 -> 88 %,
   glued questions 1 -> 0, 0 codes > 8 s. Multi-wedding test v3.9.3 -> v3.10.0: nothing worse, cuts in a pause 51 -> 73 %.
   NOT tested here: real Whisper on chunks (no model in the sandbox), MLX.
+
+## v3.11.0: the interview engine REWRITTEN from zero (transcribe.py v4, owner: "make it general, for any voice")
+- The owner asked for a rewrite instead of more patches (v3.8.8 -> v3.10.0 had grown rule on rule). Rewritten: transcribe.py
+  (same public API: app.py / qualitytest / tools unchanged). speakers.py (measured on his real interviews) and story.py
+  (prompt, parse, cut_times, export_from_source = his proven XML) are kept as they were.
+- Tested on HIS REAL interviews (Florin & Miruna: groom lav WAV, bride FX6 4 ch) with REAL Whisper large-v3 through
+  whisper.cpp (the sandbox cannot download faster-whisper / MLX models; bench in /home/claude/bench: cppmodel.py =
+  a faster-whisper-shaped stand-in, cached). Before (his v3.10.0 TXT): "Superb!" lost, YouTube inventions ("Nu lăsați
+  material rețele…", "Nu uitați"), sentences cut at every thinking pause ("Sunt | sigură… o | să fie"). After: 0 codes
+  over 8 s, 0 questions glued, 91-93 % of borders in a real pause (the rest is fluent speech with no pause at all),
+  "Superb." kept, "Iubitor." alone, every question whole; the cut audio was re-listened with Whisper.
+- Pipeline (transcribe.transcribe): 1. speakers.analyse (regions + who). 2. Whisper on the WHOLE file at once (context
+  kept; faster-whisper's generator reports real progress and Cancel works inside it). 3. clean(): no-speech /
+  compression > 2.4 / loops / a segment equal to one of the 2 before / HALLUCINATIONS patterns (subtitle phrases per
+  language, never wedding words) / words outside speech: removed only when > 1 s from any region, or outside and
+  probability < 0.3 (MEASURED: real words came out up to 0.55 s outside the VAD regions; the first version removed
+  "muncitor frumos", "Cea", "ani"). _complete_words: a segment with fewer timed words than its text gets the missing
+  tail estimated (no word lost). 4. calibrate(): a median shift of word times measured at sentence ends (pause start
+  after the word) is corrected when > 0.1 s. 5. recover(): a speech region with < 25 % covered by words is transcribed
+  again alone with 1 s around it ("Superb!"). 6. sentences(): _glue_marks (a lone "-" joins the next word);
+  _word_labels (region of the word's middle; a run of another speaker < 0.6 s inside one speaker's words = '?');
+  _sentences cuts at . ? ! …, after "?", at a definite speaker change not already separated by punctuation within
+  2 words, at a silence > 2 s, at a forgotten full stop (_cap_start) only with a real pause; NEVER at a pause alone.
+  _split_long only above SPLIT_AT 7.5 s (so moving borders never passes 8 s): score = 4 x real pause (searched +-0.45 s:
+  word times are 0.3-0.8 s off on real audio) + comma 1.2 + link word 0.8 + capital 0.6 - 3 after NO_END ("o", "să",
+  "într-un", "s-au", "fiecare"... ; "lui" only before a capital) - 3 before NO_START ("decât") - 0.08 x imbalance;
+  parts >= 1.5 s; best point without a pause = forced (quietest gap among points scoring within 0.3 of the best).
+  _snap_borders: kept when the words already have a pause between them; else the nearest pause within 0.6 s (1 s after
+  a finished sentence): each word time is CLAMPED into the pause (a soft "că" measured as pause stays with its piece;
+  measured on his bride: "că" at 20.1-20.45 s, Whisper said 19.80), both outside -> middle of the pause; no pause /
+  forced -> quietest moment within 0.4 s; a piece never passes 8 s.
+- Report: + "Removed (Whisper inventions…)" with the texts and "Speech found in the sound but without any text (target 0)";
+  quality_line adds "N stretches of speech without text"; the forced-cut line says "between two words". qualitytest
+  metrics + "Speech without text" (lower is better) and "Removed inventions". VERSION = 9 (older transcripts ↻).
+- tools/transcribe_check.py (synthetic speech + words, no Whisper) runs in CI next to story_check / speakers_check:
+  thinking pause, long sentence (<= 8 s, NO_END / NO_START, parts >= 1.5 s), question alone, speaker change and stray
+  words, cleaning (real word 0.5 s off kept, inventions / far words / loops removed, missing tail recovered), soft word
+  inside a pause (a naive "pause end" border fails it), recover, report keys.
+- NOT tested here: faster-whisper / MLX themselves (same call shape as v3.10.0 + word probability). Whole-file
+  transcription on MLX gives no progress until the end (mlx_whisper has no callback).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

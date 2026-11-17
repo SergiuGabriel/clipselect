@@ -307,7 +307,7 @@ TEMPLATES.update({
 })
 
 EXACT["Forced cuts"] = "Tăieri forțate"
-TEMPLATES["Forced cuts (no pause: cut at the quietest point between 5 and 8 s): {}"] = "Tăieri forțate (nicio pauză: tăiat în punctul cel mai liniștit între 5 și 8 s): {}"
+TEMPLATES["Forced cuts (no pause: cut at the quietest point between two words): {}"] = "Tăieri forțate (nicio pauză: tăiat în punctul cel mai liniștit dintre două cuvinte): {}"
 
 EXACT.update({"QUESTION": "ÎNTREBARE", "sure": "sigur", "medium": "mediu", "unsure": "nesigur", "not measured": "nemăsurat",
     "lavalier vs camera mic": "lavalieră față de microfonul camerei", "one channel: level": "un singur canal: nivelul",
@@ -319,6 +319,19 @@ TEMPLATES.update({
 })
 
 TEMPLATES["Borders between codes in a real pause (target 95 % or more, forced cuts not counted): {} % of {}"] = "Granițe între coduri în pauză reală (țintă cel puțin 95 %, fără tăierile forțate): {} % din {}"
+
+# v3.11.0: the rewritten interview engine
+TEMPLATES.update({
+    "{} stretches of speech without text": "{} bucăți de vorbire fără text",
+    "Removed (Whisper inventions in silence or noise, loops): {}":
+        "Scoase (invenții Whisper în liniște sau zgomot, bucle): {}",
+    "Speech found in the sound but without any text (target 0): {}":
+        "Vorbire găsită în sunet, dar fără niciun text (țintă 0): {}",
+    "{}: listening…": "{}: ascult…",
+    "{}: checking every word…": "{}: verific fiecare cuvânt…",
+    "{}: done": "{}: gata",
+})
+EXACT.update({"Speech without text": "Vorbire fără text", "Removed inventions": "Invenții scoase"})
 
 _PATS = []
 

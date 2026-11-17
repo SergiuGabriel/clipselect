@@ -39,6 +39,7 @@ jobs:
         run: |
           python tools/story_check.py
           python tools/speakers_check.py
+          python tools/transcribe_check.py
       - run: python make_icons.py
       - run: ${{ env.PYI }} $MLX_FLAGS --exclude-module torch --icon icon.icns --add-data "icon.png:." --osx-bundle-identifier com.moneymakingmachine.app app.py
       - name: Check bundled FFmpeg and ad-hoc sign
@@ -66,6 +67,7 @@ jobs:
         run: |
           python tools/story_check.py
           python tools/speakers_check.py
+          python tools/transcribe_check.py
       - run: python make_icons.py
       - run: ${{ env.PYI }} --icon icon.ico --add-data "icon.png;." app.py
       - uses: actions/upload-artifact@v4

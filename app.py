@@ -49,7 +49,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.10.0"
+APP, VER = "MoneyMakingMachine", "v3.11.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
