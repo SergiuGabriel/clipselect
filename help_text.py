@@ -90,7 +90,7 @@ conține un singur folder cu camerele (de exemplu „Video”), aplicația intr�
 <li><b>Camerele</b> apar în ordinea ta: fx6, fx3, a74, osmo, apoi alte foldere necunoscute, apoi drona (drona, mavic, dji), iar
 folderele „trash” / „gunoi” la final. Lângă fiecare folder alegi <b>ce cameră e</b>: Camera A…H, Drona sau <b>Nu include</b>.
 Secvența merge A, B, C…, apoi drona (alegerea se ține minte pentru nunta asta). Folderele doar cu sunet (lavaliere, recorder) apar și ele
-în listă, cu „Sunet”: intră în proiect (bin-uri) și, la Auto, la finalul secvenței.</li>
+în listă, cu „Sunet”: intră în proiect ca bin-uri, dar nu pe timeline (secvența are doar camerele și drona).</li>
 <li><b>Numele proiectului</b>: implicit numele folderului nunții; scrie ce vrei. Secvența se numește „selectie” (în engleză
 „select”).</li>
 <li><b>Creează proiectul.</b> Aplicația citește fiecare clip (câteva deodată) și face proiectul: câte un <b>bin pentru fiecare
@@ -98,8 +98,8 @@ cameră</b> („Camera A - fx6”, „Camera B - a7siii”, „Drona - dji”), 
 </ol>
 <h3>Cum arată timeline-ul</h3>
 <ul>
-<li>O cameră după alta pe <b>V1</b>, cu <b>20 de minute libere</b> între camere (vezi clar unde începe fiecare), apoi drona și
-folderele de sunet.</li>
+<li>O cameră după alta pe <b>V1</b>, cu <b>20 de minute libere</b> între camere (vezi clar unde începe fiecare), apoi drona.
+Lavalierele și recorderul nu sunt pe timeline (doar în bin-uri).</li>
 <li>Clipurile fiecărei camere <b>în ordinea în care au fost filmate</b>: după ceasul camerei din fișier, dacă toate clipurile camerei
 îl au; altfel după data fișierului (copiile o păstrează). Dacă două sunt egale, după nume. Numerotarea care o ia de la capăt
 (C9999 → C0001) nu încurcă ordinea.</li>
@@ -740,7 +740,7 @@ that holds a single folder with the cameras (e.g. "Video"), the app goes into it
 <li>The <b>cameras</b> come in your order: fx6, fx3, a74, osmo, then other unknown folders, then the drone (drona, mavic, dji), and
 "trash" / "gunoi" folders last. Next to every folder you choose <b>which camera it is</b>: Camera A…H, Drone or <b>Leave out</b>. The
 sequence goes A, B, C…, then the drone (the choice is remembered for this wedding). The sound-only folders (lavaliere, recorder) are in the list
-too, as "Sound": they go into the project (bins) and, in Auto, at the end of the sequence.</li>
+too, as "Sound": they go into the project as bins, but not on the timeline (the sequence holds only the cameras and the drone).</li>
 <li><b>Project name</b>: the wedding folder's name by default; type what you want. The sequence is called "select" (in Romanian
 "selectie").</li>
 <li><b>Create the project.</b> The app reads every clip (several at a time) and builds the project: one <b>bin per camera</b> ("Camera
@@ -749,7 +749,7 @@ A - fx6", "Camera B - a7siii", "Drone - dji") with its clips in the order they w
 <h3>What the timeline looks like</h3>
 <ul>
 <li>One camera after the other on <b>V1</b>, with <b>20 empty minutes</b> between cameras (you clearly see where each one starts),
-then the drone and the sound folders.</li>
+then the drone. The lavaliers and the recorder are not on the timeline (only in the bins).</li>
 <li>Every camera's clips <b>in the order they were filmed</b>: by the camera's clock in the file when every clip of that camera has
 it; otherwise by the file date (copies keep it). When two are equal, by name. Numbering that starts again (C9999 → C0001) does not
 mix up the order.</li>

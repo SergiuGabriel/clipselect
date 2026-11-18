@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.11.4), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.11.5), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -743,6 +743,10 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   tracks). The "Also the sound folders" tick is gone (Leave out in the picker instead).
 - Create Project has no NEW badge any more. Logi Options+ popping up in Premiere: Logitech's own plugin, starts with
   Premiere; the app only writes an XML and runs "open -a Premiere file.xml".
+
+## v3.11.5
+- Owner: the lavaliere / recorder must NOT be on the timeline: Auto puts only the cameras and the drone in the sequence;
+  the sound folders are bins only (export_xml(..., bins_only=[(name, files)])). Custom unchanged (bins of everything).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

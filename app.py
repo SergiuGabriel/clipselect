@@ -49,7 +49,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.11.4"
+APP, VER = "MoneyMakingMachine", "v3.11.5"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -5031,9 +5031,9 @@ class CreateProjectPage(QWidget):
         left.addWidget(self.seq_lbl)
         left.addSpacing(6)
         left.addWidget(lbl("CAMERAS", "section"))
-        left.addWidget(lbl("For every folder choose which camera it is: the sequence goes A, B, C…, then the drone and the "
-                           "sound folders (lavaliere, recorder), 20 minutes apart; \"Leave out\" keeps a folder out of the "
-                           "project.", "muted", True))
+        left.addWidget(lbl("For every folder choose which camera it is: the sequence goes A, B, C…, then the drone, 20 "
+                           "minutes apart; the sound folders (lavaliere, recorder) go into the project as bins, not on the "
+                           "timeline; \"Leave out\" keeps a folder out of the project.", "muted", True))
         self.list = QTableWidget(0, 2)
         self.list.setHorizontalHeaderLabels([i18n.T("Folder"), i18n.T("Camera")])
         self.list.verticalHeader().hide()
@@ -5216,21 +5216,24 @@ class CreateProjectPage(QWidget):
             return self._done_custom(cams, infos, extra, base, project)
         binned = [dict(c, name=(i18n.T("Drone") if sl == "drone" else i18n.T("Sound") if sl == "sound" else
                                 i18n.T("Camera {}").format(sl)) + f" - {c['name']}") for c, sl in cams]
-        lay, bad = projectsetup.layout(binned, infos)
+        # owner: only the cameras and the drone on the timeline; lavaliere / recorder only as bins
+        lay, bad = projectsetup.layout([b for b, (_c, sl) in zip(binned, cams) if sl != "sound"], infos)
+        sound_bins = [(b["name"], projectsetup.chrono([f for f in b["files"] if infos.get(f, {}).get("dur")], infos))
+                      for b, (_c, sl) in zip(binned, cams) if sl == "sound"]
         if not lay:
             notify(i18n.T("None of the clips could be read."), error=True)
             return
         safe = re.sub(r'[\\/:*?"<>|]+', "-", project).strip() or "project"
         out = projectsetup.free_path(base / f"{safe}.xml")
         try:
-            r = projectsetup.export_xml(lay, infos, out, name, project=project)
+            r = projectsetup.export_xml(lay, infos, out, name, project=project, bins_only=sound_bins)
         except OSError:
             alt, _ = QFileDialog.getSaveFileName(self, "Save the XML", str(Path.home() / out.name), "XML (*.xml)")
             if not alt:
                 return
             out = Path(alt)
             try:
-                r = projectsetup.export_xml(lay, infos, out, name, project=project)
+                r = projectsetup.export_xml(lay, infos, out, name, project=project, bins_only=sound_bins)
             except Exception as e:
                 logging.exception("create project export")
                 notify(i18n.T("Create Project failed: {}").format(i18n.T(str(e))), error=True)
@@ -5250,7 +5253,7 @@ class CreateProjectPage(QWidget):
         self.b_show.show()
         self.b_open.setVisible(bool(_premiere_app()))
         notify(i18n.T("Project ready: {} clips in {} bins and the sequence \"{}\". Open it in Premiere Pro.").format(
-            r["clips"], len(r["cameras"]), name))
+            r["clips"], len(r["cameras"]) + sum(1 for _n, fs in sound_bins if fs), name))
         logging.info("create project %s: %s clips, %s unreadable", out, r["clips"], len(bad))
 
     def _done_custom(self, cams, infos, extra, base, project):

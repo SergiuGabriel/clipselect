@@ -376,6 +376,8 @@ EXACT.update({"Sound": "Sunet",
 
 TEMPLATES["Project ready: {} clips in {} bins and the sequence \"{}\". Open it in Premiere Pro."] = "Proiect gata: {} clipuri în {} bin-uri și secvența „{}”. Deschide-l în Premiere Pro."
 
+EXACT["For every folder choose which camera it is: the sequence goes A, B, C…, then the drone, 20 minutes apart; the sound folders (lavaliere, recorder) go into the project as bins, not on the timeline; \"Leave out\" keeps a folder out of the project."] = "Pentru fiecare folder alege ce cameră e: secvența merge A, B, C…, apoi drona, la 20 de minute una de alta; folderele de sunet (lavaliere, recorder) intră în proiect ca bin-uri, nu pe timeline; „Nu include” lasă folderul în afara proiectului."
+
 _PATS = []
 
 

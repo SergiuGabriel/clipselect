@@ -293,12 +293,13 @@ def by_slot(cams, slots):
     return [(c, s) for _, _, c, s in sorted(picked)]
 
 
-def export_xml(lay, infos, out_path, name, project=None):
+def export_xml(lay, infos, out_path, name, project=None, bins_only=()):
     """One 25 fps sequence: every camera whole, one after the other (20 min between cameras), picture on V1, sound in
     STEREO PAIRS like Premiere (groups(): FX6 = A1 stereo 1+2 + A2 stereo 3+4, 2-channel cameras = A1 stereo, a mono
     file = a mono track), every pair written as Premiere writes it (two exploded tracks, premiereChannelType="stereo",
     sourcetrack = the channel), all of a clip LINKED (link = track + position in that track, sound in one group).
-    Sound folders (lavaliere, recorder) go on the timeline as sound only.
+    Only cameras and the drone are on the timeline (owner); bins_only = [(bin name, [files])] = the sound folders
+    (lavaliere, recorder): bins in the project, never on the timeline.
     With project: one BIN per folder holding its clips as master clips, and the sequence next to them (masterclipid)."""
     rate_xml, sf = core._rate(SEQ_FPS)
     clips = [(f, st, n) for _, row in lay for f, st, n in row]
@@ -341,6 +342,16 @@ def export_xml(lay, infos, out_path, name, project=None):
                     master[f] = f"masterclip-{len(master) + 1}"
                     items.append(_master(f, infos[f], master[f], files))
             bins_xml.append(f'<bin><name>{escape(cam)}</name><children>{"".join(items)}</children></bin>')
+        for cam, fs in bins_only:
+            items = []
+            for f in fs:
+                i = infos.get(f) or {}
+                if f in master or not i.get("dur") or not (i.get("video") or i.get("ach")):
+                    continue
+                master[f] = f"masterclip-{len(master) + 1}"
+                items.append(_master(f, i, master[f], files))
+            if items:
+                bins_xml.append(f'<bin><name>{escape(cam)}</name><children>{"".join(items)}</children></bin>')
 
     def links(ci, f):
         out = []
