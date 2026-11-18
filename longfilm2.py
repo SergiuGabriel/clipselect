@@ -1,0 +1,632 @@
+"""Long Film v2 (BETA): the long film from the editor's labelled sequence, every colour handled its own way.
+
+After Create Project (a chronological or a timecode synced sequence) he labels the shots in Premiere and exports the
+sequence as XML. Only the labelled cameras matter (one, two, three or more of the cameras in the sequence).
+
+Colours (v2 only, nothing to do with the old Long Film / Teaser Studio colours):
+  Blue groom, Rose bride        -> selection (Auto: minimum cut 2 s, threshold 60), groom and bride together, chronological
+  Teal first look               -> synced only (the cameras one above the other, he cuts)
+  Forest vornic (switch ON/OFF) -> 2 cameras synced by their own sound, cut like the old Long Film (V1 / V2 / V3)
+  Brown church                  -> selection; the PRIEST's shot (at least 60 s still on one face, speaking) stays whole
+  Yellow venue, Purple couple, Violet drone -> selection
+  Iris / Cerulean party         -> multicam of every labelled camera + the recorder files in the sequence (sync by the
+                                   sound, Auto Edit with his party settings, Slower cuts zones for the hora)
+  Tan interviews and any other colour -> ignored for now
+The order of the parts = the order in which the colours appear on camera A (V1 of a timecode sequence, the first camera
+of a chronological one). The export: ONE 25 fps 1920x1080 sequence, other frame sizes scaled to fill it, every camera
+with its own sound tracks (stereo pairs like Premiere), the recorder under the party.
+"""
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from xml.sax.saxutils import escape
+
+import numpy as np
+
+import core
+import director
+import longfilm
+import projectsetup
+import sync
+import teaser
+import xmlimport
+
+KINDS = {"Blue": "groom", "Rose": "bride", "Teal": "firstlook", "Forest": "vornic", "Brown": "church", "Yellow": "venue",
+         "Purple": "couple", "Violet": "drone", "Iris": "party", "Cerulean": "party"}
+PART_OF = {"groom": "ready", "bride": "ready"}
+PART_NAMES = {"ready": "Groom and bride", "firstlook": "First look", "vornic": "Vornic", "church": "Church",
+              "couple": "Couple", "venue": "Venue", "drone": "Drone", "party": "Party"}
+DEFAULT_ORDER = ["ready", "firstlook", "vornic", "church", "couple", "venue", "drone", "party"]
+SELECT = ("ready", "church", "couple", "venue", "drone")       # parts made with the Auto selection
+SEL_THR, SEL_MIN = 60, 2.0          # owner: Auto, minimum cut length 2 s, selection threshold 60
+PRIEST_MIN = 60.0                   # the priest: at least 60 s on him, the camera still
+PARTY = dict(minshot=3, maxshot=120, pace=50, energy=65, beat=True, drop_beats=4, buildup="accelerate",
+             energy_cuts=True)      # owner's party settings (editable on the page)
+SEQ_FPS, SEQ_W, SEQ_H = 25.0, 1920, 1080
+
+
+def part_of(kind):
+    return PART_OF.get(kind, kind)
+
+
+# ---------------------------------------------------------------- 1. the labelled sequence
+def load(xml_path):
+    """His labelled sequence -> dict(pieces, recorder, cams, cam_a, layout, order, skipped).
+    pieces: every labelled video clip of a known colour: path, a / b (seconds in the file), st (timeline s), track,
+    label, kind, w, h, fps, fdur, cam (camera index, camera A = 0). recorder: the sound-only files on the timeline."""
+    root = ET.parse(xml_path).getroot()
+    files = {}
+    for f in root.iter("file"):
+        if f.get("id") and f.findtext("pathurl"):
+            sc = f.find("media/video/samplecharacteristics")
+            files[f.get("id")] = dict(path=xmlimport._path(f.findtext("pathurl")), fps=xmlimport._rate(f, 25.0),
+                                      dur=teaser._n(f.findtext("duration")), video=f.find("media/video") is not None,
+                                      w=int(sc.findtext("width") or 1920) if sc is not None else 1920,
+                                      h=int(sc.findtext("height") or 1080) if sc is not None else 1080)
+    seqs = list(root.iter("sequence"))
+    if not seqs:
+        raise ValueError("No sequence in this XML.")
+    seq = max(seqs, key=lambda s: (sum(1 for c in s.iter("clipitem") if c.findtext("labels/label2") in KINDS),
+                                   sum(1 for _ in s.iter("clipitem"))))
+    sfps = xmlimport._rate(seq, 25.0)
+    clips, skipped = [], {}
+    vid = seq.find("media/video")
+    for t, tr in enumerate(vid.findall("track") if vid is not None else [], 1):
+        for ci in tr.findall("clipitem"):
+            f = ci.find("file")
+            info = files.get(f.get("id")) if f is not None else None
+            if not info or not info["path"] or ci.find("sequence") is not None:
+                continue
+            cfps = xmlimport._rate(ci, sfps)
+            a, b = teaser._n(ci.findtext("in")) / cfps, teaser._n(ci.findtext("out")) / cfps
+            real = info["dur"] / max(1e-6, info["fps"])
+            cd = teaser._n(ci.findtext("duration")) / cfps
+            interp = cd / real if real > 0 and cd > 0 else 1.0
+            if interp > 1.2 or interp < 0.8:            # footage interpreted at another rate in Premiere
+                a, b = a / interp, b / interp
+            b = min(b, real) if real > 0 else b
+            tt = teaser._times(ci, sfps, cfps)
+            if b - a < 0.2 or not tt:
+                continue
+            lab = ci.findtext("labels/label2") or ""
+            clips.append(dict(path=info["path"], a=a, b=b, st=tt[0], en=tt[1], track=t, label=lab, kind=KINDS.get(lab),
+                              w=info["w"], h=info["h"], fps=info["fps"], fdur=real))
+    if not clips:
+        raise ValueError("No video clips found in this XML.")
+    # the recorder: sound-only files on the audio tracks (each file once)
+    recorder, seen = [], set()
+    aud = seq.find("media/audio")
+    for tr in (aud.findall("track") if aud is not None else []):
+        for ci in tr.findall("clipitem"):
+            f = ci.find("file")
+            info = files.get(f.get("id")) if f is not None else None
+            if not info or not info["path"] or info["video"] or info["path"] in seen:
+                continue
+            tt = teaser._times(ci, sfps, xmlimport._rate(ci, sfps))
+            seen.add(info["path"])
+            recorder.append(dict(path=info["path"], st=tt[0] if tt else 0.0))
+    recorder.sort(key=lambda r: r["st"])
+    # cameras by their files; camera A = the camera of the first clip on the lowest video track
+    keys = {}
+    for c in clips:
+        keys.setdefault(longfilm.camera_key(c), []).append(c)
+    low = min(c["track"] for c in clips)
+    first = min((c for c in clips if c["track"] == low), key=lambda c: c["st"])
+    ka = longfilm.camera_key(first)
+    order = [ka] + sorted((k for k in keys if k != ka), key=lambda k: min((c["track"], c["st"]) for c in keys[k]))
+    labelled = [k for k in order if any(c["kind"] for c in keys[k])]
+    if ka not in labelled and labelled:                # camera A has no labels: the first labelled camera leads
+        ka = labelled[0]
+    cam_keys = [ka] + [k for k in labelled if k != ka] if labelled else [ka]
+    cams = [dict(key=k, name=longfilm.camera_name(keys[k])) for k in cam_keys]
+    idx = {k: i for i, k in enumerate(cam_keys)}
+    pieces = []
+    for c in clips:
+        if not c["kind"]:
+            if c["label"]:
+                skipped[c["label"]] = skipped.get(c["label"], 0) + 1
+            continue
+        c["cam"] = idx[longfilm.camera_key(c)]
+        pieces.append(c)
+    pieces.sort(key=lambda p: (p["st"], p["track"]))
+    # timecode synced (cameras side by side on their own tracks, overlapping in time) or chronological (one after another)
+    by_cam = {}
+    for p in clips:
+        by_cam.setdefault(longfilm.camera_key(p), []).append((p["st"], p["en"], p["track"]))
+    layout = "chronological"
+    ks = list(by_cam)
+    for i in range(len(ks)):
+        for j in range(i + 1, len(ks)):
+            if any(a0 < b1 and b0 < a1 for a0, a1, _ in by_cam[ks[i]] for b0, b1, _ in by_cam[ks[j]]):
+                layout = "timecode"
+    # the order of the parts = the order of the colours on camera A, then the others
+    seen_parts = []
+    for p in pieces:
+        if p["cam"] == 0 and part_of(p["kind"]) not in seen_parts:
+            seen_parts.append(part_of(p["kind"]))
+    for k in DEFAULT_ORDER:
+        if k not in seen_parts and any(part_of(p["kind"]) == k for p in pieces):
+            seen_parts.append(k)
+    return dict(pieces=pieces, recorder=recorder, cams=cams, layout=layout, order=seen_parts, skipped=skipped)
+
+
+def chrono(ps, layout, infos):
+    """Recording order: the timeline itself in a timecode synced sequence; else the cameras' clocks (creation time, else
+    time of day) when every piece has one, else the timeline."""
+    if layout == "timecode":
+        return sorted(ps, key=lambda p: p["st"])
+    ct = [(infos.get(p["path"]) or {}).get("ctime") for p in ps]
+    if ps and all(c is not None for c in ct):
+        return [p for _c, p in sorted(zip(ct, ps), key=lambda x: (x[0] + x[1]["a"], x[1]["st"]))]
+    td = [(infos.get(p["path"]) or {}).get("tod") for p in ps]
+    if ps and all(c is not None for c in td):
+        td = [c + 86400 if c < projectsetup.SYNC_DAY else c for c in td]
+        return [p for _c, p in sorted(zip(td, ps), key=lambda x: (x[0] + x[1]["a"], x[1]["st"]))]
+    return sorted(ps, key=lambda p: (p["cam"], p["st"]))
+
+
+def key_of(p, a=None, b=None):
+    a = p["a"] if a is None else a
+    b = p["b"] if b is None else b
+    return f'{p["path"]}#{a:.3f}-{b:.3f}'
+
+
+def stamp(path):
+    try:
+        st = Path(path).stat()
+        return f"{st.st_size}-{int(st.st_mtime)}"
+    except OSError:
+        return ""
+
+
+# ---------------------------------------------------------------- 2. selection + the priest
+def selection(an, a0):
+    """The Auto selection of one labelled clip (analysis of that range): [(src in, src out)] in file seconds."""
+    return [(a0 + s0, a0 + s1) for s0, s1, lv in core.auto_segments(an, SEL_THR, SEL_MIN) if lv == 2 and s1 - s0 >= SEL_MIN - 1e-6]
+
+
+def still_run(an):
+    """The longest stretch (s, from the start of the range) where the camera does not move: (start, end)."""
+    if not an.fs:
+        return (0.0, 0.0)
+    mv = core.moving_mask(an.fs)
+    sr = core.SAMPLE_FPS
+    # a blip of up to 1 s (a hand, a lens breath) does not break the shot
+    still = ~mv
+    i, n, best = 0, len(still), (0, 0)
+    while i < n:
+        if not still[i]:
+            i += 1
+            continue
+        j, gap = i, 0
+        k = i
+        while k < n:
+            if still[k]:
+                j, gap = k + 1, 0
+            else:
+                gap += 1
+                if gap > sr:
+                    break
+            k += 1
+        if j - i > best[1] - best[0]:
+            best = (i, j)
+        i = max(j, i + 1)
+    return best[0] / sr, best[1] / sr
+
+
+def speaks(x, sr=sync.SR):
+    """Someone speaks most of the time: at least half of the 0.5 s windows clearly above the quiet floor."""
+    hop = sr // 2
+    n = len(x) // hop
+    if n < 20:
+        return False
+    db = 10 * np.log10((x[:n * hop].reshape(n, hop).astype(np.float64) ** 2).mean(1) + 1e-12)
+    floor = np.percentile(db, 10)
+    return float(np.mean(db > floor + 10)) >= 0.5 and float(np.percentile(db, 90)) > -55
+
+
+def one_face(path, t0, t1, model):
+    """The same single face all along (the biggest face of 5 frames is the same person). None = no face model."""
+    if model is None:
+        return None
+    import faces
+    feats = []
+    for f in np.linspace(0.1, 0.9, 5):
+        img = faces.frame_bgr(path, t0 + (t1 - t0) * f)
+        if img is None:
+            return False
+        fs = model.faces(img)
+        if not fs:
+            return False
+        feats.append(max(fs, key=lambda x: x[1])[0])
+    return all(float(feats[0] @ g) >= faces.SAME for g in feats[1:])
+
+
+def is_priest(p, an, model=None):
+    """A church clip with at least 60 s where the camera stays on one face (the priest) and someone speaks."""
+    if p["b"] - p["a"] < PRIEST_MIN:
+        return False
+    s0, s1 = still_run(an)
+    if s1 - s0 < PRIEST_MIN:
+        return False
+    try:
+        x = longfilm._clip_audio(dict(p, a=p["a"] + s0, b=p["a"] + s1))
+    except Exception:
+        x = np.zeros(0, np.float32)
+    if not speaks(x):
+        return False
+    face = one_face(p["path"], p["a"] + s0, p["a"] + s1, model)
+    return face is not False                    # no face model: still + speaking is enough
+
+
+# ---------------------------------------------------------------- 3. the party (multicam)
+def party_inputs(pieces, recorder, infos):
+    """Masters (recorder files of the sequence, else the longest party file with sound) and the party files."""
+    party = [p for p in pieces if p["kind"] == "party"]
+    files = sorted({p["path"] for p in party})
+    masters = [r["path"] for r in recorder if Path(r["path"]).exists()]
+    if not masters:
+        snd = [f for f in files if (infos.get(f) or {}).get("ach")]
+        if snd:
+            masters = [max(snd, key=lambda f: infos[f]["dur"])]
+    return party, files, masters
+
+
+def party_edit(party, results, masters, analyses, cams_n, roles, st):
+    """director.build on the labelled party ranges (each one a clip of its own). Returns (edits, cams for the director,
+    {key: piece})."""
+    by_key, res, an = {}, {}, {}
+    clips = [[] for _ in range(cams_n)]
+    for p in party:
+        r = results.get(p["path"])
+        k = key_of(p)
+        if not r or r.get("conf") not in ("high", "medium") or k not in analyses:
+            continue
+        by_key[k] = p
+        res[k] = dict(r, offset=r["offset"] + p["a"], dur=p["b"] - p["a"])
+        an[k] = analyses[k]
+        clips[p["cam"]].append(k)
+    dcams = [dict(name=str(i), role=roles.get(i, "Handheld"), clips=c) for i, c in enumerate(clips)]
+    edits = director.build(dcams, res, an, masters, st) if by_key else []
+    return edits, dcams, by_key
+
+
+def party_layout(edits, by_key, masters, rec_paths=None):
+    """The party part: every camera's cuts on its own track (camera index + 1), the recorder under the whole party.
+    Returns (length, items, recorder items, spans for the map)."""
+    starts = sync.master_starts(masters)
+    cuts = []
+    for e in edits or []:
+        if not e:
+            continue
+        g = starts[e["master"]]
+        for ci, k, cin, cout, s0 in e["pieces"]:
+            p = by_key[k]
+            cuts.append((g + s0, g + s0 + (cout - cin), p, p["a"] + cin, p["a"] + cout))
+    if not cuts:
+        return 0.0, [], []
+    G0, G1 = min(c[0] for c in cuts), max(c[1] for c in cuts)
+    items = [(p["cam"] + 1, t0 - G0, p, a, b) for t0, _t1, p, a, b in sorted(cuts, key=lambda c: c[0])]
+    rec = []
+    for m, s in zip(masters, starts):
+        if not m.get("path") or (rec_paths is not None and m["path"] not in rec_paths):
+            continue                        # no recorder: the master is a party clip, its sound is already there
+        lo, hi = max(G0, s), min(G1, s + m["duration"])
+        if hi - lo > 0.1:
+            rec.append((lo - G0, m["path"], lo - s, hi - s))
+    return G1 - G0, items, rec
+
+
+# ---------------------------------------------------------------- 4. the XML
+def _scale(w, h):
+    """Basic Motion scale so the picture fills the 1920x1080 frame (a 4K clip -> 50 %); vertical / odd shapes fit."""
+    if (w, h) == (SEQ_W, SEQ_H) or not w or not h:
+        return None
+    fill, fit = max(SEQ_W / w, SEQ_H / h), min(SEQ_W / w, SEQ_H / h)
+    s = fill if abs((w / h) / (SEQ_W / SEQ_H) - 1) < 0.12 else fit
+    return round(s * 100, 3)
+
+
+def _motion(s):
+    return ('<filter><effect><name>Basic Motion</name><effectid>basic</effectid><effectcategory>motion</effectcategory>'
+            '<effecttype>motion</effecttype><mediatype>video</mediatype><parameter authoringApp="PremierePro">'
+            f'<parameterid>scale</parameterid><name>Scale</name><valuemin>0</valuemin><valuemax>1000</valuemax>'
+            f'<value>{s}</value></parameter></effect></filter>')
+
+
+def export_xml(parts, infos, cam_names, out_path, name, marker=lambda s: s):
+    """parts: [(part name, length s, items, recorder items)]; items = (video track, t0 in the part, piece, src in,
+    src out, flags) with flags in {"sound", "off"} ("off" = the clip is switched off: the vornic's whole 2nd camera);
+    recorder items = (t0 in the part, path, src in, src out). One 25 fps 1920x1080 sequence. Every camera has its own
+    audio tracks (stereo pairs / mono like Premiere, projectsetup.groups), the recorder last; links = position in the
+    track. Returns (clips written, video tracks, audio tracks)."""
+    rate_xml, sf = core._rate(SEQ_FPS)
+    ents, markers, g = [], [], 0.0
+    for pname, length, items, rec in parts:
+        if not items and not rec:
+            continue
+        markers.append((pname, g))
+        for it in items:
+            track, t0, p, a, b = it[:5]
+            flags = it[5] if len(it) > 5 else {"sound"}
+            st = round((g + t0) * sf)
+            en = st + max(1, round((b - a) * sf))
+            ents.append(dict(path=p["path"], v=track, st=st, en=en, fin=max(0, round(a * sf)), label=p.get("label"),
+                             ak=("cam", p["cam"]) if "sound" in flags else None, on="off" not in flags))
+        for t0, path, a, b in rec:
+            st = round((g + t0) * sf)
+            ents.append(dict(path=path, v=None, st=st, en=st + max(1, round((b - a) * sf)), fin=max(0, round(a * sf)),
+                             label=None, ak=("rec", 0), on=True))
+        g += length
+    if not ents:
+        raise ValueError("Nothing to export yet: press Build first.")
+    for e in ents:                          # never past the end of the file
+        i = infos.get(e["path"]) or {}
+        mx = int((i.get("dur") or 0) * sf)
+        if mx and e["fin"] + (e["en"] - e["st"]) > mx:
+            e["en"] = e["st"] + max(1, mx - e["fin"])
+    # audio slots: cameras in their order, then the recorder; inside: stereo pairs first, then mono
+    gr = lambda e: projectsetup.groups((infos.get(e["path"]) or {}).get("ach", 0))
+    slots = sorted({(e["ak"], k, kind) for e in ents if e["ak"] for k, (kind, _c) in enumerate(gr(e))},
+                   key=lambda s: (s[0][0] == "rec", s[0][1], s[2] != "stereo", s[1]))
+    tix, tracks = {}, []
+    for sl in slots:
+        for ex in range(2 if sl[2] == "stereo" else 1):
+            tix[(sl, ex)] = len(tracks) + 1
+            tracks.append((sl, ex))
+    busy = {}                               # one clip at a time on an audio track: a second one keeps only its picture
+    for e in sorted(ents, key=lambda e: e["st"]):
+        if not e["ak"]:
+            continue
+        if any(not (e["en"] <= s or e["st"] >= t) for s, t in busy.get(e["ak"], [])):
+            e["ak"] = None
+            continue
+        busy.setdefault(e["ak"], []).append((e["st"], e["en"]))
+    nv = max([e["v"] for e in ents if e["v"]] or [1])
+    n = [0]
+
+    def nid():
+        n[0] += 1
+        return f"clipitem-{n[0]}"
+    for t in range(1, nv + 1):
+        for ci, e in enumerate(sorted((e for e in ents if e["v"] == t), key=lambda e: e["st"]), 1):
+            e["vid"] = (nid(), t, ci)
+    for e in ents:
+        e["aud"] = []
+    for (sl, ex), ti in tix.items():
+        lst = sorted((e for e in ents if e["ak"] == sl[0] and len(gr(e)) > sl[1] and gr(e)[sl[1]][0] == sl[2]),
+                     key=lambda e: e["st"])
+        for ci, e in enumerate(lst, 1):
+            ch = gr(e)[sl[1]][1][ex]
+            e["aud"].append((nid(), ti, ci, ch, sl[2]))
+    files = {}
+
+    def links(e):
+        out = []
+        if e.get("vid"):
+            out.append(f'<link><linkclipref>{e["vid"][0]}</linkclipref><mediatype>video</mediatype><trackindex>'
+                       f'{e["vid"][1]}</trackindex><clipindex>{e["vid"][2]}</clipindex></link>')
+        out += [f'<link><linkclipref>{cid}</linkclipref><mediatype>audio</mediatype><trackindex>{ti}</trackindex>'
+                f'<clipindex>{ci}</clipindex><groupindex>1</groupindex></link>' for cid, ti, ci, _ch, _k in e["aud"]]
+        return "".join(out) if len(out) > 1 else ""
+
+    def head(cid, e, attr=""):
+        i = infos.get(e["path"]) or {}
+        sdur = max(e["fin"] + e["en"] - e["st"], int((i.get("dur") or 0) * sf))
+        return (f'<clipitem id="{cid}"{attr}><name>{escape(Path(e["path"]).name)}</name>'
+                f'<enabled>{"TRUE" if e["on"] else "FALSE"}</enabled><duration>{sdur}</duration>{rate_xml}'
+                f'<start>{e["st"]}</start><end>{e["en"]}</end><in>{e["fin"]}</in><out>{e["fin"] + e["en"] - e["st"]}</out>')
+
+    lab = lambda e: f'<labels><label2>{escape(e["label"])}</label2></labels>' if e.get("label") else ""
+    vx = {t: [] for t in range(1, nv + 1)}
+    ax = {ti: [] for ti in tix.values()}
+    for e in sorted(ents, key=lambda e: e["st"]):
+        i = infos.get(e["path"]) or {}
+        if e.get("vid"):
+            s = _scale(i.get("w"), i.get("h"))
+            vx[e["vid"][1]].append(head(e["vid"][0], e) + projectsetup._file_xml(e["path"], i, files) +
+                                   (_motion(s) if s else "") + links(e) + lab(e) + "</clipitem>")
+    for e in sorted(ents, key=lambda e: e["st"]):
+        i = infos.get(e["path"]) or {}
+        for cid, ti, _ci, ch, kind in e["aud"]:
+            ax[ti].append(head(cid, e, f' premiereChannelType="{kind}"') + projectsetup._file_xml(e["path"], i, files) +
+                          f'<sourcetrack><mediatype>audio</mediatype><trackindex>{ch}</trackindex></sourcetrack>' +
+                          links(e) + lab(e) + "</clipitem>")
+    total = max(e["en"] for e in ents)
+    trk = lambda its, attrs="": f'<track{attrs}>{"".join(its)}<enabled>TRUE</enabled><locked>FALSE</locked></track>'
+    arate = next(((infos.get(e["path"]) or {}).get("arate") for e in ents if (infos.get(e["path"]) or {}).get("ach")), 48000)
+    audio = (f'<audio><numOutputChannels>2</numOutputChannels><format><samplecharacteristics><depth>16</depth>'
+             f'<samplerate>{arate}</samplerate></samplecharacteristics></format>'
+             f'{"".join(trk(ax[tix[(sl, ex)]], projectsetup._track_attrs(sl[2], ex)) for sl, ex in tracks)}</audio>')
+    mk = "".join(f'<marker><name>{escape(marker(m))}</name><comment></comment><in>{round(t * sf)}</in><out>-1</out></marker>'
+                 for m, t in markers)
+    xml = (f'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4"><sequence id="sequence-1">'
+           f'<name>{escape(name)}</name><duration>{total}</duration>{rate_xml}{mk}'
+           f'<media><video><format>{core._sc(rate_xml, SEQ_W, SEQ_H, "none")}</format>'
+           f'{"".join(trk(vx[t]) for t in range(1, nv + 1))}</video>{audio}</media></sequence></xmeml>')
+    Path(out_path).write_text(xml, encoding="utf-8")
+    return len(ents), nv, len(tracks)
+
+
+# ---------------------------------------------------------------- 5. the build job (heavy work, in a thread)
+def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_dir=None):
+    """Everything that reads the media: probe, analyses (cached in `cache`: {key: dict(key=stamp, a=json)}), the
+    priest, first look and vornic sync, the party sync and its music. Returns a JSON-able result for the page."""
+    from concurrent.futures import ThreadPoolExecutor
+    prog = progress or (lambda s, f: None)
+
+    def chk():
+        if cancel and cancel():
+            raise InterruptedError("Cancelled")
+    L = load(xml_path)
+    pieces, recorder = L["pieces"], L["recorder"]
+    missing = sorted({p["path"] for p in pieces if not Path(p["path"]).exists()})
+    pieces = [p for p in pieces if Path(p["path"]).exists()]
+    if not pieces:
+        raise ValueError("None of the labelled clips were found on this computer: connect the disk with the footage.")
+    paths = sorted({p["path"] for p in pieces} | {r["path"] for r in recorder if Path(r["path"]).exists()})
+    infos = {}
+    for k, f in enumerate(paths):
+        chk()
+        prog(f"Reading the files: {k + 1} of {len(paths)}", 0.05 * k / max(1, len(paths)))
+        try:
+            infos[f] = projectsetup.probe(f)
+        except Exception:
+            infos[f] = dict(video=False, dur=0.0, fps=25.0, w=1920, h=1080, ach=0, arate=48000, ctime=None, tod=None)
+    # analyses: every selection range + every party range (once, cached)
+    use = [p for p in pieces if part_of(p["kind"]) in SELECT or p["kind"] == "party"]
+    analyses, todo = {}, []
+    for p in use:
+        k = key_of(p)
+        c = cache.get(k)
+        if c and c.get("key") == stamp(p["path"]):
+            try:
+                analyses[k] = core.Analysis.from_json(c["a"])
+                continue
+            except Exception:
+                pass
+        todo.append(p)
+    done = [0]
+
+    def one(p):
+        if cancel and cancel():
+            return
+        k = key_of(p)
+        try:
+            a = core.analyze(p["path"], cancel=cancel, a=p["a"], b=p["b"])
+            analyses[k] = a
+            cache[k] = dict(key=stamp(p["path"]), a=a.to_json())
+        except InterruptedError:
+            return
+        except Exception:
+            pass
+        done[0] += 1
+        prog(f"Looking at your selections: {done[0]} of {len(todo)}", 0.05 + 0.45 * done[0] / max(1, len(todo)))
+    with ThreadPoolExecutor(max(1, jobs)) as ex:
+        list(ex.map(one, todo))
+    chk()
+    # the priest (church clips of at least 60 s)
+    model = None
+    long_church = [p for p in pieces if p["kind"] == "church" and p["b"] - p["a"] >= PRIEST_MIN and key_of(p) in analyses]
+    if long_church and model_dir:
+        try:
+            import faces
+            model = faces.Faces(faces.ensure_models(model_dir))
+        except Exception:
+            model = None
+    priests = []
+    for k, p in enumerate(long_church):
+        chk()
+        prog(f"Looking for the priest: {k + 1} of {len(long_church)}", 0.5 + 0.05 * k / max(1, len(long_church)))
+        try:
+            if is_priest(p, analyses[key_of(p)], model):
+                priests.append(key_of(p))
+        except Exception:
+            pass
+    # selections
+    sel = {}
+    for p in pieces:
+        if part_of(p["kind"]) in SELECT and key_of(p) in analyses and key_of(p) not in priests:
+            sel[key_of(p)] = selection(analyses[key_of(p)], p["a"])
+    # first look: synced only
+    fl = chrono([p for p in pieces if p["kind"] == "firstlook"], L["layout"], infos)
+    for p in fl:
+        p["train"] = p["cam"]
+    prog("Syncing the first look", 0.56)
+    fl_len, fl_items = longfilm.firstlook_layout(fl, progress=lambda s, f: prog(s, 0.56 + 0.06 * f)) if fl else (0.0, [])
+    # vornic: always 2 cameras
+    vo_len, vo_items, vo_cams = 0.0, [], []
+    vps = [p for p in pieces if p["kind"] == "vornic"]
+    if vornic_on and vps:
+        foot = {}
+        for p in vps:
+            foot[p["cam"]] = foot.get(p["cam"], 0.0) + p["b"] - p["a"]
+        two = sorted(foot, key=lambda c: -foot[c])[:2]
+        main = 0 if 0 in two else two[0]
+        vo_cams = [main] + [c for c in two if c != main]
+        mp = chrono([p for p in vps if p["cam"] == main], L["layout"], infos)
+        op = chrono([p for p in vps if p["cam"] in vo_cams[1:]], L["layout"], infos)
+        vo_len, vo_items = longfilm.vornic_cut(mp, op, progress=lambda s, f: prog(s, 0.62 + 0.06 * f), cancel=cancel)
+    chk()
+    # the party: sync with the recorder + its music
+    party, pfiles, masters = party_inputs(pieces, recorder, infos)
+    psync = None
+    if party and masters:
+        clips = [f for f in pfiles if f not in masters and (infos.get(f) or {}).get("ach")]
+        clocks = {}
+        for f in clips + masters:
+            try:
+                clocks[f] = sync.media_info(f)["clock"]
+            except Exception:
+                clocks[f] = None
+        camk = {p["path"]: str(p["cam"]) for p in party}
+        info, res = sync.run_sync(masters, clips, lambda s, f: prog(s, 0.68 + 0.22 * f), cancel,
+                                  clocks=clocks, groups=camk, jobs=jobs)
+        for f in pfiles:
+            if f in masters:                # the longest party clip itself is the master
+                res[f] = dict(conf="high", master=masters.index(f), offset=0.0, dur=infos[f]["dur"], drift_ppm=0.0)
+        for i, m in enumerate(info):
+            chk()
+            prog(f"Reading the music (beats, bars, drops): {i + 1} of {len(info)}", 0.9 + 0.09 * i / max(1, len(info)))
+            try:
+                import music
+                m["music"] = music.analyze(sync.audio_pcm(m["path"]))
+            except Exception:
+                m["music"] = None
+        psync = dict(masters=info, results=res)
+    prog("Done", 1.0)
+    return dict(pieces=pieces, recorder=recorder, cams=L["cams"], layout=L["layout"], order=L["order"],
+                skipped=L["skipped"], missing=missing, infos=infos, sel=sel, priests=priests,
+                firstlook=[fl_len, [(t, t0, key_of(p), a, b, ["sound"]) for t, t0, p, a, b in fl_items]],
+                vornic=[vo_len, [(t, t0, key_of(p), a, b, ["sound"] if t == 1 else (["sound", "off"] if t == 2 else []))
+                                 for t, t0, p, a, b in vo_items], vo_cams],
+                party=psync, faces=model is not None)
+
+
+def roles_of(party, analyses):
+    """Static / Handheld per camera, from its party footage."""
+    out = {}
+    for c in sorted({p["cam"] for p in party}):
+        out[c] = director.detect_role([analyses.get(key_of(p)) for p in party if p["cam"] == c])
+    return out
+
+
+def assemble(r, analyses, st, zones, marker=lambda s: s, vornic_on=True):
+    """The parts in his order, ready for export_xml, + the party edit for the map.
+    r: build() result; st: party settings; zones: Slower cuts zones (timeline seconds of the party map)."""
+    by_key = {key_of(p): p for p in r["pieces"]}
+    parts, info = [], {}
+    stat = {}
+    for part in r["order"]:
+        name = marker(PART_NAMES[part])
+        if part in SELECT:
+            ps = chrono([p for p in r["pieces"] if part_of(p["kind"]) == part], r["layout"], r["infos"])
+            items, t = [], 0.0
+            for p in ps:
+                k = key_of(p)
+                cuts = [(p["a"], p["b"])] if k in r["priests"] else r["sel"].get(k, [])
+                for a, b in cuts:
+                    items.append((1, t, p, a, b, {"sound"}))
+                    t += b - a
+            parts.append((name, t, items, []))
+            stat[part] = (len(items), t)
+        elif part in ("firstlook", "vornic"):
+            ln, its = r[part][0], r[part][1]
+            if part == "vornic" and (not its or not vornic_on):
+                continue
+            items = [(tr, t0, by_key[k], a, b, set(fl)) for tr, t0, k, a, b, fl in its if k in by_key]
+            parts.append((name, ln, items, []))
+            stat[part] = (len(items), ln)
+        elif part == "party":
+            ps = r.get("party")
+            if not ps:
+                continue
+            party = [p for p in r["pieces"] if p["kind"] == "party"]
+            roles = roles_of(party, analyses)
+            edits, dcams, bk = party_edit(party, ps["results"], ps["masters"], analyses, len(r["cams"]), roles,
+                                          {**director.DEFAULTS, **st, "zones": zones})
+            ln, items, rec = party_layout(edits, bk, ps["masters"], {x["path"] for x in r["recorder"]})
+            parts.append((name, ln, [(*it, {"sound"}) for it in items], rec))
+            info.update(edits=edits, dcams=dcams, roles=roles)
+            stat[part] = (len(items), ln)
+    info["stat"] = stat
+    return parts, info

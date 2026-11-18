@@ -8,10 +8,11 @@ RO = """
 <ol>
 <li><b>Descărcare carduri</b>: copiază toate cardurile deodată, verificate, în folderul nunții.</li>
 <li><b>Creează proiectul</b>: pune toate filmările pe un timeline, cum le așezi tu pentru selecție, gata de importat în Premiere.</li>
-<li><b>Selection &amp; Multicam</b>: <b>Footage Selection</b> alege singur cadrele bune din clipuri; <b>Multicam</b> sincronizează
-camerele cu recorderul de la mixer și face montajul petrecerii.</li>
-<li><b>Teaser Studio</b>: shortmovie-ul (teaser, pregătiri, biserică, sală, petrecere) pe muzica ta.</li>
+<li><b>Selection</b>: <b>Footage Selection</b> alege singur cadrele bune din clipuri.</li>
+<li><b>Multicam</b>: sincronizează camerele cu recorderul de la mixer și face montajul petrecerii.</li>
 <li><b>Long Film</b>: filmul lung până la petrecere, pre-montat din selecțiile tale.</li>
+<li><b>Long Film v2</b> (BETA): filmul lung întreg din secvența făcută de Creează proiectul, după ce ai etichetat cadrele pe culori.</li>
+<li><b>Teaser Studio</b>: shortmovie-ul (teaser, pregătiri, biserică, sală, petrecere) pe muzica ta.</li>
 <li><b>Transcriere</b>: interviurile devin text; din interviurile mirilor, Claude face o singură poveste.</li>
 </ol>
 <p>Fiecare pagină din stânga a acestui Info explică o parte din aplicație, cu fiecare opțiune: ce face, cu ce cifre lucrează
@@ -473,6 +474,41 @@ ordinea zilei. Iris-urile scurte de dimineață urmează ca montaj (~2 s).</li>
 parte, în limba aplicației. E un pre-montaj: ritmul exact pe muzică și alegerea finală le faci tu.</li>
 </ul>
 
+<h2>Long Film v2 (BETA)</h2>
+<p>Filmul lung întreg, inclusiv petrecerea, din secvența făcută de <b>Creează proiectul</b> (Cronologic sau Secvență sincronizată pe
+timecode). În Premiere etichetezi cadrele pe culori, pui în secvență și fișierele recorderului (pentru petrecere), exporți secvența ca
+XML (File &gt; Export &gt; Final Cut Pro XML) și o imporți aici (Import XML sau tras din Finder). Contează doar camerele pe care ai pus
+etichete: pot fi una, două, trei sau mai multe din camerele secvenței. Long Film-ul vechi și Teaser Studio rămân neschimbate:
+culorile de aici sunt doar pentru v2.</p>
+<ul>
+<li><b>Blue (mirele) și Rose (mireasa)</b>: selecție Auto (ca la Footage Selection: focus 40 %, stabilitate 30 %, expunere 30 %,
+prag 60, tăietură minimă 2 s; mișcările de cameră sunt scoase), mirele și mireasa împreună, în ordinea în care au fost filmate.</li>
+<li><b>Teal (first look)</b>: doar sincronizat: camera A întreagă pe V1, celelalte camere puse după sunet deasupra, în același
+moment (V2, V3...). Tai tu între camere.</li>
+<li><b>Forest (vornicul)</b>, cu comutatorul <b>PORNIT / OPRIT</b>: pornit = vornicul de pe exact 2 camere, sincronizat după sunetul
+camerelor; camera principală (camera A dacă îl are, altfel cea cu mai mult vornic) întreagă pe V1, a doua cameră întreagă pe V2
+(clipurile oprite, cu sunetul pe pistele ei), varianta tăiată pe V3 (bucăți de ~3–4 s, în pauzele de vorbă), ca la Long Film.
+Oprit = nu există vornic, Forest nu e folosit.</li>
+<li><b>Brown (biserica)</b>: selecție Auto. <b>Preotul</b> e găsit singur: un clip de biserică cu cel puțin 60 s în care camera stă
+pe loc (fără mișcări mai lungi de 1 s), aceeași față tot timpul (recunoaștere facială locală, 5 cadre; dacă modelul nu se poate
+descărca, ajung camera nemișcată și vorbirea) și se vorbește cel puțin jumătate din timp. Clipul preotului rămâne întreg.</li>
+<li><b>Yellow (sala), Purple (cadre cu mirii), Violet (drona)</b>: selecție Auto.</li>
+<li><b>Iris sau Cerulean (petrecerea)</b>: multicam ca la pagina Multicam: toate camerele etichetate + fișierele de recorder din
+secvență, sincronizate după sunet (fără recorder: pe cel mai lung clip de petrecere), apoi Auto Director pe intervalele tale
+etichetate. Setările tale implicite: cadru minim 3 s, maxim 120 s, ritm 50, Static ↔ Handheld 65, pe drop schimbă camera la 1
+măsură (4 beat-uri), înainte de drop „Tăieturi tot mai dese”; le poți schimba pe pagină (Înapoi la setările mele de petrecere le
+readuce). Tăieturile cad pe beat (1 cadru înainte), mai dese pe muzica intensă. Pe hartă (ca la Multicam) tragi zone
+<b>Slower cuts</b> pentru horă: acolo se folosesc setările de horă (minim 6 s, maxim 120 s, ritm 50, 45).</li>
+<li><b>Tan</b> (interviuri) și celelalte culori nu sunt folosite deocamdată.</li>
+</ul>
+<p><b>Ordinea părților</b> = ordinea în care apar culorile pe camera A (la o secvență pe timecode camera de pe V1, la una cronologică
+prima cameră din timeline); culorile care nu apar pe camera A vin după, în ordinea obișnuită. „În ordinea filmării”: la o secvență pe
+timecode poziția din timeline, la una cronologică ora de filmare din fișiere.</p>
+<p><b>Exportul</b>: o singură secvență 25 fps, 1920x1080, cu un marker pe fiecare parte. Clipurile cu altă rezoluție sunt micșorate
+ca să umple cadrul (4K = 50 %). Fiecare cameră își are pistele ei de sunet, legate de imagine, ca la Creează proiectul (FX6 = A1 și
+A2 stereo, FX3 / A7 = o pistă stereo); recorderul e sub toată petrecerea. Build citește filmările (o dată: analizele rămân salvate);
+schimbarea setărilor de petrecere și a zonelor se vede imediat, fără alt Build.</p>
+
 <h2>Cum trebuie să arate selecția</h2>
 <p>Ce trebuie să aibă XML-ul pe care îl dai fiecărei funcții. Culorile sunt etichetele (labels) din Premiere: Rose mireasa,
 Blue mirele, Purple cuplul, Brown biserica, Iris first look / petrecerea, Teal locația de la pregătiri, Mango vornicul,
@@ -667,10 +703,11 @@ EN = """
 <ol>
 <li><b>Card Offload</b>: copies every card at once, checked, into the wedding folder.</li>
 <li><b>Create Project</b>: puts all the footage on one timeline, the way you lay it out for the selection, ready to import into Premiere.</li>
-<li><b>Selection &amp; Multicam</b>: <b>Footage Selection</b> picks the good shots from the clips by itself; <b>Multicam</b> syncs the
-cameras to the mixer recorder and edits the party.</li>
-<li><b>Teaser Studio</b>: the short film (teaser, getting ready, church, venue, party) on your music.</li>
+<li><b>Selection</b>: <b>Footage Selection</b> picks the good shots from the clips by itself.</li>
+<li><b>Multicam</b>: syncs the cameras to the mixer recorder and edits the party.</li>
 <li><b>Long Film</b>: the long film up to the party, pre-edited from your selects.</li>
+<li><b>Long Film v2</b> (BETA): the whole long film from the sequence of Create Project, after you labelled the shots by colour.</li>
+<li><b>Teaser Studio</b>: the short film (teaser, getting ready, church, venue, party) on your music.</li>
 <li><b>Transcribe</b>: the interviews become text; from the couple's interviews Claude makes one story.</li>
 </ol>
 <p>Every page on the left of this Info explains one part of the app with every option: what it does, the numbers it works with
@@ -1123,6 +1160,41 @@ morning Iris follow as a montage (~2 s).</li>
 <li>Every shot keeps your colour and has its sound linked to the picture; the teaser has its music on A5/A6; one marker per part, in the
 app's language. It is a pre-edit: the exact rhythm on the music and the final choice are yours.</li>
 </ul>
+
+<h2>Long Film v2 (BETA)</h2>
+<p>The whole long film, the party included, from the sequence of <b>Create Project</b> (Chronological or Timecode synchronized
+sequence). In Premiere you label the shots by colour, put the recorder files in the sequence too (for the party), export the sequence
+as XML (File &gt; Export &gt; Final Cut Pro XML) and import it here (Import XML or dragged from Finder). Only the cameras you labelled
+count: one, two, three or more of the cameras in the sequence. The old Long Film and Teaser Studio stay unchanged: these colours are
+for v2 only.</p>
+<ul>
+<li><b>Blue (groom) and Rose (bride)</b>: Auto selection (like Footage Selection: focus 40 %, stability 30 %, exposure 30 %,
+threshold 60, minimum cut 2 s; camera moves are cut out), groom and bride together, in the order they were filmed.</li>
+<li><b>Teal (first look)</b>: synced only: camera A whole on V1, the other cameras placed by their sound above it at the same moment
+(V2, V3...). You cut between the cameras.</li>
+<li><b>Forest (vornic)</b>, with the <b>ON / OFF</b> switch: ON = the vornic from exactly 2 cameras, synced by the cameras' own sound;
+the main camera (camera A if it has him, else the one with more vornic) whole on V1, the second camera whole on V2 (clips switched
+off, its sound on its own tracks), the cut version on V3 (pieces of ~3-4 s, at the pauses of his speech), like Long Film. OFF = no
+vornic, Forest is not used.</li>
+<li><b>Brown (church)</b>: Auto selection. The <b>priest</b> is found by himself: a church clip with at least 60 s where the camera
+stays still (no move longer than 1 s), the same face all the time (local face recognition, 5 frames; if the model cannot be
+downloaded, the still camera and the speech are enough) and someone speaks at least half of the time. The priest's clip stays whole.</li>
+<li><b>Yellow (venue), Purple (couple shots), Violet (drone)</b>: Auto selection.</li>
+<li><b>Iris or Cerulean (party)</b>: multicam like the Multicam page: every labelled camera + the recorder files of the sequence,
+synced by the sound (no recorder: on the longest party clip), then the Auto Director on your labelled ranges. Your defaults: minimum
+shot 3 s, maximum 120 s, pace 50, Static ↔ Handheld 65, on a drop change camera every 1 bar (4 beats), before a drop "Cut faster and
+faster"; change them on the page (Back to my party settings brings them back). Cuts fall on the beat (1 frame before), faster on
+intense music. On the map (like Multicam) you drag <b>Slower cuts</b> zones for the hora: there the hora settings are used (minimum
+6 s, maximum 120 s, pace 50, 45).</li>
+<li><b>Tan</b> (interviews) and the other colours are not used for now.</li>
+</ul>
+<p><b>The order of the parts</b> = the order in which the colours appear on camera A (the V1 camera of a timecode sequence, the first
+camera of a chronological one); colours that are not on camera A come after, in the usual order. "In the order they were filmed": in
+a timecode sequence the timeline position, in a chronological one the recording time in the files.</p>
+<p><b>The export</b>: one 25 fps 1920x1080 sequence with a marker on every part. Clips of another size are scaled to fill the frame
+(4K = 50 %). Every camera has its own sound tracks, linked to the picture, like Create Project (FX6 = A1 and A2 stereo, FX3 / A7 = one
+stereo track); the recorder is under the whole party. Build reads the footage (once: the analyses are kept); changing the party
+settings and the zones shows at once, without another Build.</p>
 
 <h2>What your selects need</h2>
 <p>What the XML you give each feature must have. The colours are your Premiere labels: Rose bride, Blue groom, Purple couple,

@@ -39,6 +39,7 @@ import help_text
 import i18n
 import teaser
 import longfilm
+import longfilm2
 import blueprint
 import offload
 import updater
@@ -49,7 +50,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.11.7"
+APP, VER = "MoneyMakingMachine", "v3.12.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -843,7 +844,7 @@ class NewProjectDialog(QDialog):
     DESC = {"footage": "Grade your clips Good / Fair / Poor and export a colour-labelled timeline.",
             "multicam": "Sync several cameras to a master audio recorder, then build the multicam edit."}
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, kind=None):
         super().__init__(parent)
         self.setWindowTitle("New Project")
         self.setModal(True)
@@ -860,6 +861,10 @@ class NewProjectDialog(QDialog):
         row.addWidget(self.b1)
         row.addWidget(self.b2)
         v.addLayout(row)
+        if kind:                          # the Selection / Multicam pages: the type is the page's own
+            for w_ in (self.b1, self.b2):
+                w_.hide()
+            v.itemAt(1).widget().hide()
         self.desc = lbl("", "muted", True)
         v.addWidget(self.desc)
         self.edit = QLineEdit()
@@ -871,7 +876,7 @@ class NewProjectDialog(QDialog):
         r2.addWidget(btn("Cancel", slot=self.reject))
         r2.addWidget(btn("Create Project", "primary", self.accept))
         v.addLayout(r2)
-        self.pick("footage")
+        self.pick(kind or "footage")
 
     def pick(self, k):
         self._kind = k
@@ -951,12 +956,13 @@ class Dashboard(QWidget):
     open_project = Signal(str)
     delete_project = Signal(str)
 
-    def __init__(self):
+    def __init__(self, kind="footage"):
         super().__init__()
+        self.kind = kind                  # "footage" (Selection) or "multicam": each has its own page in the menu
         v = QVBoxLayout(self)
         v.setContentsMargins(28, 22, 28, 22)
         head = QHBoxLayout()
-        head.addWidget(lbl("Selection & Multicam", "h1"))
+        head.addWidget(lbl("Multicam" if kind == "multicam" else "Selection", "h1"))
         head.addStretch()
         head.addWidget(btn("+  New Project", "primary", self.new_project.emit))
         v.addLayout(head)
@@ -987,6 +993,7 @@ class Dashboard(QWidget):
         self.stack.addWidget(self.scroll)
 
     def refresh(self, projects):
+        projects = [p for p in projects if (p.get("type") == "multicam") == (self.kind == "multicam")]
         if not projects:
             self.stack.setCurrentIndex(0)
             return
@@ -1020,7 +1027,7 @@ class ProjectPage(QWidget):
         head.setObjectName("head")
         hh = QHBoxLayout(head)
         hh.setContentsMargins(20, 10, 20, 10)
-        hh.addWidget(btn("←  Selection && Multicam", "link", self.back.emit))
+        hh.addWidget(btn("←  Selection", "link", self.back.emit))
         self.title = lbl("", "h2")
         hh.addWidget(self.title)
         hh.addStretch()
@@ -2155,7 +2162,7 @@ class MulticamPage(QWidget):
         head.setObjectName("head")
         hh = QHBoxLayout(head)
         hh.setContentsMargins(20, 10, 20, 10)
-        hh.addWidget(btn("←  Selection && Multicam", "link", self.back.emit))
+        hh.addWidget(btn("←  Multicam", "link", self.back.emit))
         self.title = lbl("", "h2")
         hh.addWidget(self.title)
         hh.addStretch()
@@ -6694,6 +6701,425 @@ class TranscribePage(QWidget):
 
 # ---------------------------------------------------------------- project pages for Teaser Studio / Long Film
 
+class _LF2Worker(QThread):
+    """Long Film v2 build: reads the media (analyses, priest, first look, vornic, party sync + music)."""
+    progress = Signal(str, float)
+    done = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, xml_path, vornic, cache, jobs, base):
+        super().__init__()
+        self.xml_path, self.vornic, self.cache, self.jobs, self.base, self._stop = xml_path, vornic, cache, jobs, base, False
+
+    def run(self):
+        try:
+            r = longfilm2.build(self.xml_path, self.vornic, self.cache, lambda s, f: self.progress.emit(s, f),
+                                lambda: self._stop, self.jobs, self.base)
+            self.done.emit(r)
+        except InterruptedError:
+            self.failed.emit("Cancelled")
+        except Exception as e:
+            logging.exception("long film v2 build failed")
+            self.failed.emit(str(e))
+
+
+class LongFilm2Page(QWidget):
+    """Long Film v2 (BETA): the long film from the labelled sequence of Create Project, every colour its own way."""
+    back = Signal()
+    DROPS = [1, 2, 4, 8, 16]
+
+    def __init__(self, store):
+        super().__init__()
+        self.store, self.worker, self.r, self.an, self.parts, self.info = store, None, None, {}, [], {}
+        v = QVBoxLayout(self)
+        v.setContentsMargins(24, 18, 24, 18)
+        v.setSpacing(10)
+        top = QHBoxLayout()
+        top.addWidget(btn("←  Projects", "link", lambda: self.back.emit()))
+        self.pname = lbl("", "h2")
+        top.addWidget(self.pname)
+        top.addWidget(lbl("·  Long Film v2", "muted"))
+        badge = QLabel("BETA")
+        badge.setStyleSheet(f"background:{C['POOR']};color:white;font-size:10px;font-weight:800;border-radius:9px;padding:2px 8px")
+        top.addWidget(badge)
+        top.addStretch()
+        self.b_exp = btn("Export XML", slot=self.export)
+        self.b_build = btn("Build", "primary", self.build)
+        top.addWidget(self.b_exp)
+        top.addWidget(self.b_build)
+        v.addLayout(top)
+        v.addWidget(lbl("The long film from the sequence of Create Project (Chronological or Timecode synchronized "
+                        "sequence) after you labelled the shots: every colour is handled its own way, in the order of the "
+                        "colours on camera A. One 25 fps 1920x1080 sequence.", "muted", True))
+        v.addSpacing(8)
+        body = QHBoxLayout()
+        body.setSpacing(18)
+        v.addLayout(body, 1)
+        sc = QScrollArea()
+        sc.setWidgetResizable(True)
+        sc.setFixedWidth(430)
+        lw = QWidget()
+        left = QVBoxLayout(lw)
+        left.setContentsMargins(0, 0, 8, 0)
+        left.setSpacing(10)
+
+        def card(n, title):
+            f = QFrame()
+            f.setObjectName("card")
+            l = QVBoxLayout(f)
+            l.setContentsMargins(16, 14, 16, 16)
+            l.setSpacing(10)
+            h = QHBoxLayout()
+            num = QLabel(str(n))
+            num.setFixedSize(22, 22)
+            num.setAlignment(Qt.AlignCenter)
+            num.setStyleSheet(f"background:{C['BLUE']};color:white;border-radius:11px;font-weight:700")
+            h.addWidget(num)
+            h.addWidget(lbl(title, "h2"))
+            h.addStretch()
+            l.addLayout(h)
+            left.addWidget(f)
+            return l
+        l1 = card(1, "Your labelled sequence")
+        l1.addWidget(lbl("Export from Premiere the sequence with your labels as XML (put the recorder files in it too, for "
+                         "the party). Only the labelled cameras are used. The colours:<br>"
+                         "• Blue groom, Rose bride: selection (Auto, minimum cut 2 s, threshold 60), in the order they were "
+                         "filmed;<br>"
+                         "• Teal first look: synced, the cameras one above the other;<br>"
+                         "• Forest vornic: 2 cameras synced by their sound, cut automatically (switch below);<br>"
+                         "• Brown church: selection; the priest's shot (at least 1 minute on him) stays whole;<br>"
+                         "• Yellow venue, Purple couple, Violet drone: selection;<br>"
+                         "• Iris or Cerulean party: multicam of every camera + the recorder, cut by the Auto Director;<br>"
+                         "• Tan and the other colours are not used.<br>"
+                         "The order of the parts = the order of the colours on camera A (V1 of a timecode sequence, the "
+                         "first camera of a chronological one).", "muted", True))
+        l1.addWidget(btn("Import XML", slot=self.pick_xml))
+        self.foot_lbl = QLabel("")
+        self.foot_lbl.setWordWrap(True)
+        self.foot_lbl.setTextFormat(Qt.RichText)
+        l1.addWidget(self.foot_lbl)
+        l2 = card(2, "Vornic")
+        vr = QHBoxLayout()
+        vr.addWidget(lbl("This wedding has a vornic (Forest)", "", True), 1)
+        self.sw_v = Switch(True)
+        self.sw_v.toggled.connect(self._vornic)
+        vr.addWidget(self.sw_v, 0, Qt.AlignTop)
+        l2.addLayout(vr)
+        l2.addWidget(lbl("ON: the Forest shots of 2 cameras are synced by their own sound: the main camera whole on V1, the "
+                         "second camera whole on V2 (switched off), the cut version on V3. OFF: no vornic, Forest is not "
+                         "used.", "muted", True))
+        l3 = card(3, "Party · Auto Director")
+        self.d_rows = {}
+        for key, title, sub, lo, hi, suf in (
+                ("minshot", "Minimum shot", "No shot is shorter than this.", 1, 10, " s"),
+                ("maxshot", "Maximum shot", "After this the edit prefers to cut to another camera.", 4, 120, " s"),
+                ("pace", "Cut pace", "Calm (few cuts) ↔ fast (many cuts).", 0, 100, ""),
+                ("energy", "Static  ↔  Handheld", "Left = prefer the static cameras, right = prefer the handheld ones.", 0, 100, "")):
+            r = SliderRow(title, sub, longfilm2.PARTY[key], lo=lo, hi=hi, suffix=suf)
+            r.changed.connect(lambda x, k=key: self.set_d(k, x))
+            self.d_rows[key] = r
+            l3.addWidget(r)
+        l3.addWidget(lbl("On a drop, change camera every"))
+        self.c_drop = QComboBox()
+        self.c_drop.setProperty("i18n", True)
+        self.c_drop.addItems(["1 beat", "2 beats", "1 bar (4 beats)", "2 bars", "4 bars"])
+        self.c_drop.currentIndexChanged.connect(lambda i: self.set_d("drop_beats", self.DROPS[i]))
+        l3.addWidget(self.c_drop)
+        l3.addWidget(lbl("Build-up before a drop"))
+        self.c_build = QComboBox()
+        self.c_build.setProperty("i18n", True)
+        self.c_build.addItems(["Hold one shot until the drop", "Cut faster and faster"])
+        self.c_build.currentIndexChanged.connect(lambda i: self.set_d("buildup", "hold" if i == 0 else "accelerate"))
+        l3.addWidget(self.c_build)
+        l3.addWidget(btn("Back to my party settings", "link", self.reset_d), 0, Qt.AlignLeft)
+        left.addStretch()
+        sc.setWidget(lw)
+        body.addWidget(sc)
+        right = QVBoxLayout()
+        right.addWidget(lbl("YOUR LONG FILM", "section"))
+        self.table = QTableWidget(0, 3)
+        self.table.setHorizontalHeaderLabels(["Part", "Shots", "Length"])
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self.table.verticalHeader().hide()
+        self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        right.addWidget(self.table)
+        self.status = lbl("Import your labelled XML, then press Build.", "muted", True)
+        right.addWidget(self.status)
+        self.pp = ProgressPanel()
+        right.addWidget(self.pp)
+        right.addSpacing(6)
+        right.addWidget(lbl("PARTY", "section"))
+        right.addWidget(lbl("Slower cuts (the hora): drag on the map to mark a zone; there the cuts follow your hora settings "
+                            "(longer shots, not on the bars). Drag an edge to move it, right-click or Delete to remove it.",
+                            "muted", True))
+        self.map = SyncMap()
+        self.map.zones_changed.connect(self._zones)
+        right.addWidget(self.map)
+        self.stats = lbl("", "muted", True)
+        right.addWidget(self.stats)
+        right.addStretch()
+        body.addLayout(right, 1)
+        self.timer = QTimer(singleShot=True, interval=300)
+        self.timer.timeout.connect(self.recompute)
+        self._buttons()
+
+    # ---- project
+    def _cur(self):
+        pid = self.store.app.get("long2_current")
+        return next((p for p in self.store.app.setdefault("long2_projects", []) if p["id"] == pid), None)
+
+    def _remember(self, **kw):
+        p = self._cur()
+        if p is not None:
+            p.update(kw, when=datetime.now().isoformat(timespec="seconds"))
+            self.store.save_app()
+
+    def _busy(self):
+        return bool(self.worker and self.worker.isRunning())
+
+    def _dir(self):
+        p = self._cur() or {}
+        return {**longfilm2.PARTY, **p.get("dir", {})}
+
+    def open_project(self):
+        p = self._cur()
+        if p is None:
+            return
+        self.pname.setText(p["name"])
+        d = self._dir()
+        for k, r in self.d_rows.items():
+            r.set(int(d[k]))
+        for w_, i in ((self.c_drop, self.DROPS.index(d["drop_beats"]) if d["drop_beats"] in self.DROPS else 2),
+                      (self.c_build, 0 if d["buildup"] == "hold" else 1)):
+            w_.blockSignals(True)
+            w_.setCurrentIndex(i)
+            w_.blockSignals(False)
+        self.sw_v.set(p.get("vornic", True))
+        self.map.set_zones(p.get("zones", []))
+        blob = self.store.load_blob(p["id"]) if p.get("built") else {}
+        self.r = blob.get("result")
+        self.an = {}
+        for k, c in (blob.get("cache") or {}).items():
+            try:
+                self.an[k] = core.Analysis.from_json(c["a"])
+            except Exception:
+                pass
+        self._cache = blob.get("cache") or {}
+        self._summary()
+        self.recompute()
+
+    def _summary(self):
+        p = self._cur() or {}
+        f = p.get("footage")
+        if not f:
+            self.foot_lbl.setText("")
+            return
+        try:
+            L = longfilm2.load(f)
+        except Exception as e:
+            self.foot_lbl.setText(f'<span style="color:{C["POOR"]}">' + i18n.T("Could not read the XML: {}").format(i18n.T(str(e))) + "</span>")
+            return
+        cnt = {}
+        for q in L["pieces"]:
+            cnt[q["label"]] = cnt.get(q["label"], 0) + 1
+        cams = "<br>".join(f'{i18n.T("Camera")} {"ABCDEFGH"[i] if i < 8 else i + 1}: {escape(c["name"])}'
+                           for i, c in enumerate(L["cams"]))
+        lay = i18n.T("Timecode synchronized sequence") if L["layout"] == "timecode" else i18n.T("Chronological")
+        txt = (f"<b>{escape(Path(f).name)}</b><br>{lay} · " +
+               i18n.T("{} labelled clips · {} recorder files").format(len(L["pieces"]), len(L["recorder"])) + "<br>" + cams +
+               "<br>" + " · ".join(f"{i18n.T(k)} {n}" for k, n in sorted(cnt.items())) + "<br>" +
+               i18n.T("Order: {}").format(" → ".join(i18n.T(longfilm2.PART_NAMES[x]) for x in L["order"])))
+        if L["skipped"]:
+            txt += "<br>" + i18n.T("Not used: {}").format(", ".join(f"{i18n.T(k)} {n}" for k, n in L["skipped"].items()))
+        if any(q["kind"] == "party" for q in L["pieces"]) and not L["recorder"]:
+            txt += f'<br><span style="color:{C["FAIR"]}">' + i18n.T("No recorder file in the sequence: the party is synced on the longest party clip.") + "</span>"
+        self.foot_lbl.setText(txt)
+
+    def _drop(self, paths):
+        xmls, _ = _xml_or_rest(paths)
+        if not xmls:
+            notify(i18n.T("Drop the XML of your labelled sequence here."), error=True)
+            return
+        self._set_xml(xmls[0])
+
+    def pick_xml(self):
+        p = self._cur() or {}
+        f, _ = QFileDialog.getOpenFileName(self, "Your labelled sequence (XML from Premiere)",
+                                           str(Path(p["footage"]).parent) if p.get("footage") else "", "XML (*.xml)")
+        if f:
+            self._set_xml(f)
+
+    def _set_xml(self, f):
+        if self._busy():
+            notify("Wait for the current job to finish (or Cancel it).", error=True)
+            return
+        self._remember(footage=f, built=False)
+        self.r, self.an = None, {}
+        self._summary()
+        self.recompute()
+        notify(i18n.T("XML loaded: {}").format(Path(f).name))
+
+    # ---- settings
+    def set_d(self, k, x):
+        p = self._cur()
+        if p is None:
+            return
+        p.setdefault("dir", {})[k] = x
+        self.store.save_app()
+        self.timer.start()
+
+    def reset_d(self):
+        self._remember(dir={})
+        self.open_project()
+
+    def _vornic(self, on):
+        self._remember(vornic=on)
+        if on and self.r and not self.r.get("vornic", [0, []])[1] and any(q["kind"] == "vornic" for q in self.r["pieces"]):
+            self.status.setText(i18n.T("Press Build to sync the vornic."))
+        self.timer.start()
+
+    def _zones(self, zones):
+        self._remember(zones=[list(z) for z in zones])
+        self.timer.start()
+
+    def _buttons(self):
+        p = self._cur() or {}
+        busy = self._busy()
+        self.b_build.setEnabled(bool(p.get("footage")) and not busy)
+        self.b_exp.setEnabled(bool(self.parts) and not busy)
+
+    # ---- build
+    def build(self):
+        p = self._cur()
+        if p is None or not p.get("footage") or self._busy():
+            return
+        self.pp.start("Starting…")
+        self.pp.allow_cancel(lambda: self.worker and setattr(self.worker, "_stop", True))
+        self.worker = _LF2Worker(p["footage"], p.get("vornic", True), dict(getattr(self, "_cache", {}) or {}),
+                                 self.store.app.get("jobs", 2), str(self.store.dir))
+        self._job_p = p
+        self.worker.progress.connect(self.pp.set)
+        self.worker.done.connect(self._done)
+        self.worker.failed.connect(self._failed)
+        self.worker.finished.connect(self._buttons)
+        self.worker.start()
+        self._buttons()
+
+    def _done(self, r):
+        p = self._job_p
+        cache = self.worker.cache
+        try:
+            r = json.loads(json.dumps(r, default=lambda o: o.tolist() if hasattr(o, "tolist") else str(o)))
+        except Exception:
+            logging.exception("long film v2: result not saved")
+        self.store.save_blob(p["id"], dict(result=r, cache=cache))
+        p.update(built=True, when=datetime.now().isoformat(timespec="seconds"))
+        self.store.save_app()
+        self.pp.hide()
+        self.pp.allow_cancel(None)
+        if p is self._cur():
+            self.r, self._cache = r, cache
+            self.an = {}
+            for k, c in cache.items():
+                try:
+                    self.an[k] = core.Analysis.from_json(c["a"])
+                except Exception:
+                    pass
+            self.recompute()
+        if r.get("missing"):
+            notify(i18n.T("{} clips not found on this computer: connect the disk with the footage.").format(len(r["missing"])), error=True)
+        notify(i18n.T("Long Film v2 ready: {}").format(p["name"]))
+
+    def _failed(self, m):
+        self.pp.hide()
+        self.pp.allow_cancel(None)
+        self.status.setText(i18n.T("Stopped: ") + i18n.T(m))
+        if m != "Cancelled":
+            notify(i18n.T("Long Film v2 failed: {}").format(i18n.T(m)), error=True)
+
+    # ---- the film
+    def recompute(self):
+        p = self._cur() or {}
+        self.parts, self.info = [], {}
+        if self.r:
+            try:
+                self.parts, self.info = longfilm2.assemble(self.r, self.an, self._dir(), p.get("zones", []),
+                                                           marker=i18n.T, vornic_on=p.get("vornic", True))
+            except Exception as e:
+                logging.exception("long film v2 assemble failed")
+                self.status.setText(i18n.T("Error: {}").format(str(e)))
+        self._fill()
+        self._buttons()
+
+    def _fill(self):
+        rows = [(n, len(its), ln) for n, ln, its, _rec in self.parts]
+        self.table.setRowCount(len(rows))
+        self.table.setFixedHeight(self.table.horizontalHeader().height() + 32 * max(1, len(rows)) + 6)
+        for i, (n, k, ln) in enumerate(rows):
+            self.table.setRowHeight(i, 32)
+            for c, t in enumerate((n, str(k), fmt_hms(ln))):
+                it = QTableWidgetItem(t)
+                self.table.setItem(i, c, it)
+        if self.r:
+            tot = sum(ln for _n, ln, _i, _r in self.parts)
+            extra = ""
+            if self.r.get("priests"):
+                extra += "  " + i18n.T("The priest found in {} church clips (kept whole).").format(len(self.r["priests"]))
+            self.status.setText(i18n.T("Ready: the long film is {} long. Press Export XML.").format(fmt_hms(tot)) + extra)
+        elif (self._cur() or {}).get("footage"):
+            self.status.setText(i18n.T("Press Build."))
+        self._map()
+
+    def _map(self):
+        ps = (self.r or {}).get("party")
+        if not ps:
+            self.map.set_data([], [])
+            self.stats.setText("")
+            return
+        masters, res = ps["masters"], ps["results"]
+        starts = sync.master_starts(masters)
+        spans = [(starts[i], starts[i] + m["duration"]) for i, m in enumerate(masters)]
+        rows = []
+        for ci, cam in enumerate(self.r["cams"]):
+            bl = []
+            for q in self.r["pieces"]:
+                if q["kind"] == "party" and q["cam"] == ci and (x := res.get(q["path"])) and x["conf"] != "fail":
+                    g = starts[x["master"]] + x["offset"]
+                    bl.append((g + q["a"], g + q["b"], x["conf"]))
+            if bl:
+                role = (self.info.get("roles") or {}).get(ci, "Handheld")
+                rows.append((f"{cam['name'].split('  ·  ')[0]}  ({role[0]})", director.CAM_COLORS[ci % 8], bl))
+        edit, shots = [], 0
+        for e in self.info.get("edits") or []:
+            if e:
+                g = starts[e["master"]]
+                edit += [(g + t0, g + t1, director.CAM_COLORS[ci % 8]) for t0, t1, ci in e["segs"]]
+                shots += e["stats"]["shots"]
+        mus = [(starts[i], m["music"]) for i, m in enumerate(masters) if m.get("music")]
+        self.map.set_data(spans, rows, edit, mus)
+        fails = sum(1 for q in self.r["pieces"] if q["kind"] == "party" and (res.get(q["path"]) or {}).get("conf") not in ("high", "medium"))
+        self.stats.setText(i18n.T("Party: {} shots").format(shots) +
+                           (("  ·  " + i18n.T("{} party clips could not be synced by the sound").format(fails)) if fails else ""))
+
+    def export(self):
+        p = self._cur()
+        if not p or not self.parts:
+            return
+        d = Path(p["footage"]).parent if p.get("footage") else Path.home()
+        f, _ = QFileDialog.getSaveFileName(self, "Export XML", str(d / f"{p['name']} - Long Film v2.xml"), "XML (*.xml)")
+        if not f:
+            return
+        try:
+            n, nv, na = longfilm2.export_xml(self.parts, self.r["infos"], [c["name"] for c in self.r["cams"]], f,
+                                             f"{p['name']} - Long Film v2", marker=lambda s: s)
+        except Exception as e:
+            logging.exception("long film v2 export failed")
+            notify(i18n.T("Export failed: {}").format(str(e)), error=True)
+            return
+        self.status.setText(i18n.T("Saved {} clips ({} video, {} audio tracks) to {}. Premiere: File > Import.").format(n, nv, na, f))
+        notify(i18n.T("XML saved: {}").format(Path(f).name))
+
+
 class StudioCard(QFrame):
     opened = Signal(str)
     deleted = Signal(str)
@@ -6865,20 +7291,22 @@ class Main(QMainWindow):
         sv.addSpacing(14)
         self.nav = {"offload": btn("Card Offload", "nav", lambda: self.go("offload")),
                     "project": btn("Create Project", "nav", lambda: self.go("project")),
-                    "dash": btn("Selection && Multicam", "nav", lambda: self.go("dash")),
-                    "teaser": btn("Teaser Studio", "nav", lambda: self.go("teaser")),
+                    "dash": btn("Selection", "nav", lambda: self.go("dash")),
+                    "mcdash": btn("Multicam", "nav", lambda: self.go("mcdash")),
                     "long": btn("Long Film", "nav", lambda: self.go("long")),
+                    "long2": btn("Long Film v2", "nav", lambda: self.go("long2")),
+                    "teaser": btn("Teaser Studio", "nav", lambda: self.go("teaser")),
                     "transcribe": btn("Transcribe", "nav", lambda: self.go("transcribe")),
                     "queue": btn("Analysis Queue", "nav", lambda: self.go("queue")),
                     "settings": btn("Settings", "nav", lambda: self.go("settings")),
                     "info": btn("Info / How to use", "nav", lambda: self.go("info"))}
         for b in self.nav.values():
             sv.addWidget(b)
-        for key in ("teaser", "long"):     # owner: no NEW on Card Offload / Transcribe / Create Project any more
+        for key in ("teaser", "long", "long2"):     # owner: no NEW on Card Offload / Transcribe / Create Project any more
             nb = QHBoxLayout(self.nav[key])
             nb.setContentsMargins(0, 0, 8, 0)
             nb.addStretch()
-            new = QLabel("NEW")
+            new = QLabel("BETA" if key == "long2" else "NEW")
             new.setStyleSheet(f"background:{C['POOR']};color:white;font-size:8px;font-weight:800;border-radius:5px;padding:0px 4px")
             new.setAttribute(Qt.WA_TransparentForMouseEvents)
             new.setFixedSize(30, 14)
@@ -6891,7 +7319,8 @@ class Main(QMainWindow):
         h.addWidget(self.stack, 1)
         self.setCentralWidget(central)
 
-        self.dash, self.proj = Dashboard(), ProjectPage(self.store)
+        self.dash, self.proj = Dashboard("footage"), ProjectPage(self.store)
+        self.mcdash = Dashboard("multicam")
         self.anl, self.res, self.queue = AnalyzingPage(), ResultsPage(self.store), QueuePage()
         self.mc = MulticamPage(self.store)
         self.settings = SettingsPage(self.store)
@@ -6908,24 +7337,28 @@ class Main(QMainWindow):
                                   lambda p: [name_of(p.get("footage")),
                                              (i18n.T("with vornic") + " · " if p.get("vornic") else "") +
                                              f"{i18n.T('Updated')} {nice_date(p.get('when', ''))}"])
+        self.long2 = LongFilm2Page(self.store)
+        self.long2_hub = StudioHub(self.store, self.long2, "Long Film v2", "long2", "LONG FILM V2", "#2e9e6a",
+                                   lambda p: [name_of(p.get("footage")), f"{i18n.T('Updated')} {nice_date(p.get('when', ''))}"])
         self.toast = Toast(self)
         global _NOTIFY
         _NOTIFY = lambda text, error=False, ms=None: self.toast.show_msg(text, ms, error)
         self._drops = [enable_drops(pg, pg._drop) for pg in (self.proj, self.mc, self.teaser, self.long, self.offload,
-                                                              self.transcribe, self.cproject)]
+                                                              self.transcribe, self.cproject, self.long2)]
         dd = _Drops(self.offload._drop_dest, self.offload)  # the destination area takes the destination folder
         for w_ in (self.offload.dest_lbl, self.offload.where):
             w_.installEventFilter(dd)
         self._drops.append(dd)
         self.res.export_done = lambda name: (self.toast.show_msg(f"XML saved: {name}"), logging.info("footage export %s", name))
         self.teaser.notify.connect(self.toast.show_msg)
-        for w in (self.dash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser_hub, self.long_hub, self.offload, self.transcribe, self.cproject):
+        for w in (self.dash, self.mcdash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser_hub, self.long_hub, self.long2_hub, self.offload, self.transcribe, self.cproject):
             self.stack.addWidget(w)
-        self.dash.new_project.connect(self.new_project)
-        self.dash.open_project.connect(self.open_project)
-        self.dash.delete_project.connect(self.delete_project)
+        for d_ in (self.dash, self.mcdash):
+            d_.new_project.connect(lambda k=d_.kind: self.new_project(k))
+            d_.open_project.connect(self.open_project)
+            d_.delete_project.connect(self.delete_project)
         self.proj.back.connect(lambda: self.go("dash"))
-        self.mc.back.connect(lambda: self.go("dash"))
+        self.mc.back.connect(lambda: self.go("mcdash"))
         self.proj.analyze.connect(self.start_analysis)
         self.proj.open_history.connect(self.show_history)
         self.anl.back.connect(lambda: self.show_page(self.proj))
@@ -6953,6 +7386,8 @@ class Main(QMainWindow):
         lr = getattr(self.long, "runner", None)
         if lr and lr.isRunning():
             jobs["long"] = ("Long Film", self.long.pp.title.text(), self.long.pp.bar.value() / 1000)
+        if self.long2._busy():
+            jobs["long2"] = ("Long Film v2", self.long2.pp.title.text(), self.long2.pp.bar.value() / 1000)
         if self.offload._busy():
             jobs["offload"] = ("Card Offload", self.offload.pp.title.text(), self.offload.pp.bar.value() / 1000)
         if self.cproject._busy():
@@ -6971,6 +7406,9 @@ class Main(QMainWindow):
         elif k == "long":
             self.long_hub.stack.setCurrentIndex(1)
             self.show_page(self.long_hub)
+        elif k == "long2":
+            self.long2_hub.stack.setCurrentIndex(1)
+            self.show_page(self.long2_hub)
         elif k in ("offload", "project", "transcribe"):
             self.go(k)
         else:
@@ -6989,6 +7427,9 @@ class Main(QMainWindow):
             self.offload._stop = True
             for w_ in self.offload.workers:
                 w_.wait(10000)
+        if self.long2._busy():
+            self.long2.worker._stop = True
+            self.long2.worker.wait(10000)
         for pg in (self.teaser, self.long):
             r = getattr(pg, "runner", None)
             if r and r.isRunning():
@@ -7007,7 +7448,8 @@ class Main(QMainWindow):
     def show_page(self, w):
         self.stack.setCurrentWidget(w)
         for k, b in self.nav.items():
-            b.setProperty("active", (k == "dash" and w in (self.dash, self.proj, self.res, self.mc)) or (k == "queue" and w in (self.queue, self.anl))
+            b.setProperty("active", (k == "dash" and w in (self.dash, self.proj, self.res)) or
+                          (k == "mcdash" and w in (self.mcdash, self.mc)) or (k == "long2" and w is getattr(self, "long2_hub", None)) or (k == "queue" and w in (self.queue, self.anl))
                           or (k == "settings" and w is self.settings) or (k == "info" and w is self.info) or (k == "teaser" and w is self.teaser_hub) or (k == "long" and w is self.long_hub)
                           or (k == "offload" and w is self.offload) or (k == "transcribe" and w is self.transcribe)
                           or (k == "project" and w is self.cproject))
@@ -7029,6 +7471,12 @@ class Main(QMainWindow):
         if where == "dash":
             self.dash.refresh(self.store.projects)
             self.show_page(self.dash)
+        elif where == "mcdash":
+            self.mcdash.refresh(self.store.projects)
+            self.show_page(self.mcdash)
+        elif where == "long2":
+            self.long2_hub.show_grid()
+            self.show_page(self.long2_hub)
         elif where == "settings":
             self.show_page(self.settings)
         elif where == "info":
@@ -7050,8 +7498,8 @@ class Main(QMainWindow):
             self.show_page(self.queue)
 
     # projects
-    def new_project(self):
-        d = NewProjectDialog(self)
+    def new_project(self, kind=None):
+        d = NewProjectDialog(self, kind)
         if d.exec() and d.name():
             self.open_project(self.store.new(d.name(), d.kind())["id"])
 
@@ -7067,6 +7515,7 @@ class Main(QMainWindow):
     def delete_project(self, pid):
         self.store.delete(pid)
         self.dash.refresh(self.store.projects)
+        self.mcdash.refresh(self.store.projects)
 
     # analysis
     def start_analysis(self):

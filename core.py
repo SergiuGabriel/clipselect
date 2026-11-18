@@ -148,9 +148,14 @@ def _accel(sh, a, b):
     return float(acc.mean()) if len(acc) else 0.0
 
 
-def analyze(path, progress=None, cancel=None):
+def analyze(path, progress=None, cancel=None, a=None, b=None):
+    """The whole file, or only a..b seconds of it (Long Film v2: one labelled selection); times are then from a."""
     info = probe(path)
-    cmd = [ffmpeg_exe(), "-v", "error", "-nostdin", *decode_flags(), "-i", path, "-map", "0:v:0", "-an", "-sn", "-dn",
+    rng = []
+    if a is not None and b is not None:
+        rng = ["-ss", f"{max(0.0, a):.3f}", "-t", f"{max(0.1, b - a):.3f}"]
+        info.duration = max(0.1, min(b, info.duration or b) - max(0.0, a))
+    cmd = [ffmpeg_exe(), "-v", "error", "-nostdin", *decode_flags(), *rng, "-i", path, "-map", "0:v:0", "-an", "-sn", "-dn",
            "-vf", f"fps={SAMPLE_FPS},scale={AW}:{AH}:flags=fast_bilinear,format=gray",
            "-f", "rawvideo", "-"]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **_NOWIN)

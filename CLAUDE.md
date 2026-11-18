@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.11.7), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.12.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -60,6 +60,8 @@ linking to https://www.instagram.com/sergiugabrielcg/.
   vornic (face or Mango) with medium / wide / cut tracks, 25 fps XML.
 - `faces.py` — local face recognition (OpenCV Zoo YuNet MIT + SFace Apache 2.0, downloaded once into
   <data>/ai_model/faces; cosine >= 0.363 = same person). Used for the vornic; later the bride and groom.
+- `longfilm2.py` — Long Film v2 (BETA): the long film from the labelled Create Project sequence (load, selection,
+  priest, first look, vornic, party multicam, 1920x1080 25 fps export).
 - `teaser.py` — Teaser Studio engine (labels, music parts, beats, drop, edit, XML export).
 - `make_icons.py` — builds icon.icns / icon.ico / icon.png from `icon_source.png` (run in CI before PyInstaller).
 - `.github/workflows/build.yml` — builds macOS DMGs (Apple Silicon + Intel) and a Windows folder with PyInstaller on every push.
@@ -771,6 +773,29 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   (drone) go at the end (a clock cannot be compared with a hand-set TC); the old clock + 05:00 wrap only when no clip
   has a timecode. The sequence gets <timecode> = first clip's TC (_seq_tc). Ours vs his: every clip within 0.02 s.
   Chronological mode unchanged.
+
+## v3.12.0: Long Film v2 (BETA) + Selection / Multicam split (owner: "change nothing else, work only on v2")
+- Menu: Card Offload, Create Project, Selection, Multicam (two Dashboard(kind) pages, each creates its own project type;
+  the project pages go back to their own page), Long Film, Long Film v2 (BETA badge, same box as NEW), Teaser Studio, ...
+- Long Film v2 = longfilm2.py + LongFilm2Page / _LF2Worker (projects store.app["long2_projects"] / "long2_current", heavy data
+  in the project blob <id>.analysis.json: result + analysis cache). Input: HIS labelled sequence (Create Project,
+  chronological or timecode) exported as XML; only labelled cameras count; recorder = sound-only files in the sequence.
+  Colours (v2 ONLY, the old Long Film / Teaser Studio keep theirs): Blue groom + Rose bride (one part, chronological),
+  Teal first look (longfilm.firstlook_layout, synced only), Forest vornic (switch ON/OFF, exactly 2 cameras,
+  longfilm.vornic_cut: V1 main whole, V2 second whole clips OFF, V3 cut-ins), Brown church, Yellow venue, Purple couple,
+  Violet drone = Auto selection (core.auto_segments thr 60, min cut 2 s, on core.analyze(path, a=, b=) of the range);
+  priest = Brown clip with a still run >= 60 s (moving_mask, blips <= 1 s), speech >= half the time, one same face
+  (faces.py, 5 frames; skipped if the model cannot load) -> kept WHOLE; Iris / Cerulean party = sync.run_sync of the
+  party files on the recorder (else the longest party clip) + director.build on every labelled party range as its own
+  clip (key path#a-b, offset = file offset + a), party settings longfilm2.PARTY (3 / 120 / 50 / 65, 1 bar, accelerate,
+  editable per project), SyncMap with Slower cuts zones (HORA). Tan + other colours ignored.
+  Camera A = camera of the first clip on the lowest video track (V1 timecode / first camera chronological); part order =
+  order of the colours on camera A, then DEFAULT_ORDER. Chronological = timeline (timecode layout) else creation time /
+  time of day of the files. Export (longfilm2.export_xml): ONE 25 fps 1920x1080 sequence, other sizes Basic Motion scale
+  to fill (4K 50 %, non-16:9 fit), every camera its own audio tracks (projectsetup.groups / _file_xml / _track_attrs),
+  recorder last under the party span, links = position in track, a marker per part (app language).
+  Tested on a synthetic wedding (/home/claude/lf2: gen.py, mkxml*.py, run.py, ui.py): timecode + chronological +
+  no recorder + vornic off; check_xml clean; RO scan clean. NOT tested on real footage.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower
