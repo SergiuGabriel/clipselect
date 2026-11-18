@@ -83,9 +83,12 @@ copii pe jumătate care să pară bune.</li>
 alta. Contează <b>doar poziția în timeline</b>: clipurile fiecărei camere în ordinea filmării, fără timecode.
 <b>Secvență sincronizată pe timecode</b>: aplicația face singură ce faci în Premiere când dai label camerelor (Metadata &gt; Dynamic
 Media &gt; Camera Label) și apoi Create Multi-Camera Source Sequence cu Synchronize Point = Timecode. Litera aleasă în listă e
-label-ul camerei: camera A primește prima pistă video, B următoarea, apoi drona. Fiecare clip stă la <b>timecode-ul lui</b> (ora din
-zi), iar o cameră fără timecode real (00:00:00:00, de obicei drona sau telefonul) e pusă după ora de filmare din fișier. Ce e filmat
-după miezul nopții, până la 05:00, vine după restul zilei. Dacă două clipuri ale aceleiași camere se suprapun, al doilea merge pe o
+label-ul camerei: camera A primește prima pistă video, B următoarea, apoi drona. Fiecare clip stă <b>exact la timecode-ul lui</b>, ca
+în Premiere (și un timecode pus de mână care începe de la 00:00:00 rămâne așa, nu e mutat după miezul nopții; la camerele de 23,976
+cadre timecode-ul e socotit ca în Premiere), iar secvența începe la timecode-ul primului clip. Clipurile fără timecode real
+(00:00:00:00, de obicei drona sau telefonul) merg la capătul secvenței, pe pista lor: ceasul lor nu se poate potrivi cu un timecode pus
+de mână. Doar dacă niciun clip nu are timecode se folosește ora de filmare din fișier (ce e filmat după miezul nopții, până la 05:00,
+vine după restul zilei). Dacă două clipuri ale aceleiași camere se suprapun, al doilea merge pe o
 pistă sub ea. Fiecare cameră are pistele ei audio (perechi stereo). Secvența se numește „sincronizare timecode”. Timecode-ul pus de
 mână pe camere nu e exact la cadru: după sincronizare verifici sunetul, ca în Premiere.</p>
 <p>După descărcarea cardurilor: toate filmările nunții pe un singur timeline, <b>cum le așezi tu pentru selecție</b> (măsurat pe
@@ -739,9 +742,12 @@ recorder, which stay in their bins, not on the timeline), every clip whole with 
 apart. Only the <b>position in the timeline</b> matters: every camera's clips in the order they were filmed, no timecode.
 <b>Timecode synchronized sequence</b>: the app does by itself what you do in Premiere when you give the cameras a label (Metadata &gt;
 Dynamic Media &gt; Camera Label) and then Create Multi-Camera Source Sequence with Synchronize Point = Timecode. The letter chosen in
-the list is the camera label: camera A gets the first video track, B the next, then the drone. Every clip sits at <b>its timecode</b>
-(time of day); a camera without a real timecode (00:00:00:00, usually the drone or a phone) is placed by the recording time in the file.
-What was filmed after midnight, until 05:00, comes after the rest of the day. When two clips of the same camera overlap, the second goes
+the list is the camera label: camera A gets the first video track, B the next, then the drone. Every clip sits <b>exactly at its
+timecode</b>, like in Premiere (a hand-set timecode starting at 00:00:00 stays there, it is not moved past midnight; on 23.976 fps
+cameras the timecode is counted like Premiere does), and the sequence starts at the first clip's timecode. Clips without a real
+timecode (00:00:00:00, usually the drone or a phone) go at the end of the sequence, on their own track: their clock cannot be matched
+with a hand-set timecode. Only when no clip has a timecode is the recording time in the file used (what was filmed after midnight,
+until 05:00, comes after the rest of the day). When two clips of the same camera overlap, the second goes
 on a track under it. Every camera has its own audio tracks (stereo pairs). The sequence is called "timecode sync". Timecode set by hand
 on the cameras is not frame accurate: after the sync you check the sound, like in Premiere.</p>
 <p>After the card offload: all the wedding's footage on one timeline, <b>the way you lay it out for the selection</b> (measured on your

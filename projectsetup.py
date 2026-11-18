@@ -210,13 +210,22 @@ def probe(path):
     info["tc"] = None
     if mt and any(int(x) for x in mt.groups()):        # 00:00:00:00 = no real timecode (drones, phones)
         h, mi, se, fr = map(int, mt.groups())
-        info["tc"] = h * 3600 + mi * 60 + se + fr / max(1, round(info["fps"]))
+        info["tc"] = tc_seconds(h, mi, se, fr, info["fps"])
     info["tod"] = (int(mm.group(4)) * 3600 + int(mm.group(5)) * 60 + int(mm.group(6))) if mm else None
     try:
         info["mtime"] = os.path.getmtime(path)
     except OSError:
         info["mtime"] = 0.0
     return info
+
+
+def tc_seconds(h, mi, se, fr, fps):
+    """A timecode in REAL seconds, the way Premiere places it (checked on his own multicam sequence, 137 of 137 clips):
+    the timecode counts frames at the nominal rate (24, 25, 30, 50...); at 23.976 / 29.97 / 59.94 those frames last
+    1001/1000 longer, so 12:33:25:19 of an A7 IV at 23.976 sits 45 s later than the same text at 25 / 50 fps."""
+    nom = max(1, round(fps or 25))
+    real = nom * 1000 / 1001 if abs((fps or nom) - nom * 1000 / 1001) < abs((fps or nom) - nom) else nom
+    return ((h * 3600 + mi * 60 + se) * nom + fr) / real
 
 
 def _natural(path):
@@ -312,11 +321,15 @@ def export_xml(lay, infos, out_path, name, project=None, bins_only=()):
 SYNC_DAY = 5 * 3600            # a time of day before 05:00 belongs to the night after the wedding day (party)
 
 
-def sync_time(i):
-    """Where a clip goes in the TIMECODE SYNCED sequence: its timecode (time of day), else its recording clock."""
-    t = i.get("tc")
-    if t is None:
-        t = i.get("tod")
+def sync_time(i, use_tc=True):
+    """Where a clip goes in the TIMECODE SYNCED sequence. use_tc (some clip of the wedding has a real timecode): its
+    timecode exactly as Premiere's "Create Multi-Camera Source Sequence > Timecode" does, NEVER wrapped past midnight
+    (his cameras' timecode is set by hand and often starts near 00:00:00); a clip without one -> None (end of the
+    sequence: a recording clock cannot be compared with a hand-set timecode). Without any timecode: the recording clock
+    (time of day; before 05:00 = the night after the wedding day)."""
+    if use_tc:
+        return i.get("tc")
+    t = i.get("tod")
     if t is None:
         return None
     return t + 86400 if t < SYNC_DAY else t
@@ -330,12 +343,13 @@ def export_synced(cams, infos, out_path, name, project=None, bins_only=()):
     Sound: every camera has its own audio tracks (stereo pairs like Premiere). Bins as in export_xml."""
     sf = SEQ_FPS
     placed, untimed = [], []
+    use_tc = any((infos.get(f) or {}).get("tc") is not None for _c, fs in cams for f in fs)
     for k, (cam, fs) in enumerate(cams):
         for f in fs:
             i = infos.get(f) or {}
             if not (i.get("video") or i.get("ach")) or int(i.get("dur", 0) * sf) < 1:
                 continue
-            t = sync_time(i)
+            t = sync_time(i, use_tc)
             (placed if t is not None else untimed).append((k, f, t))
     if not placed and not untimed:
         raise ValueError("No clips to put on the timeline.")
@@ -358,13 +372,22 @@ def export_synced(cams, infos, out_path, name, project=None, bins_only=()):
     vt = {key: n for n, key in enumerate(order, 1)}
     items = [(f, vt[key] if infos[f].get("video") else None, key, st, ln) for f, key, _a, st, ln in items]
     items.sort(key=lambda x: x[3])
-    r = _write(items, infos, out_path, name, project, cams, bins_only, [(c, len(fs)) for c, fs in cams])
+    r = _write(items, infos, out_path, name, project, cams, bins_only, [(c, len(fs)) for c, fs in cams],
+               start_tc=round(t0 * sf) if placed and use_tc else 0)
     r["untimed"] = [f for _k, f, _t in untimed]
     r["tracks"] = len(order)
     return r
 
 
-def _write(items, infos, out_path, name, project, bins, bins_only, cameras):
+def _seq_tc(fr):
+    """The sequence's start timecode (25 fps): the timecode sequence starts at its first clip's timecode, like his."""
+    sf = round(SEQ_FPS)
+    s = f"{fr // (3600 * sf) % 24:02d}:{fr // (60 * sf) % 60:02d}:{fr // sf % 60:02d}:{fr % sf:02d}"
+    return (f'<timecode><rate><timebase>{sf}</timebase><ntsc>FALSE</ntsc></rate><string>{s}</string>'
+            f'<frame>{fr}</frame><displayformat>NDF</displayformat></timecode>')
+
+
+def _write(items, infos, out_path, name, project, bins, bins_only, cameras, start_tc=0):
     """The sequence writer shared by both modes. items = [(file, video track or None, audio key, start, length)] in
     sequence frames (25 fps). Every audio key gets its own audio tracks: one per stereo pair (two exploded xmeml
     tracks, as Premiere writes them) and one per mono channel; stereo before mono inside a key."""
@@ -449,7 +472,7 @@ def _write(items, infos, out_path, name, project, bins, bins_only, cameras):
              f'{"".join(trk(ax[tix[(sl, ex)]], _track_attrs(sl[2], ex)) for sl, ex in tracks)}</audio>')
     seq = (f'<sequence id="sequence-1"><name>{escape(name)}</name><duration>{total}</duration>{rate_xml}'
            f'<media><video><format>{core._sc(rate_xml, sw, sh, "none")}</format>'
-           f'{"".join(trk(vx[t]) for t in range(1, nv + 1))}</video>{audio}</media></sequence>')
+           f'{"".join(trk(vx[t]) for t in range(1, nv + 1))}</video>{audio}</media>{_seq_tc(start_tc)}</sequence>')
     if project is not None:
         seq = f'<project><name>{escape(project)}</name><children>{"".join(bins_xml)}{seq}</children></project>'
     xml = f'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4">{seq}</xmeml>'

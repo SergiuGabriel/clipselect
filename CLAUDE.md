@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.11.6), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.11.7), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -762,6 +762,15 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   Premiere multicam clip (xmeml multiclip import not verifiable here); the Camera Label XMP field itself is not written.
 - projectsetup._write(items, ...) = the one sequence writer (items = file, video track, audio key, start, length);
   export_xml (chronological) and export_synced use it. export_bins is no longer used by the app.
+
+## v3.11.7 (his own Premiere multicam vs ours: "the label is right, the sync is not")
+- Measured on his Premiere "Create Multi-Camera Source Sequence > Timecode" XML (137 of 137 clips): a clip's position =
+  its timecode FRAMES / the real rate (23.976 A7 IV: 12:33:25:19 = 45251 s, not 45205 s), the sequence starts at the
+  first timecode, NO midnight wrap (his A7S III timecode was set by hand from 00:06:36). projectsetup.tc_seconds does
+  the 1000/1001 rule; sync_time(i, use_tc): when any clip has a timecode only timecodes are used, clips without one
+  (drone) go at the end (a clock cannot be compared with a hand-set TC); the old clock + 05:00 wrap only when no clip
+  has a timecode. The sequence gets <timecode> = first clip's TC (_seq_tc). Ours vs his: every clip within 0.02 s.
+  Chronological mode unchanged.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

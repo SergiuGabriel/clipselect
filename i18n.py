@@ -389,7 +389,7 @@ TEMPLATES.update({
     "The sequence \"{}\": the cameras one after the other, every camera's clips in the order they were filmed (only the position in the timeline, no timecode).":
         "Secvența „{}”: camerele una după alta, clipurile fiecărei camere în ordinea filmării (doar poziția în timeline, fără timecode).",
     "{} clips, every camera on its own track ({} tracks), placed by timecode.": "{} clipuri, fiecare cameră pe pista ei ({} piste), puse după timecode.",
-    "{} clips have neither timecode nor a recording time: they are at the end: {}": "{} clipuri nu au nici timecode, nici oră de filmare: sunt la final: {}",
+    "{} clips have no timecode: they are at the end of the sequence: {}": "{} clipuri nu au timecode: sunt la capătul secvenței: {}",
     "Project ready: {} clips in {} bins and the sequence \"{}\", synced by timecode. Open it in Premiere Pro.":
         "Proiect gata: {} clipuri în {} bin-uri și secvența „{}”, sincronizată pe timecode. Deschide-l în Premiere Pro.",
 })

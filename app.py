@@ -49,7 +49,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.11.6"
+APP, VER = "MoneyMakingMachine", "v3.11.7"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -5297,7 +5297,7 @@ class CreateProjectPage(QWidget):
         txt = (i18n.T("{} clips, every camera on its own track ({} tracks), placed by timecode.").format(r["clips"], r["tracks"]) +
                "<br>" + escape(", ".join(f"{c} {k}" for c, k in r["cameras"])) + "<br>" + i18n.T("Saved: {}").format(escape(out.name)))
         if r["untimed"]:
-            txt += f'<br><span style="color:{C["FAIR"]}">' + i18n.T("{} clips have neither timecode nor a recording time: they are at the end: {}").format(
+            txt += f'<br><span style="color:{C["FAIR"]}">' + i18n.T("{} clips have no timecode: they are at the end of the sequence: {}").format(
                 len(r["untimed"]), escape(", ".join(Path(b).name for b in r["untimed"][:6]))) + "</span>"
         if bad:
             txt += f'<br><span style="color:{C["POOR"]}">' + i18n.T("{} files could not be read and were left out: {}").format(
