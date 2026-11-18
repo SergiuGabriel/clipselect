@@ -378,6 +378,24 @@ TEMPLATES["Project ready: {} clips in {} bins and the sequence \"{}\". Open it i
 
 EXACT["For every folder choose which camera it is: the sequence goes A, B, C…, then the drone, 20 minutes apart; the sound folders (lavaliere, recorder) go into the project as bins, not on the timeline; \"Leave out\" keeps a folder out of the project."] = "Pentru fiecare folder alege ce cameră e: secvența merge A, B, C…, apoi drona, la 20 de minute una de alta; folderele de sunet (lavaliere, recorder) intră în proiect ca bin-uri, nu pe timeline; „Nu include” lasă folderul în afara proiectului."
 
+EXACT.update({
+    "Chronological": "Cronologic", "Timecode synchronized sequence": "Secvență sincronizată pe timecode",
+    "Choose the wedding folder and give the project a name: a new Premiere Pro project with one bin for every folder and a sequence. Chronological: the cameras one after the other (camera A, B, C…, then the drone), every camera's clips in the order they were filmed. Timecode synchronized sequence: every camera on its own track, every clip at its timecode, as if you labelled the cameras and made a multi-camera source sequence synced by timecode. Clips whole, with their sound.":
+        "Alege folderul nunții și dă-i un nume proiectului: un proiect nou de Premiere Pro, cu câte un bin pentru fiecare folder și o secvență. Cronologic: camerele una după alta (camera A, B, C…, apoi drona), clipurile fiecărei camere în ordinea filmării. Secvență sincronizată pe timecode: fiecare cameră pe pista ei, fiecare clip la timecode-ul lui, ca și cum ai da label camerelor și ai face un multi-camera source sequence sincronizat pe timecode. Clipurile întregi, cu sunetul lor.",
+})
+TEMPLATES.update({
+    "The sequence \"{}\": every camera on its own track (its label = the letter you choose), every clip at its timecode, like a multi-camera source sequence synced by timecode.":
+        "Secvența „{}”: fiecare cameră pe pista ei (label-ul ei = litera aleasă), fiecare clip la timecode-ul lui, ca un multi-camera source sequence sincronizat pe timecode.",
+    "The sequence \"{}\": the cameras one after the other, every camera's clips in the order they were filmed (only the position in the timeline, no timecode).":
+        "Secvența „{}”: camerele una după alta, clipurile fiecărei camere în ordinea filmării (doar poziția în timeline, fără timecode).",
+    "{} clips, every camera on its own track ({} tracks), placed by timecode.": "{} clipuri, fiecare cameră pe pista ei ({} piste), puse după timecode.",
+    "{} clips have neither timecode nor a recording time: they are at the end: {}": "{} clipuri nu au nici timecode, nici oră de filmare: sunt la final: {}",
+    "Project ready: {} clips in {} bins and the sequence \"{}\", synced by timecode. Open it in Premiere Pro.":
+        "Proiect gata: {} clipuri în {} bin-uri și secvența „{}”, sincronizată pe timecode. Deschide-l în Premiere Pro.",
+})
+
+EXACT["For every folder choose which camera it is (its camera label): camera A gets the first track, B the next, then the drone; the sound folders (lavaliere, recorder) go into the project as bins, not on the timeline; \"Leave out\" keeps a folder out of the project."] = "Pentru fiecare folder alege ce cameră e (label-ul camerei): camera A primește prima pistă, B următoarea, apoi drona; folderele de sunet (lavaliere, recorder) intră în proiect ca bin-uri, nu pe timeline; „Nu include” lasă folderul în afara proiectului."
+
 _PATS = []
 
 

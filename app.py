@@ -49,7 +49,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.11.5"
+APP, VER = "MoneyMakingMachine", "v3.11.6"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -4985,16 +4985,16 @@ class CreateProjectPage(QWidget):
         self.b_go = btn("Create the project", "primary", self.start)
         top.addWidget(self.b_go)
         v.addLayout(top)
-        v.addWidget(lbl("Choose the wedding folder and give the project a name. Auto: a new Premiere Pro project with one "
-                        "bin for every camera and the selects sequence (camera A, B, C…, then the drone, every camera's "
-                        "clips in the order they were filmed, whole and with their sound). Custom: only the folders as bins, "
-                        "like dragging them into Premiere; you label the cameras and make the sequence yourself.",
-                        "muted", True))
+        v.addWidget(lbl("Choose the wedding folder and give the project a name: a new Premiere Pro project with one bin for "
+                        "every folder and a sequence. Chronological: the cameras one after the other (camera A, B, C…, then "
+                        "the drone), every camera's clips in the order they were filmed. Timecode synchronized sequence: "
+                        "every camera on its own track, every clip at its timecode, as if you labelled the cameras and made "
+                        "a multi-camera source sequence synced by timecode. Clips whole, with their sound.", "muted", True))
         mr = QHBoxLayout()
         mr.setSpacing(18)
         mr.addWidget(lbl("MODE", "section"))
-        self.m_auto = QRadioButton(i18n.T("Auto (camera bins + the sequence)"))
-        self.m_custom = QRadioButton(i18n.T("Custom (only the folders, you make the sequence)"))
+        self.m_auto = QRadioButton(i18n.T("Chronological"))
+        self.m_custom = QRadioButton(i18n.T("Timecode synchronized sequence"))
         (self.m_custom if self.cfg.get("mode") == "custom" else self.m_auto).setChecked(True)
         for rb_ in (self.m_auto, self.m_custom):
             rb_.setStyleSheet("QRadioButton{spacing:8px;padding:4px 0}"
@@ -5031,9 +5031,8 @@ class CreateProjectPage(QWidget):
         left.addWidget(self.seq_lbl)
         left.addSpacing(6)
         left.addWidget(lbl("CAMERAS", "section"))
-        left.addWidget(lbl("For every folder choose which camera it is: the sequence goes A, B, C…, then the drone, 20 "
-                           "minutes apart; the sound folders (lavaliere, recorder) go into the project as bins, not on the "
-                           "timeline; \"Leave out\" keeps a folder out of the project.", "muted", True))
+        self.cam_help = lbl("", "muted", True)
+        left.addWidget(self.cam_help)
         self.list = QTableWidget(0, 2)
         self.list.setHorizontalHeaderLabels([i18n.T("Folder"), i18n.T("Camera")])
         self.list.verticalHeader().hide()
@@ -5104,6 +5103,9 @@ class CreateProjectPage(QWidget):
     def _seq_name(self):
         return "selectie" if i18n.LANG == "ro" else "select"
 
+    def _sync_name(self):
+        return "sincronizare timecode" if i18n.LANG == "ro" else "timecode sync"
+
     def _custom(self):
         return self.m_custom.isChecked()
 
@@ -5111,9 +5113,18 @@ class CreateProjectPage(QWidget):
         c = self._custom()
         self.cfg["mode"] = "custom" if c else "auto"
         self.store.save_app()
-        self.seq_lbl.setText(i18n.T("No sequence: in Premiere you give every camera its label, select the clips and make "
-                                    "the sequence yourself.") if c else
-                             i18n.T("The sequence is called \"{}\".").format(self._seq_name()))
+        self.cam_help.setText(i18n.T(
+            "For every folder choose which camera it is (its camera label): camera A gets the first track, B the next, "
+            "then the drone; the sound folders (lavaliere, recorder) go into the project as bins, not on the timeline; "
+            "\"Leave out\" keeps a folder out of the project.") if c else i18n.T(
+            "For every folder choose which camera it is: the sequence goes A, B, C…, then the drone, 20 minutes apart; "
+            "the sound folders (lavaliere, recorder) go into the project as bins, not on the timeline; \"Leave out\" keeps "
+            "a folder out of the project."))
+        self.seq_lbl.setText(i18n.T("The sequence \"{}\": every camera on its own track (its label = the letter you choose), "
+                                    "every clip at its timecode, like a multi-camera source sequence synced by timecode.")
+                             .format(self._sync_name()) if c else
+                             i18n.T("The sequence \"{}\": the cameras one after the other, every camera's clips in the order "
+                                    "they were filmed (only the position in the timeline, no timecode).").format(self._seq_name()))
 
     def _ui(self):
         busy = self._busy()
@@ -5257,35 +5268,46 @@ class CreateProjectPage(QWidget):
         logging.info("create project %s: %s clips, %s unreadable", out, r["clips"], len(bad))
 
     def _done_custom(self, cams, infos, extra, base, project):
-        groups = [(c["name"], projectsetup.chrono([f for f in c["files"] if infos.get(f, {}).get("dur")], infos))
-                  for c, _sl in cams]
+        """Timecode synced sequence: every camera (its label = the picker's letter) on its own track, clips at their
+        timecode; the sound folders only as bins."""
+        name = self._sync_name()
+        lab = lambda c, sl: (i18n.T("Drone") if sl == "drone" else i18n.T("Sound") if sl == "sound" else
+                             i18n.T("Camera {}").format(sl)) + f" - {c['name']}"
+        okf = lambda c: projectsetup.chrono([f for f in c["files"] if infos.get(f, {}).get("dur")], infos)
+        cams_ = [(lab(c, sl), okf(c)) for c, sl in cams if sl != "sound"]
+        snd = [(lab(c, sl), okf(c)) for c, sl in cams if sl == "sound"]
+        bad = [f for c, _sl in cams for f in c["files"] if not infos.get(f, {}).get("dur")]
         safe = re.sub(r'[\\/:*?"<>|]+', "-", project).strip() or "project"
         out = projectsetup.free_path(base / f"{safe}.xml")
         try:
             try:
-                r = projectsetup.export_bins(groups, infos, out, project)
+                r = projectsetup.export_synced(cams_, infos, out, name, project=project, bins_only=snd)
             except OSError:
                 alt, _ = QFileDialog.getSaveFileName(self, "Save the XML", str(Path.home() / out.name), "XML (*.xml)")
                 if not alt:
                     return
                 out = Path(alt)
-                r = projectsetup.export_bins(groups, infos, out, project)
+                r = projectsetup.export_synced(cams_, infos, out, name, project=project, bins_only=snd)
         except Exception as e:
-            logging.exception("create project custom")
+            logging.exception("create project timecode")
             notify(i18n.T("Create Project failed: {}").format(i18n.T(str(e))), error=True)
             return
         self.out = str(out)
-        txt = (i18n.T("{} clips in {} bins: {}.").format(r["clips"], len(r["bins"]), escape(", ".join(
-            f"{b} {k}" for b, k in r["bins"]))) + "<br>" + i18n.T("Saved: {}").format(escape(out.name)))
-        if r["bad"]:
+        nb = len(cams_) + sum(1 for _n, fs in snd if fs)
+        txt = (i18n.T("{} clips, every camera on its own track ({} tracks), placed by timecode.").format(r["clips"], r["tracks"]) +
+               "<br>" + escape(", ".join(f"{c} {k}" for c, k in r["cameras"])) + "<br>" + i18n.T("Saved: {}").format(escape(out.name)))
+        if r["untimed"]:
+            txt += f'<br><span style="color:{C["FAIR"]}">' + i18n.T("{} clips have neither timecode nor a recording time: they are at the end: {}").format(
+                len(r["untimed"]), escape(", ".join(Path(b).name for b in r["untimed"][:6]))) + "</span>"
+        if bad:
             txt += f'<br><span style="color:{C["POOR"]}">' + i18n.T("{} files could not be read and were left out: {}").format(
-                len(r["bad"]), escape(", ".join(Path(b).name for b in r["bad"][:6]) + (" …" if len(r["bad"]) > 6 else ""))) + "</span>"
+                len(bad), escape(", ".join(Path(b).name for b in bad[:6]) + (" …" if len(bad) > 6 else ""))) + "</span>"
         self.result.setText(txt)
         self.b_show.show()
         self.b_open.setVisible(bool(_premiere_app()))
-        notify(i18n.T("Project ready: {} clips in {} bins. Open it in Premiere Pro, label the cameras and make the sequence.")
-               .format(r["clips"], len(r["bins"])))
-        logging.info("create project custom %s: %s clips", out, r["clips"])
+        notify(i18n.T("Project ready: {} clips in {} bins and the sequence \"{}\", synced by timecode. Open it in Premiere Pro.")
+               .format(r["clips"], nb, name))
+        logging.info("create project timecode %s: %s clips", out, r["clips"])
 
     def open_premiere(self):
         app = _premiere_app()

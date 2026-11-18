@@ -205,6 +205,13 @@ def probe(path):
             info["ctime"] = _dt.datetime(*map(int, mm.groups())).timestamp()
         except ValueError:
             pass
+    # time of day for the TIMECODE SYNCED sequence: the camera's timecode, else the recording clock
+    mt = re.search(r"^\s*timecode\s*:\s*(\d\d):(\d\d):(\d\d)[:;.](\d\d)", t, re.M)
+    info["tc"] = None
+    if mt and any(int(x) for x in mt.groups()):        # 00:00:00:00 = no real timecode (drones, phones)
+        h, mi, se, fr = map(int, mt.groups())
+        info["tc"] = h * 3600 + mi * 60 + se + fr / max(1, round(info["fps"]))
+    info["tod"] = (int(mm.group(4)) * 3600 + int(mm.group(5)) * 60 + int(mm.group(6))) if mm else None
     try:
         info["mtime"] = os.path.getmtime(path)
     except OSError:
@@ -294,71 +301,123 @@ def by_slot(cams, slots):
 
 
 def export_xml(lay, infos, out_path, name, project=None, bins_only=()):
-    """One 25 fps sequence: every camera whole, one after the other (20 min between cameras), picture on V1, sound in
-    STEREO PAIRS like Premiere (groups(): FX6 = A1 stereo 1+2 + A2 stereo 3+4, 2-channel cameras = A1 stereo, a mono
-    file = a mono track), every pair written as Premiere writes it (two exploded tracks, premiereChannelType="stereo",
-    sourcetrack = the channel), all of a clip LINKED (link = track + position in that track, sound in one group).
-    Only cameras and the drone are on the timeline (owner); bins_only = [(bin name, [files])] = the sound folders
-    (lavaliere, recorder): bins in the project, never on the timeline.
-    With project: one BIN per folder holding its clips as master clips, and the sequence next to them (masterclipid)."""
-    rate_xml, sf = core._rate(SEQ_FPS)
-    clips = [(f, st, n) for _, row in lay for f, st, n in row]
-    if not clips:
+    """CHRONOLOGICAL sequence (25 fps): every camera whole, one after the other on V1 (20 min between cameras), sound
+    in stereo pairs like Premiere (groups()), all of a clip linked. Only cameras and the drone on the timeline; bins_only
+    = the sound folders (bins only). With project: one BIN per folder + the sequence (masterclipid)."""
+    items = [(f, 1, 0, st, ln) for _cam, row in lay for f, st, ln in row]
+    return _write(items, infos, out_path, name, project, [(c, [f for f, _, _ in r]) for c, r in lay], bins_only,
+                  [(c, len(r)) for c, r in lay])
+
+
+SYNC_DAY = 5 * 3600            # a time of day before 05:00 belongs to the night after the wedding day (party)
+
+
+def sync_time(i):
+    """Where a clip goes in the TIMECODE SYNCED sequence: its timecode (time of day), else its recording clock."""
+    t = i.get("tc")
+    if t is None:
+        t = i.get("tod")
+    if t is None:
+        return None
+    return t + 86400 if t < SYNC_DAY else t
+
+
+def export_synced(cams, infos, out_path, name, project=None, bins_only=()):
+    """TIMECODE SYNCED sequence (the friend's Premiere way, done for him: camera label per folder + Create Multi-Camera
+    Source Sequence by Timecode + Open in Timeline): every camera (cams = [(bin name, [files])] in the order of their
+    labels A, B, C..., then the drone) on ITS OWN video track, every clip at its timecode (time of day; clips without a
+    real timecode at their recording clock), all at 25 fps; a camera's overlapping clips go on an extra track under it.
+    Sound: every camera has its own audio tracks (stereo pairs like Premiere). Bins as in export_xml."""
+    sf = SEQ_FPS
+    placed, untimed = [], []
+    for k, (cam, fs) in enumerate(cams):
+        for f in fs:
+            i = infos.get(f) or {}
+            if not (i.get("video") or i.get("ach")) or int(i.get("dur", 0) * sf) < 1:
+                continue
+            t = sync_time(i)
+            (placed if t is not None else untimed).append((k, f, t))
+    if not placed and not untimed:
         raise ValueError("No clips to put on the timeline.")
-    vids = [f for f, _, _ in clips if infos[f].get("video")]
+    t0 = min([t for _k, _f, t in placed] or [0.0])
+    end = max([round((t - t0) * sf) + int(infos[f]["dur"] * sf) for _k, f, t in placed] or [0])
+    lanes = {}                                     # (camera, lane) -> last end frame
+    items = []
+    for k, f, t in sorted(placed, key=lambda x: (x[0], x[2])) + [(k, f, None) for k, f, _ in untimed]:
+        ln = int(infos[f]["dur"] * sf + 1e-6)
+        st = round((t - t0) * sf) if t is not None else None
+        if st is None:                            # no time at all: after everything, in filming order
+            st = end + round(60 * sf)
+            end = st + ln
+        lane = 0
+        while lanes.get((k, lane), -1) > st:
+            lane += 1
+        lanes[(k, lane)] = st + ln
+        items.append((f, (k, lane), (k, lane), st, ln))
+    order = sorted({it[1] for it in items})
+    vt = {key: n for n, key in enumerate(order, 1)}
+    items = [(f, vt[key] if infos[f].get("video") else None, key, st, ln) for f, key, _a, st, ln in items]
+    items.sort(key=lambda x: x[3])
+    r = _write(items, infos, out_path, name, project, cams, bins_only, [(c, len(fs)) for c, fs in cams])
+    r["untimed"] = [f for _k, f, _t in untimed]
+    r["tracks"] = len(order)
+    return r
+
+
+def _write(items, infos, out_path, name, project, bins, bins_only, cameras):
+    """The sequence writer shared by both modes. items = [(file, video track or None, audio key, start, length)] in
+    sequence frames (25 fps). Every audio key gets its own audio tracks: one per stereo pair (two exploded xmeml
+    tracks, as Premiere writes them) and one per mono channel; stereo before mono inside a key."""
+    rate_xml, sf = core._rate(SEQ_FPS)
+    if not items:
+        raise ValueError("No clips to put on the timeline.")
+    vids = [f for f, v, _a, _s, _l in items if v]
     sizes = {}
     for f in vids[:200]:
         k = (infos[f]["w"], infos[f]["h"])
         sizes[k] = sizes.get(k, 0) + 1
     sw, sh = max(sizes, key=sizes.get) if sizes else (1920, 1080)
-    # the audio slots: (pair / mono group number, kind) -> xmeml tracks (2 for stereo)
-    slots = sorted({(g, kind) for f, _, _ in clips for g, (kind, _c) in enumerate(groups(infos[f].get("ach", 0)))},
-                   key=lambda t: (t[1] != "stereo", t[0]))   # stereo tracks first (A1, A2), mono after
+    slots = sorted({(ak, g, kind) for f, _v, ak, _s, _l in items for g, (kind, _c) in enumerate(groups(infos[f].get("ach", 0)))},
+                   key=lambda t: (t[0], t[2] != "stereo", t[1]))
     tracks, tix = [], {}
     for sl in slots:
-        for ex in range(2 if sl[1] == "stereo" else 1):
+        for ex in range(2 if sl[2] == "stereo" else 1):
             tix[(sl, ex)] = len(tracks) + 1
             tracks.append((sl, ex))
-    ids, n, vpos = {}, 0, 0
-    tpos = {t: 0 for t in tix.values()}
-    for ci, (f, st, ln) in enumerate(clips, 1):
-        if infos[f].get("video"):
+    nv = max([v for _f, v, _a, _s, _l in items if v] or [1])
+    ids, n = {}, 0
+    vpos = {t: 0 for t in range(1, nv + 1)}
+    apos = {t: 0 for t in tix.values()}
+    for ci, (f, v, ak, st, ln) in enumerate(items):
+        if v:
             n += 1
-            vpos += 1
-            ids[("v", ci)] = (f"clipitem-{n}", 1, vpos)
-    for ci, (f, st, ln) in enumerate(clips, 1):
+            vpos[v] += 1
+            ids[("v", ci)] = (f"clipitem-{n}", v, vpos[v])
         for g, (kind, chs) in enumerate(groups(infos[f].get("ach", 0))):
             for ex, ch in enumerate(chs):
-                t = tix[((g, kind), ex)]
+                t = tix[((ak, g, kind), ex)]
                 n += 1
-                tpos[t] += 1
-                ids[("a", ci, ch)] = (f"clipitem-{n}", t, tpos[t], kind)
+                apos[t] += 1
+                ids[("a", ci, ch)] = (f"clipitem-{n}", t, apos[t], kind)
     files, master, bins_xml = {}, {}, []
     if project is not None:                       # the bins first: every file is written whole the first time here
-        for cam, row in lay:
-            items = []
-            for f, _st, _ln in row:
-                if f not in master:
-                    master[f] = f"masterclip-{len(master) + 1}"
-                    items.append(_master(f, infos[f], master[f], files))
-            bins_xml.append(f'<bin><name>{escape(cam)}</name><children>{"".join(items)}</children></bin>')
-        for cam, fs in bins_only:
-            items = []
+        for cam, fs in list(bins) + list(bins_only):
+            its = []
             for f in fs:
                 i = infos.get(f) or {}
                 if f in master or not i.get("dur") or not (i.get("video") or i.get("ach")):
                     continue
                 master[f] = f"masterclip-{len(master) + 1}"
-                items.append(_master(f, i, master[f], files))
-            if items:
-                bins_xml.append(f'<bin><name>{escape(cam)}</name><children>{"".join(items)}</children></bin>')
+                its.append(_master(f, i, master[f], files))
+            if its:
+                bins_xml.append(f'<bin><name>{escape(cam)}</name><children>{"".join(its)}</children></bin>')
 
     def links(ci, f):
         out = []
         if ("v", ci) in ids:
             v = ids[("v", ci)]
-            out.append(f'<link><linkclipref>{v[0]}</linkclipref><mediatype>video</mediatype><trackindex>1</trackindex>'
-                       f'<clipindex>{v[2]}</clipindex></link>')
+            out.append(f'<link><linkclipref>{v[0]}</linkclipref><mediatype>video</mediatype><trackindex>{v[1]}'
+                       f'</trackindex><clipindex>{v[2]}</clipindex></link>')
         for _g, (_kind, chs) in enumerate(groups(infos[f].get("ach", 0))):
             for ch in chs:
                 a = ids[("a", ci, ch)]
@@ -371,30 +430,31 @@ def export_xml(lay, infos, out_path, name, project=None, bins_only=()):
         return (f'<clipitem id="{cid}"{attr}>{mc}<name>{escape(Path(f).name)}</name><enabled>TRUE</enabled>'
                 f'<duration>{ln}</duration>{rate_xml}<start>{st}</start><end>{st + ln}</end><in>0</in><out>{ln}</out>')
 
-    vx = [head(ids[("v", ci)][0], f, st, ln) + _file_xml(f, infos[f], files) + links(ci, f) + "</clipitem>"
-          for ci, (f, st, ln) in enumerate(clips, 1) if ("v", ci) in ids]
+    vx = {t: [] for t in range(1, nv + 1)}
     ax = {t: [] for t in tix.values()}
-    for ci, (f, st, ln) in enumerate(clips, 1):
+    for ci, (f, v, ak, st, ln) in enumerate(items):
+        if v:
+            vx[v].append(head(ids[("v", ci)][0], f, st, ln) + _file_xml(f, infos[f], files) + links(ci, f) + "</clipitem>")
         for _g, (kind, chs) in enumerate(groups(infos[f].get("ach", 0))):
             for ch in chs:
                 cid, t, _pos, _k = ids[("a", ci, ch)]
                 ax[t].append(head(cid, f, st, ln, f' premiereChannelType="{kind}"') + _file_xml(f, infos[f], files) +
                              f'<sourcetrack><mediatype>audio</mediatype><trackindex>{ch}</trackindex></sourcetrack>' +
                              links(ci, f) + "</clipitem>")
-    total = clips[-1][1] + clips[-1][2]
-    arate = next((infos[f]["arate"] for f, _, _ in clips if infos[f].get("ach")), 48000)
+    total = max(st + ln for _f, _v, _a, st, ln in items)
+    arate = next((infos[f]["arate"] for f, *_ in items if infos[f].get("ach")), 48000)
     trk = lambda its, attrs="": f'<track{attrs}>{"".join(its)}<enabled>TRUE</enabled><locked>FALSE</locked></track>'
     audio = (f'<audio><numOutputChannels>2</numOutputChannels><format><samplecharacteristics><depth>16</depth>'
              f'<samplerate>{arate}</samplerate></samplecharacteristics></format>'
-             f'{"".join(trk(ax[tix[(sl, ex)]], _track_attrs(sl[1], ex)) for sl, ex in tracks)}</audio>')
+             f'{"".join(trk(ax[tix[(sl, ex)]], _track_attrs(sl[2], ex)) for sl, ex in tracks)}</audio>')
     seq = (f'<sequence id="sequence-1"><name>{escape(name)}</name><duration>{total}</duration>{rate_xml}'
-           f'<media><video><format>{core._sc(rate_xml, sw, sh, "none")}</format>{trk(vx)}</video>{audio}</media>'
-           f'</sequence>')
+           f'<media><video><format>{core._sc(rate_xml, sw, sh, "none")}</format>'
+           f'{"".join(trk(vx[t]) for t in range(1, nv + 1))}</video>{audio}</media></sequence>')
     if project is not None:
         seq = f'<project><name>{escape(project)}</name><children>{"".join(bins_xml)}{seq}</children></project>'
     xml = f'<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE xmeml>\n<xmeml version="4">{seq}</xmeml>'
     Path(out_path).write_text(xml, encoding="utf-8")
-    return dict(clips=len(clips), cameras=[(c, len(r)) for c, r in lay], seconds=total / sf)
+    return dict(clips=len(items), cameras=cameras, seconds=total / sf)
 
 
 def sound_files(root):

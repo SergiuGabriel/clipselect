@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.11.5), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.11.6), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -747,6 +747,21 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 ## v3.11.5
 - Owner: the lavaliere / recorder must NOT be on the timeline: Auto puts only the cameras and the drone in the sequence;
   the sound folders are bins only (export_xml(..., bins_only=[(name, files)])). Custom unchanged (bins of everything).
+
+## v3.11.6 (from his screen recording of a colleague's Premiere workflow)
+- The Create Project modes are renamed: Auto -> "Chronological" (RO "Cronologic"; only the POSITION in the timeline:
+  cameras one after the other, 20 min apart); Custom -> "Timecode synchronized sequence" (RO "Secvență sincronizată pe
+  timecode"). The recording: bins per folder -> select a bin's clips -> Metadata > Dynamic Media > Camera Label -> select
+  the bins -> Create Multi-Camera Source Sequence (Synchronize Point = Timecode, one multicam sequence) -> Open in
+  Timeline. The app does it: the picker's letter = the camera label; projectsetup.export_synced(cams, infos, ...):
+  every camera on ITS OWN video track (A first, then B..., the drone), every clip at sync_time(i) = its timecode (probe
+  reads "timecode : hh:mm:ss:ff"; 00:00:00:00 = none) else its recording clock (tod from creation_time); before 05:00
+  (SYNC_DAY) = after midnight (+24 h); overlapping clips of one camera -> an extra lane under it; clips with no time at
+  the end; every camera its own audio tracks (stereo pairs, groups()). Sequence "sincronizare timecode" / "timecode
+  sync". Sound folders = bins only in both modes. Written as a NORMAL sequence (what "Open in Timeline" shows), not a
+  Premiere multicam clip (xmeml multiclip import not verifiable here); the Camera Label XMP field itself is not written.
+- projectsetup._write(items, ...) = the one sequence writer (items = file, video track, audio key, start, length);
+  export_xml (chronological) and export_synced use it. export_bins is no longer used by the app.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

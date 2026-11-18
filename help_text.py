@@ -65,7 +65,7 @@ Debifat: toate fișierele ajung direct în folderul camerei.</li>
 <li><b>Scrie un raport lângă filmări</b> (bifat): _offload_report.txt, cu fiecare fișier, mărimea, suma de control și starea.</li>
 <li><b>Scoate cardurile când totul e copiat</b>: le scoate (eject) când totul e copiat, ca să le poți lua imediat.</li>
 <li><b>Apoi fă proiectul de Premiere</b>: după ce totul e copiat și verificat, <b>Creează proiectul</b> pornește singur pe nunta
-copiată, în modul ales acolo (Auto sau Custom), cu numele proiectului = numele folderului nunții. Îl vezi în Coada de analiză.</li>
+copiată, în modul ales acolo (Cronologic sau Secvență sincronizată pe timecode), cu numele proiectului = numele folderului nunții. Îl vezi în Coada de analiză.</li>
 </ul>
 <h3>Siguranță</h3>
 <ul>
@@ -77,11 +77,17 @@ copii pe jumătate care să pară bune.</li>
 </ul>
 
 <h2>Creează proiectul (Premiere / DaVinci)</h2>
-<p><b>Două moduri.</b> <b>Auto</b> (ce e descris mai jos): bin-uri pe camere plus secvența de selecție gata făcută. <b>Custom</b>: pentru
-cine lucrează altfel. Proiectul are doar folderele ca bin-uri (câte unul pentru fiecare folder de cameră, cu numele folderului, plus
-folderele de sunet: lavaliere, recorder), fiecare clip întreg cu tot sunetul lui, <b>fără secvență</b>, ca și cum ai trage
-folderele în Premiere. Acolo dai fiecărei camere un label, selectezi clipurile și faci tu secvența. Selectorul de cameră alege și aici
-ordinea bin-urilor și ce lași afară („Nu include”).</p>
+<p><b>Două moduri.</b> Amândouă fac un proiect nou cu câte un bin pentru fiecare folder (camerele, drona, plus lavalierele
+și recorderul, care rămân doar în bin-uri, nu pe timeline), fiecare clip întreg cu sunetul lui, și o secvență 25 fps.
+<b>Cronologic</b> (ce e descris mai jos): secvența „selectie”, cu camerele una după alta, A, B, C…, apoi drona, la 20 de minute una de
+alta. Contează <b>doar poziția în timeline</b>: clipurile fiecărei camere în ordinea filmării, fără timecode.
+<b>Secvență sincronizată pe timecode</b>: aplicația face singură ce faci în Premiere când dai label camerelor (Metadata &gt; Dynamic
+Media &gt; Camera Label) și apoi Create Multi-Camera Source Sequence cu Synchronize Point = Timecode. Litera aleasă în listă e
+label-ul camerei: camera A primește prima pistă video, B următoarea, apoi drona. Fiecare clip stă la <b>timecode-ul lui</b> (ora din
+zi), iar o cameră fără timecode real (00:00:00:00, de obicei drona sau telefonul) e pusă după ora de filmare din fișier. Ce e filmat
+după miezul nopții, până la 05:00, vine după restul zilei. Dacă două clipuri ale aceleiași camere se suprapun, al doilea merge pe o
+pistă sub ea. Fiecare cameră are pistele ei audio (perechi stereo). Secvența se numește „sincronizare timecode”. Timecode-ul pus de
+mână pe camere nu e exact la cadru: după sincronizare verifici sunetul, ca în Premiere.</p>
 <p>După descărcarea cardurilor: toate filmările nunții pe un singur timeline, <b>cum le așezi tu pentru selecție</b> (măsurat pe
 selecțiile tale de la 4 iulie și de la Mădălina &amp; Radu).</p>
 <ol>
@@ -96,7 +102,7 @@ Secvența merge A, B, C…, apoi drona (alegerea se ține minte pentru nunta ast
 <li><b>Creează proiectul.</b> Aplicația citește fiecare clip (câteva deodată) și face proiectul: câte un <b>bin pentru fiecare
 cameră</b> („Camera A - fx6”, „Camera B - a7siii”, „Drona - dji”), cu clipurile ei în ordinea filmării, plus secvența de selecție.</li>
 </ol>
-<h3>Cum arată timeline-ul</h3>
+<h3>Cum arată timeline-ul (Cronologic)</h3>
 <ul>
 <li>O cameră după alta pe <b>V1</b>, cu <b>20 de minute libere</b> între camere (vezi clar unde începe fiecare), apoi drona.
 Lavalierele și recorderul nu sunt pe timeline (doar în bin-uri).</li>
@@ -714,7 +720,7 @@ every file goes straight into the camera folder.</li>
 <li><b>Write a report next to the footage</b> (ticked): _offload_report.txt, with every file, its size, checksum and status.</li>
 <li><b>Eject the cards when everything is copied</b>: so you can take them right away.</li>
 <li><b>Then make the Premiere project</b>: when everything is copied and checked, <b>Create Project</b> starts by itself on the copied
-wedding, in the mode chosen there (Auto or Custom), the project named like the wedding folder. You see it in the Analysis Queue.</li>
+wedding, in the mode chosen there (Chronological or Timecode synchronized sequence), the project named like the wedding folder. You see it in the Analysis Queue.</li>
 </ul>
 <h3>Safety</h3>
 <ul>
@@ -727,11 +733,17 @@ look good are left behind.</li>
 </ul>
 
 <h2>Create Project (Premiere / DaVinci)</h2>
-<p><b>Two modes.</b> <b>Auto</b> (described below): camera bins plus the selects sequence ready made. <b>Custom</b>: for those who work
-differently. The project has only the folders as bins (one per camera folder, named like the folder, plus the sound
-folders: recorder, lavaliere), every clip whole with all its sound, <b>no sequence</b>, as if you dragged the folders into Premiere.
-There you give every camera a label, select the clips and make the sequence yourself. The camera picker still sets the bins' order and
-what stays out ("Leave out").</p>
+<p><b>Two modes.</b> Both make a new project with one bin per folder (the cameras, the drone, plus the lavaliers and the
+recorder, which stay in their bins, not on the timeline), every clip whole with its sound, and a 25 fps sequence.
+<b>Chronological</b> (described below): the "select" sequence with the cameras one after the other, A, B, C…, then the drone, 20 minutes
+apart. Only the <b>position in the timeline</b> matters: every camera's clips in the order they were filmed, no timecode.
+<b>Timecode synchronized sequence</b>: the app does by itself what you do in Premiere when you give the cameras a label (Metadata &gt;
+Dynamic Media &gt; Camera Label) and then Create Multi-Camera Source Sequence with Synchronize Point = Timecode. The letter chosen in
+the list is the camera label: camera A gets the first video track, B the next, then the drone. Every clip sits at <b>its timecode</b>
+(time of day); a camera without a real timecode (00:00:00:00, usually the drone or a phone) is placed by the recording time in the file.
+What was filmed after midnight, until 05:00, comes after the rest of the day. When two clips of the same camera overlap, the second goes
+on a track under it. Every camera has its own audio tracks (stereo pairs). The sequence is called "timecode sync". Timecode set by hand
+on the cameras is not frame accurate: after the sync you check the sound, like in Premiere.</p>
 <p>After the card offload: all the wedding's footage on one timeline, <b>the way you lay it out for the selection</b> (measured on your
 4 July and Madalina &amp; Radu selects).</p>
 <ol>
@@ -746,7 +758,7 @@ too, as "Sound": they go into the project as bins, but not on the timeline (the 
 <li><b>Create the project.</b> The app reads every clip (several at a time) and builds the project: one <b>bin per camera</b> ("Camera
 A - fx6", "Camera B - a7siii", "Drone - dji") with its clips in the order they were filmed, plus the selects sequence.</li>
 </ol>
-<h3>What the timeline looks like</h3>
+<h3>What the timeline looks like (Chronological)</h3>
 <ul>
 <li>One camera after the other on <b>V1</b>, with <b>20 empty minutes</b> between cameras (you clearly see where each one starts),
 then the drone. The lavaliers and the recorder are not on the timeline (only in the bins).</li>
