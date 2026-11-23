@@ -47,6 +47,22 @@ def _med3(x):
     return np.median(np.vstack([np.r_[x[:1], x[:-1]], x, np.r_[x[1:], x[-1:]]]), axis=0)
 
 
+def _resting(fs, sp):
+    """A handheld camera put down (pointing at a table, the floor): for 2 s NOTHING moves in the picture (frame
+    difference < 4) and the camera does not move (shift < 0.5 px). Measured on his Alex & Andreea party: an FX6 lying
+    on a table scored 99 and was used for 21 s; in 52 min of party footage only that stretch (and 2 single windows)
+    match, never a real shot of people."""
+    df = np.asarray(fs["diff"], float)
+    n, w = len(df), 2 * core.SAMPLE_FPS
+    if n < w:
+        return np.zeros(n, bool)
+    from numpy.lib.stride_tricks import sliding_window_view as win
+    pad = lambda x: np.r_[np.full(w // 2, x[0]), x, np.full(w - w // 2 - 1, x[-1])]
+    dm = np.median(win(pad(df), w), axis=1)[:n]
+    sm = np.median(win(pad(np.asarray(sp, float)), w), axis=1)[:n]
+    return (dm < 4) & (sm < 0.5)
+
+
 def sample_quality(a, role, lap_ref=None):
     """Quality of every analysis sample for the director (v3.13.0, measured on his Alex & Andreea party: 48 frames
     judged by eye against the numbers).
@@ -67,7 +83,7 @@ def sample_quality(a, role, lap_ref=None):
     E = np.minimum(core.exposure_vec(mean, fs["bright"]), np.clip((mean - 15) / 25, 0, 1))
     if role == "Handheld":
         S = np.clip(1 - (sp - 5) / 10, 0, 1)
-        bad = (sp > HAND_WHIP) | (lapr < 0.4)
+        bad = (sp > HAND_WHIP) | (lapr < 0.4) | _resting(fs, sp)
     else:
         j = _smooth_jitter(fs)
         S = np.clip(1 - (j - 1.5) / 8, 0, 1)

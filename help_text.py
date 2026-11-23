@@ -310,7 +310,8 @@ din notă e criteriul cel mai slab.</li>
 judecate cu ochiul): <b>mișcarea reală a camerei</b> (măsurată pe blocuri, nu pe toată imaginea, ca oamenii care sar să nu conteze:
 cadrele bune se mișcă 1–10 px pe 1/8 s, panoramările bruște 12–28 px; stabilitate 100% sub 5 px, 0% la 15 px), <b>claritatea față de
 restul materialului acelei camere</b> (motion blur = sub 40% din claritatea ei obișnuită) și <b>întunericul</b> (media sub 40 din 255
-coboară nota, la 15 e zero). O panoramare bruscă (peste 14 px) sau un cadru mișcat scade nota la 15%. Înainte, oamenii care sar și
+coboară nota, la 15 e zero). O panoramare bruscă (peste 14 px), un cadru mișcat sau o cameră lăsată jos (2 s în care nu se mișcă nimic în imagine, de
+exemplu pe o masă) scade nota la 15%. Înainte, oamenii care sar și
 fumul păreau „cameră care se mișcă” și camerele din mână primeau ~10 puncte față de ~110 ale camerei statice, așa că și la Handheld 100
 se folosea mult camera statică.</li>
 <li><b>Camerele statice</b> au nota tehnică ×0,8 (un cadru larg, fix, valorează cât un cadru bun din mână la mijlocul cursorului) plus un
@@ -1017,8 +1018,8 @@ weakest criterion.</li>
 <li><b>Handheld cameras</b> are judged by what really spoils a party shot (measured on 48 frames of Alex & Andreea judged by eye): the
 <b>real camera movement</b> (measured on blocks, not the whole picture, so jumping people do not count: good shots move 1-10 px per
 1/8 s, whip pans 12-28 px; stability 100% under 5 px, 0% at 15 px), the <b>sharpness against that camera's own footage</b> (motion blur
-= under 40% of its usual sharpness) and <b>darkness</b> (a mean under 40 of 255 lowers the score, 15 is zero). A whip pan (over 14 px) or
-a blurred frame drops the score to 15%. Before, jumping people and smoke looked like "the camera is moving" and the handheld cameras got
+= under 40% of its usual sharpness) and <b>darkness</b> (a mean under 40 of 255 lowers the score, 15 is zero). A whip pan (over 14 px), a
+blurred frame or a camera put down (2 s where nothing moves in the picture, e.g. on a table) drops the score to 15%. Before, jumping people and smoke looked like "the camera is moving" and the handheld cameras got
 ~10 points against ~110 for the static one, so even Handheld 100 used the static camera a lot.</li>
 <li><b>Static cameras</b> have their technical score x0.8 (a wide fixed shot is worth a good handheld shot at the middle of the slider)
 plus a bonus of up to <b>+10 points</b> when something happens in the frame (people moving). Only a pan of the static camera drops it to 15%.</li>

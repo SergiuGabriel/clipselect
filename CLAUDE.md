@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.13.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.13.1), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -821,6 +821,18 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   now) and the option "At the end, copy the whole wedding folder to the backup drive too" (cfg backup / backup_dest);
   _BackupWorker; Offload _busy includes it (queue).
 - Analysis files of this investigation were written in his Documents/_mmm_analiza (the device shell cannot delete).
+
+## v3.13.1 (the long test on his laptop: Alex & Andreea, 3 cameras)
+- Analysed on his Mac (device shell, 3-min chunks): the night party C2053 (a74) + C9738 (fx3) + 500_SERJFX63321 (fx6)
+  over their whole overlap (~20 min) and two day stretches (2 x 16 min, C2048/C9729/63283 and C2049/C9730/63299).
+  director at Handheld 100, minshot 2: night old a74 44 % -> new 10 % (fx3 47, fx6 43), day a74 30-36 % -> 9-15 %.
+  Every chosen shot of the new edits looked at (middle frame): night 188 shots, ~25 "meh" (dark crowds, backs,
+  silhouettes, mostly fx6), no whip pan / blur; day 221 frames, ~20 meh (people passing in front, ceiling, backs).
+  Short close-ups of people jumping (2-3 s) are in. Face detection (YuNet, 2 fps) was tried as a bonus: it only moved
+  the time on judged-bad stretches 12.1 -> 11.5 % -> NOT added (needs a re-analysis for little gain).
+- New rule director._resting: a handheld camera put down (2 s median frame diff < 4 and shift < 0.5) -> x0.15. His
+  FX6 lying on a table (63299, src 79-97 s) scored 99 and was used for 21 s; in 52 min of footage only that stretch
+  matches. Old analyses stay valid.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower
