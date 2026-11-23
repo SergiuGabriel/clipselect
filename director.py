@@ -21,6 +21,8 @@ SEQ_FPS = 25.0      # the owner's final sequences are always 25 fps
 PRE_BEAT = 1 / SEQ_FPS   # cuts on the music fall 1 frame (40 ms) before the beat: the eye sees a cut a little late
 SLOW_MIN = 6.0
 # inside a "Slower cuts" zone (folk music, hora) the owner's own settings, whatever the rest of the party uses
+STATIC_W = 0.8      # a static camera's quality weight (its +10 activity bonus comes on top)
+HAND_WHIP = 14.0     # robust shift (px per 1/8 s at 320 px) above which a handheld shot is a whip pan / blur
 HORA = dict(minshot=6.0, maxshot=120.0, pace=50, energy=45)      # shortest shot inside a "Slower cuts" zone (and at least 2 x Minimum shot)       # the last three: global (Settings > Auto edit music)
 CAM_COLORS = ["#a78bfa", "#2dd4bf", "#fb923c", "#22c55e", "#818cf8", "#f472b6", "#38bdf8", "#c4b5fd"]  # = sync.CAM_LABELS
 
@@ -38,18 +40,45 @@ def _smooth_jitter(fs):
     return np.convolve(core.jitter_vec(fs), np.ones(8) / 8, "same")
 
 
-def sample_quality(a, role, jit_ref=None):
+def _med3(x):
+    x = np.asarray(x, float)
+    if len(x) < 3:
+        return x
+    return np.median(np.vstack([np.r_[x[:1], x[:-1]], x, np.r_[x[1:], x[-1:]]]), axis=0)
+
+
+def sample_quality(a, role, lap_ref=None):
+    """Quality of every analysis sample for the director (v3.13.0, measured on his Alex & Andreea party: 48 frames
+    judged by eye against the numbers).
+    The old rules took a handheld camera DANCING WITH THE CROWD for a broken shot: the whole-frame shift estimate
+    (gx / gy) follows the jumping people (jitter 13-95 px on good frames -> stability 0) and the frame difference
+    (people, smoke, lights) marked 55-60 % of the party as "camera moving" (x0.15). Static cameras scored ~110, the
+    handheld ones ~10, so even Static <-> Handheld at 100 used the static camera.
+    Now a handheld camera is judged by what really spoils a shot: its own ROBUST shift (block median, ignores the
+    people: good dance shots 1-10 px, whip pans / blur 12-28 px), its sharpness RELATIVE to its own footage (motion
+    blur: < 0.4 x its median) and darkness (mean < 40 of 255 fades the score to 0 at 15). The frame difference no
+    longer counts as a move for any camera. lap_ref = the camera's median sharpness (Laplacian) in this edit."""
     fs = a.fs
-    F = core.focus_vec(fs["lap"])
-    E = core.exposure_vec(fs["mean"], fs["bright"])
-    j = _smooth_jitter(fs)
-    S = np.clip(1 - (j - 1.5) / 8, 0, 1)
-    if role == "Handheld" and jit_ref is not None and len(jit_ref):
-        S = 0.5 * S + 0.5 * (1 - np.searchsorted(jit_ref, j) / len(jit_ref))
+    lap = np.asarray(fs["lap"], float)
+    mean = np.asarray(fs["mean"], float)
+    sp = _med3(np.hypot(fs["sx"], fs["sy"]))
+    lapr = lap / max(1.0, float(lap_ref if lap_ref else np.median(lap) if len(lap) else 1.0))
+    F = np.minimum(core.focus_vec(lap), np.clip(lapr / 0.6, 0, 1))
+    E = np.minimum(core.exposure_vec(mean, fs["bright"]), np.clip((mean - 15) / 25, 0, 1))
+    if role == "Handheld":
+        S = np.clip(1 - (sp - 5) / 10, 0, 1)
+        bad = (sp > HAND_WHIP) | (lapr < 0.4)
+    else:
+        j = _smooth_jitter(fs)
+        S = np.clip(1 - (j - 1.5) / 8, 0, 1)
+        bad = sp > core.MOVE_PX                         # a static camera that pans
     q = 100 * (0.6 * (0.4 * F + 0.3 * S + 0.3 * E) + 0.4 * np.minimum(np.minimum(F, S), E))
-    if role == "Static":
-        q = q + 10 * np.clip(np.asarray(fs["diff"]) / 10, 0, 1)
-    q[core.moving_mask(fs)] *= 0.15
+    if role == "Static":                                # technically perfect, but a wide fixed shot: worth a good
+        q = STATIC_W * q + 10 * np.clip(np.asarray(fs["diff"]) / 10, 0, 1)    # handheld at the middle of the slider
+    d = bad.copy()
+    d[1:] |= bad[:-1]
+    d[:-1] |= bad[1:]
+    q[d] *= 0.15
     return q
 
 
@@ -267,8 +296,8 @@ def build(cams, results, analyses, masters, st):
         static_pen = 0                                  # "static only as backup" was removed: the slider does it
         refs = {}
         for ci in range(C):
-            js = [_smooth_jitter(x[4].fs) for x in mem if x[0] == ci]
-            refs[ci] = np.sort(np.concatenate(js)) if js else None
+            ls = [np.asarray(x[4].fs["lap"], float) for x in mem if x[0] == ci]
+            refs[ci] = float(np.median(np.concatenate(ls))) if ls else None
         for ci, p, off, dur, a in mem:
             role = cams[ci]["role"]
             qs = sample_quality(a, role, refs[ci]) + (bias if role == "Handheld" else -bias - static_pen)

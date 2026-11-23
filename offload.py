@@ -165,7 +165,7 @@ def _free_name(dest):
 
 
 def offload(source, dest_dir, verify=True, keep_folders=True, skip_proxies=False, report=True,
-            progress=None, cancel=None, on_file=None, window=None):
+            progress=None, cancel=None, on_file=None, window=None, report_name="_offload_report.txt", title="Card"):
     """Copy one card into dest_dir. progress(done_bytes, total_bytes, current file); on_file(rel, status) with status
     'copied', 'verified', 'already there', 'renamed', 'FAILED: ...'. Returns the summary."""
     source, dest_dir = Path(source), Path(dest_dir)
@@ -237,15 +237,31 @@ def offload(source, dest_dir, verify=True, keep_folders=True, skip_proxies=False
     summary = dict(source=str(source), dest=str(dest_dir), files=len(files), bytes=sum(s for _, s in files),
                    seconds=round(took, 1), **counts)
     if report:
-        lines = ["Card offload report - MoneyMakingMachine", f"Card:        {source}", f"Destination: {dest_dir}",
+        lines = [f"{title} offload report - MoneyMakingMachine" if title == "Card" else f"{title} report - MoneyMakingMachine",
+                 f"{title + ':':<13}{source}", f"Destination: {dest_dir}",
                  f"Date:        {time.strftime('%Y-%m-%d %H:%M')}",
                  f"Files: {len(files)}, {summary['bytes'] / 1e9:.2f} GB in {took / 60:.1f} min",
                  f"Copied {counts['copied']}, verified {counts['verified']}, already there {counts['already']}, "
                  f"renamed (a different file had the name) {counts['renamed']}, FAILED {counts['failed']}",
                  "", "file\tbytes\tchecksum (blake2b)\tstatus"]
         lines += [f"{r}\t{s}\t{d}\t{st}" for r, s, d, st in rows]
-        (dest_dir / "_offload_report.txt").write_text("\n".join(lines), encoding="utf-8")
+        (dest_dir / report_name).write_text("\n".join(lines), encoding="utf-8")
     return summary
+
+
+def backup(root, backup_dir, verify=True, progress=None, cancel=None):
+    """The whole wedding folder (every camera / sound folder, the reports, the projects) copied again to a backup
+    drive: backup_dir / <wedding folder name>. Same rules as a card: read only, .part then rename, checked file by
+    file, identical files already there are skipped, a different file of the same name gets " (2)", dates kept.
+    The report is _backup_report.txt in the backup copy."""
+    root, backup_dir = Path(root), Path(backup_dir)
+    if not root.is_dir():
+        raise FileNotFoundError(f"The wedding folder is not there: {root}")
+    dest = backup_dir / root.name
+    if dest.resolve() == root.resolve() or root.resolve() in dest.resolve().parents:
+        raise ValueError("The backup must go to another place than the wedding folder itself.")
+    return offload(root, dest, verify=verify, keep_folders=True, skip_proxies=False, report=True, progress=progress,
+                   cancel=cancel, report_name="_backup_report.txt", title="Backup")
 
 
 def eject(volume):

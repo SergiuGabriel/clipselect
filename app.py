@@ -50,7 +50,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.12.0"
+APP, VER = "MoneyMakingMachine", "v3.13.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -77,7 +77,7 @@ SEQ_RATES = ["Match footage", "23.976", "24", "25", "29.97", "30", "50", "59.94"
 SEQ_FIELDS = {"Lower Field First": "lower", "Upper Field First": "upper", "None (Progressive)": "none"}
 SEQ_DEFAULT = dict(size="Match footage", rate="25", fields="Lower Field First")      # final sequences are 25 fps
 DEFAULT_ON = {k: True for k, _, _ in SLIDERS}
-DEFAULTS = dict(mode="auto", thr=60, mincut=3, cutmoves=True, protect=True, contrast=50, exposure=50, focus=60, importance=40,
+DEFAULTS = dict(mode="auto", thr=60, mincut=3, cutmoves=True, keepall=True, protect=True, contrast=50, exposure=50, focus=60, importance=40,
                 stability=50, preset="Normal", p1=25, p2=65)
 
 
@@ -1092,7 +1092,7 @@ class ProjectPage(QWidget):
         av = QVBoxLayout(self.auto_box)
         av.setContentsMargins(0, 0, 0, 0)
         self.r_thr = SliderRow("Selection threshold", "Higher = pickier. Shots scoring at least this much are kept.",
-                               60, lo=20, hi=90, suffix="")
+                               60, lo=0, hi=90, suffix="")
         self.r_thr.changed.connect(lambda x: self.set_s("thr", x))
         av.addWidget(self.r_thr)
         mvr = QHBoxLayout()
@@ -1105,6 +1105,18 @@ class ProjectPage(QWidget):
         self.sw_moves.toggled.connect(lambda v: self.set_s("cutmoves", v))
         mvr.addWidget(self.sw_moves)
         av.addLayout(mvr)
+        kr = QHBoxLayout()
+        kr.addWidget(lbl("Keep every good frame"))
+        kq = lbl("?", "muted")
+        kq.setToolTip("Smooth camera moves (gimbal, slow pans) that stay sharp are kept as shots of their own; only "
+                      "blurred whip pans and dark moves are cut out. A good piece shorter than the minimum cut is kept "
+                      "when it touches another kept piece, and a short clip keeps its good part (at least 1 s).")
+        kr.addWidget(kq)
+        kr.addStretch()
+        self.sw_keep = Switch(True)
+        self.sw_keep.toggled.connect(lambda v: self.set_s("keepall", v))
+        kr.addWidget(self.sw_keep)
+        av.addLayout(kr)
         mv.addWidget(self.auto_box)
 
         # CUSTOM box
@@ -1231,6 +1243,7 @@ class ProjectPage(QWidget):
         self.r_cut.set(s["mincut"])
         self.sw_protect.set(s["protect"])
         self.sw_moves.set(s["cutmoves"])
+        self.sw_keep.set(s.get("keepall", True))
         self.apply_mode()
         self.refresh_videos()
         self.refresh_history()
@@ -5372,6 +5385,27 @@ class _OffloadWorker(QThread):
             self.ended.emit(self.k, None, str(e))
 
 
+class _BackupWorker(QThread):
+    """The whole wedding folder copied again to the backup drive (offload.backup)."""
+    moved = Signal(float, float)
+    ended = Signal(object, str)
+
+    def __init__(self, root, dest, verify, stop):
+        super().__init__()
+        self.root, self.dest, self.verify, self.stop = root, dest, verify, stop
+
+    def run(self):
+        try:
+            r = offload.backup(self.root, self.dest, verify=self.verify,
+                               progress=lambda d, t, name: self.moved.emit(float(d), float(max(1, t))), cancel=self.stop)
+            self.ended.emit(r, "")
+        except InterruptedError:
+            self.ended.emit(None, "Cancelled")
+        except Exception as e:
+            logging.exception("backup failed")
+            self.ended.emit(None, str(e))
+
+
 class _CardLook(QThread):
     """Reads what a card is (camera, size, speed, its clips) without blocking the window."""
     seen = Signal(str, object)
@@ -5406,6 +5440,7 @@ class OffloadPage(QWidget):
                                                         eject=False, twins=True))
         self.cfg.setdefault("twins", True)
         self.extra, self.workers, self.state, self._stop = [], [], {}, False
+        self.bworker = None
         self.looks, self.info, self.choice, self.looker = {}, {}, {}, None
         v = QVBoxLayout(self)
         v.setContentsMargins(28, 22, 28, 22)
@@ -5512,6 +5547,16 @@ class OffloadPage(QWidget):
         self.where.setWordWrap(True)
         right.addWidget(self.where)
         right.addSpacing(8)
+        right.addWidget(lbl("BACKUP", "section"))
+        br = QHBoxLayout()
+        self.backup_lbl = lbl("", "muted", True)
+        br.addWidget(self.backup_lbl, 1)
+        br.addWidget(btn("Choose", slot=lambda: self.pick_backup()))
+        self.b_backup = btn("Back up now", slot=lambda: self.start_backup())
+        self.b_backup.setToolTip(i18n.T("Copies the wedding folder above (every camera and sound folder) to the backup drive now."))
+        br.addWidget(self.b_backup)
+        right.addLayout(br)
+        right.addSpacing(8)
         right.addWidget(lbl("OPTIONS", "section"))
         self.opts = {}
         for key, text in (("verify", "Check every file after copying (reads the copy back)"),
@@ -5520,7 +5565,8 @@ class OffloadPage(QWidget):
                           ("proxies", "Skip the camera proxies (.LRF, .LRV, .THM)"),
                           ("report", "Write a report next to the footage"),
                           ("eject", "Eject the cards when everything is copied"),
-                          ("project", "Then make the Premiere project (Create Project, in the mode chosen there)")):
+                          ("project", "Then make the Premiere project (Create Project, in the mode chosen there)"),
+                          ("backup", "At the end, copy the whole wedding folder to the backup drive too")):
             cb = QCheckBox(text)
             cb.setChecked(bool(self.cfg.get(key)))
             cb.toggled.connect(lambda on, k=key: (self.cfg.update({k: on}), self.store.save_app(), self._plan(), self._where()))
@@ -5749,12 +5795,74 @@ class OffloadPage(QWidget):
             self._where()
             self._buttons()
 
+    def pick_backup(self, d=None):
+        if not d:
+            d = QFileDialog.getExistingDirectory(self, "Where the backup copy goes (your backup drive)",
+                                                 self.cfg.get("backup_dest", ""))
+        if d:
+            self.cfg["backup_dest"] = d
+            self.store.save_app()
+            self._where()
+            self._buttons()
+
+    def start_backup(self, root=None):
+        """Copy the wedding folder again to the backup drive (also after an offload, when the option is ticked)."""
+        if self._busy():
+            notify("Wait for the current copy to finish (or Cancel it).", error=True)
+            return
+        dest = self.cfg.get("backup_dest")
+        if not dest:
+            notify("Choose the backup drive first.", error=True)
+            return
+        root = Path(root) if root else self._root() if self.cfg.get("dest") else None
+        if not root or not root.is_dir():
+            notify("The wedding folder is not there yet: copy the cards first (or check the wedding name).", error=True)
+            return
+        if not Path(dest).exists():
+            notify(i18n.T("The backup drive is not connected: {}").format(dest), error=True)
+            return
+        self._stop = False
+        self.bworker = _BackupWorker(root, dest, self.opts["verify"].isChecked(), lambda: self._stop)
+        self.bworker.moved.connect(lambda d, t: self.pp.set(i18n.T("Backup: copying and checking {}%").format(int(100 * d / t)), d / t))
+        self.bworker.ended.connect(self._backup_ended)
+        self.bworker.finished.connect(self._buttons)
+        self._backup_root = root
+        self.pp.start(i18n.T("Backup of {}…").format(root.name))
+        self.pp.allow_cancel(self.cancel)
+        self.bworker.start()
+        self._buttons()
+        logging.info("backup of %s to %s", root, dest)
+
+    def _backup_ended(self, r, err):
+        self.pp.hide()
+        self.pp.allow_cancel(None)
+        dest = Path(self.cfg.get("backup_dest", "")) / self._backup_root.name
+        if err == "Cancelled":
+            notify("Backup stopped: what is copied is kept", error=True)
+            line = f'<span style="color:{C["POOR"]}">' + i18n.T("Backup stopped: what is copied is kept") + "</span>"
+        elif err:
+            notify(i18n.T("Backup failed: {}").format(i18n.T(err)), error=True)
+            line = f'<span style="color:{C["POOR"]}">' + i18n.T("Backup failed: {}").format(escape(i18n.T(err))) + "</span>"
+        elif r["failed"]:
+            notify(i18n.T("Backup finished with problems: {} files failed").format(r["failed"]), error=True)
+            line = f'<span style="color:{C["POOR"]}">' + i18n.T("Backup finished with problems: {} files failed").format(r["failed"]) + "</span>"
+        else:
+            notify(i18n.T("Backup done and checked: {} files in {}").format(r["files"], str(dest)))
+            line = (f'<b style="color:{C["GOOD"]}">✓</b> ' + i18n.T("Backup: {} files, {} GB · {} checked, {} already there").format(
+                r["files"], f"{r['bytes'] / 1e9:.1f}", r["verified"], r["already"]) + f" → {escape(str(dest))}")
+        self._backup_line = line
+        self._show()
+        self._buttons()
+
     def _root(self):
         return Path(self.cfg["dest"]) / ((self.cfg.get("wedding") or "").strip() or time.strftime("Offload %Y-%m-%d"))
 
     def _where(self):
         d = self.cfg.get("dest") or ""
         self.dest_lbl.setText(d or i18n.T("No destination yet."))
+        b = self.cfg.get("backup_dest") or ""
+        self.backup_lbl.setText((b + "/" + ((self.cfg.get("wedding") or "").strip() or "…")) if b else
+                                i18n.T("No backup drive yet."))
         if not d:
             self.where.setText("")
             return
@@ -5772,11 +5880,12 @@ class OffloadPage(QWidget):
         return [Path(s) for s in self._ticked_paths()]
 
     def _busy(self):
-        return any(w.isRunning() for w in self.workers)
+        return any(w.isRunning() for w in self.workers) or bool(self.bworker and self.bworker.isRunning())
 
     def _buttons(self):
         busy = self._busy()
         self.b_start.setEnabled(not busy and bool(self.cfg.get("dest")) and bool(self._ticked()))
+        self.b_backup.setEnabled(not busy and bool(self.cfg.get("backup_dest")) and bool(self.cfg.get("dest")))
         self.b_cancel.setVisible(busy)
 
     # ---- copying
@@ -5787,6 +5896,7 @@ class OffloadPage(QWidget):
         self._stop = False
         self.workers, self.state, self.waiting = [], {}, {}
         self._reported = False                           # the end of this offload is reported once
+        self._backup_line = ""
         jobs = []
         for s in self._ticked_paths():
             f = self._folder(s)
@@ -5860,6 +5970,11 @@ class OffloadPage(QWidget):
             if self.opts["project"].isChecked() and hasattr(self.window(), "auto_project"):
                 root = str(self._root())
                 QTimer.singleShot(1200, lambda: self.window().auto_project(root))
+            if self.opts["backup"].isChecked():
+                if self.cfg.get("backup_dest"):
+                    QTimer.singleShot(800, lambda: self.start_backup(self._root()))
+                else:
+                    notify("Choose the backup drive first.", error=True)
             if self.opts["eject"].isChecked():
                 for s in self.state.values():
                     if str(s["src"]).startswith("/Volumes/"):
@@ -5893,6 +6008,8 @@ class OffloadPage(QWidget):
                 rows.append(f'<span style="color:{C["MUTED"]}">…</span> {head}: ' + i18n.T("waiting for its twin's copy, then checked"))
             else:
                 rows.append(f'<span style="color:{C["MUTED"]}">…</span> {head}: {int(100 * s["done"] / max(1, s["total"]))}%')
+        if getattr(self, "_backup_line", ""):
+            rows.append(self._backup_line)
         self.status.setText("<br>".join(rows))
 
 

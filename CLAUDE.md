@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.12.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.13.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -796,6 +796,31 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   recorder last under the party span, links = position in track, a marker per part (app language).
   Tested on a synthetic wedding (/home/claude/lf2: gen.py, mkxml*.py, run.py, ui.py): timecode + chronological +
   no recorder + vornic off; check_xml clean; RO scan clean. NOT tested on real footage.
+
+## v3.13.0 (his 2nd real party: Alex & Andreea, a74 static 4K + fx3 + fx6 handheld; "jumping crowds break it")
+- MEASURED on his footage (4 min of the dance analysed on his Mac through the device shell, 48 frames judged by eye):
+  director.sample_quality took handheld cameras dancing with the crowd for broken shots: the whole-frame shift (gx/gy)
+  follows the jumping people (jitter 13-95 px on GOOD frames -> stability 0) and core.moving_mask's frame-difference
+  rule marked 55-60 % of the party as "camera moving" (x0.15) -> handheld ~10 vs static ~110; his edit at Handheld 100
+  was 66 % a74 (fx3 14 %, fx6 21 %). New director quality (director only, Footage Selection untouched): Handheld =
+  ROBUST shift (sx/sy block median, med3) S = 1 - (sp - 5) / 10, sharpness relative to the camera's own median lap
+  (refs[ci] = median lap of that camera in this master; F = min(focus_vec, lapr / 0.6)), darkness (E also <= (mean -
+  15) / 25), whip pan / blur = sp > HAND_WHIP 14 or lapr < 0.4 -> x0.15; NO frame-difference move rule. Static =
+  STATIC_W 0.8 x the old formula + the +10 activity bonus; only a real pan (sp > MOVE_PX) is x0.15. On his 4 min:
+  good handheld 46-100, bad 2-25 (2 dark wides ~50); shares a74 / fx3 / fx6 at slider 50: 57/20/23 %, 60: 35/38/27,
+  100: 8/56/36 (old 50/23/27); all 9 bad moments avoided. Old analyses stay valid (same raw fs): Auto Edit again.
+- Footage Selection "Keep every good frame" (settings keepall, default ON, switch under Cut out camera moves;
+  core.auto_segments(..., keep_all) + _kept_moves): every second of a camera move is kept when its median lap >=
+  KEEP_MOVE_SHARP 0.45 x the clip's still parts and mean >= KEEP_MOVE_DARK 25 (kept moves = separate segments, so a
+  move between two people is its own clip); a short good piece survives when its run of touching kept pieces reaches
+  the minimum cut, or the clip is shorter than 2 x min cut and the piece >= 1 s. His church (500_SERJFX63249, 150 s):
+  kept 66 -> 119 s at thr 60, good moments 1/14 -> 12/14, blurred 0/4 -> 2/4 (owner prefers keeping too much).
+  Threshold slider now 0-90. Long Film v2 still calls auto_segments without keep_all (owner: v2 later).
+- Card Offload Backup: offload.backup(root, backup_dir) = offload() of the whole wedding folder into
+  backup_dir/<wedding name> (verify, skip identical, " (2)", dates, _backup_report.txt); BACKUP section (Choose + Back up
+  now) and the option "At the end, copy the whole wedding folder to the backup drive too" (cfg backup / backup_dest);
+  _BackupWorker; Offload _busy includes it (queue).
+- Analysis files of this investigation were written in his Documents/_mmm_analiza (the device shell cannot delete).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

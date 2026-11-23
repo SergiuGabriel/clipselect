@@ -269,9 +269,47 @@ def _v1_score(fs, a, b, jit):
     return 100 * (0.6 * (0.4 * F + 0.3 * S + 0.3 * E) + 0.4 * min(F, S, E))
 
 
-def auto_segments(a, thr, min_len, cut_moves=True):
+KEEP_MOVE_SHARP = 0.45   # keep every good frame: a camera move is kept when its sharpness >= 0.45 x the clip's still parts
+KEEP_MOVE_DARK = 25      # ... and it is not darker than this (mean of 255)
+
+
+def _kept_moves(fs, mv):
+    """Keep every good frame (v3.13.0, measured on his Alex & Andreea church): smooth gimbal moves (shift 17-42 px but
+    sharp) are good shots he uses; only blurred whip pans are bad. Every second of a move (a run of 'moving' samples)
+    is kept when its median sharpness is at least KEEP_MOVE_SHARP of the clip's still parts and it is not dark.
+    Returns the kept sample ranges."""
+    lap = np.asarray(fs["lap"], float)
+    mean = np.asarray(fs["mean"], float)
+    ref = max(1.0, float(np.median(lap[~mv])) if (~mv).sum() >= 4 else float(np.median(lap)) if len(lap) else 1.0)
+    out, i, n, sr = [], 0, len(mv), SAMPLE_FPS
+    while i < n:
+        if not mv[i]:
+            i += 1
+            continue
+        j = i
+        while j < n and mv[j]:
+            j += 1
+        for x0 in range(i, j, sr):
+            x1 = min(j, x0 + sr)
+            if x1 - x0 < sr // 2 and out and out[-1][1] == x0:      # a short tail follows the second before it
+                if np.median(lap[x0:x1]) >= KEEP_MOVE_SHARP * ref:
+                    out[-1] = (out[-1][0], x1)
+                continue
+            if np.median(lap[x0:x1]) >= KEEP_MOVE_SHARP * ref and np.median(mean[x0:x1]) >= KEEP_MOVE_DARK:
+                if out and out[-1][1] == x0:
+                    out[-1] = (out[-1][0], x1)
+                else:
+                    out.append((x0, x1))
+        i = j
+    return out
+
+
+def auto_segments(a, thr, min_len, cut_moves=True, keep_all=False):
     """AUTO mode (the original algorithm, finer): the clip is split into 'holds' between camera moves; every second of
-    a hold is scored like the first version; kept parts (level 2) shorter than min_len are dropped (level 0)."""
+    a hold is scored like the first version; kept parts (level 2) shorter than min_len are dropped (level 0).
+    keep_all ("Keep every good frame"): sharp camera moves are kept as shots of their own (only blurred whip pans are
+    cut out), and a good piece shorter than the minimum cut is kept when it touches another kept piece or when it is
+    the good part of a short clip (at least 1 s)."""
     dur = a.duration
     if not a.fs:   # analyses made before per-sample data existed
         lv = np.where(auto_scores(a) >= thr, 2, 0)
@@ -298,16 +336,43 @@ def auto_segments(a, thr, min_len, cut_moves=True):
                 if x1 - x0 >= 2 and _v1_score(fs, x0, x1, jit) >= thr:
                     sel[x0:x1] = True
             i = j
+        mvk = np.zeros(n, bool)
+        if keep_all and cut_moves:
+            for x0, x1 in _kept_moves(fs, mv):
+                mvk[x0:x1] = True
+        # pieces: kept holds (1) and kept moves (3, separate shots so a move between two people stays its own clip)
+        lvl = np.where(sel, 1, np.where(mvk, 3, 0))
         segs = []
         k = 0
         while k < n:
             m = k
-            while m < n and sel[m] == sel[k]:
+            while m < n and lvl[m] == lvl[k]:
                 m += 1
-            segs.append([k / sr, min(m / sr, dur), 2 if sel[k] else 0])
+            segs.append([k / sr, min(m / sr, dur), int(lvl[k])])
             k = m
         if segs:
             segs[-1][1] = dur
+        if keep_all:
+            for i, sg in enumerate(segs):
+                if not sg[2] or sg[1] - sg[0] >= min_len - 1e-6:
+                    continue
+                run0, run1 = i, i                   # the whole run of touching kept pieces
+                while run0 > 0 and segs[run0 - 1][2]:
+                    run0 -= 1
+                while run1 + 1 < len(segs) and segs[run1 + 1][2]:
+                    run1 += 1
+                run = segs[run1][1] - segs[run0][0]
+                short_clip = dur < 2 * min_len and sg[1] - sg[0] >= 1.0 - 1e-6
+                if run < min_len - 1e-6 and not short_clip:
+                    sg[2] = 0
+            out = []
+            for sg in segs:                         # 1 / 3 -> 2, touching pieces of the same kind merged
+                if out and out[-1][2] == sg[2]:
+                    out[-1][1] = sg[1]
+                else:
+                    out.append(list(sg))
+            return [(x[0], x[1], 2 if x[2] else 0) for x in out if x[1] - x[0] > 1e-6]
+        segs = [[x[0], x[1], 2 if x[2] else 0] for x in segs]
     for sg in segs:
         if sg[2] == 2 and sg[1] - sg[0] < min_len - 1e-6:
             sg[2] = 0
@@ -370,7 +435,8 @@ def grade_segments(analyses, s):
     if not analyses:
         return []
     if s.get("mode", "auto") == "auto":
-        return [auto_segments(a, s.get("thr", 60), float(s.get("mincut", 3)), s.get("cutmoves", True)) for a in analyses]
+        return [auto_segments(a, s.get("thr", 60), float(s.get("mincut", 3)), s.get("cutmoves", True),
+                              s.get("keepall", True)) for a in analyses]
     else:
         on = s.get("on", {})
         weights = {k: (s.get(k, 50) / 100 if on.get(k, True) else 0) for k in KEYS}

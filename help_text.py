@@ -67,6 +67,12 @@ Debifat: toate fișierele ajung direct în folderul camerei.</li>
 <li><b>Scoate cardurile când totul e copiat</b>: le scoate (eject) când totul e copiat, ca să le poți lua imediat.</li>
 <li><b>Apoi fă proiectul de Premiere</b>: după ce totul e copiat și verificat, <b>Creează proiectul</b> pornește singur pe nunta
 copiată, în modul ales acolo (Cronologic sau Secvență sincronizată pe timecode), cu numele proiectului = numele folderului nunții. Îl vezi în Coada de analiză.</li>
+<li><b>La final, copiază tot folderul nunții și pe discul de backup</b>: alegi o dată discul de backup (secțiunea <b>BACKUP</b>,
+Alege); după ce toate cardurile sunt copiate și verificate, tot folderul nunții (toate folderele camerelor și ale sunetului,
+rapoartele) se copiază a doua oară acolo, în <i>discul de backup / numele nunții</i>, cu aceleași reguli: fiecare fișier verificat, ce
+există deja identic e sărit, nimic nu e suprascris, datele rămân. Raportul e _backup_report.txt în copia de backup. Butonul <b>Fă
+backup acum</b> face același lucru oricând (de exemplu după ce ai salvat proiectul de Premiere în folderul nunții: se copiază doar ce
+e nou).</li>
 </ul>
 <h3>Siguranță</h3>
 <ul>
@@ -177,12 +183,19 @@ secundă):</p>
 </ul>
 <h3>Reglajele din Auto</h3>
 <ol>
-<li><b>Pragul de selecție</b> (Selection threshold; 20–90, implicit 60): se păstrează doar secundele cu nota cel puțin egală cu
+<li><b>Pragul de selecție</b> (Selection threshold; 0–90, implicit 60): se păstrează doar secundele cu nota cel puțin egală cu
 pragul. Exemple la pragul 60: un cadru clar și bine expus poate avea stabilitatea până la ~31% și tot rămâne; dacă focusul e doar
 70%, stabilitatea trebuie să fie de cel puțin ~43%.</li>
 <li><b>Scoate mișcările de cameră</b> (Cut out camera moves; pornit): când muți camera de la un om la altul mai repede de ~20% din cadru pe secundă (sau toată
 imaginea se schimbă deodată, ca la o panoramare bruscă), mișcarea se taie și fiecare om devine cadru separat. Exemplu: 3 oameni
 filmați câte 2 s, cu mutări între ei = 3 cadre. Panoramările lente nu sunt tăiate. Oprit: mișcările rămân în cadru dacă au notă bună.</li>
+<li><b>Păstrează toate cadrele bune</b> (Keep every good frame; pornit): mișcările de cameră care rămân <b>clare</b> (gimbal, panoramări
+line, de exemplu la biserică) nu mai sunt aruncate: rămân, ca cadre separate, ca să le poți șterge ușor dacă nu-ți plac. Fiecare
+secundă de mișcare e păstrată dacă claritatea ei e cel puțin 45% din claritatea părților nemișcate ale clipului și nu e întunecată
+(media peste 25 din 255); se scot doar mișcările bruște, mișcate (blur). În plus, o bucată bună mai scurtă decât tăietura minimă rămâne
+când se atinge de altă bucată păstrată, iar un clip scurt (sub de două ori tăietura minimă) își păstrează partea bună dacă are cel puțin
+1 s. Măsurat pe biserica de la Alex și Andreea: din 14 momente bune judecate cu ochiul, versiunea veche păstra 1, acum 12; din 4 momente
+mișcate, acum rămân 2 (preferă să păstreze în plus decât să piardă un cadru bun). Oprit: ca înainte.</li>
 <li><b>Lungimea minimă a tăieturii</b> (Minimum cut length; 1–10 s, implicit 3 s): în Auto, cadrele păstrate mai scurte de atât sunt aruncate.</li>
 </ol>
 <h3>Ca să scoți maximum din Auto</h3>
@@ -291,12 +304,17 @@ devin recorderul. Clipurile care nu sunt pe acest calculator sunt sărite, cu av
 din dreapta (Auto Director) se aplică <b>instant</b>, fără o nouă analiză; pe hartă vezi imediat rezultatul.</p>
 <h3>Cum alege camera</h3>
 <ul>
-<li>Fiecare cameră primește la fiecare jumătate de secundă o notă de calitate, cu <b>aceeași formulă ca Auto</b>: claritate 40%,
-stabilitate 30%, expunere 30%, iar 40% din notă e criteriul cel mai slab.</li>
-<li><b>Camerele din mână</b> sunt judecate și față de propriul lor material: jumătate din nota de stabilitate e absolută, jumătate
-e comparată cu tremuratul obișnuit al acelei camere (puțin tremur face parte din stilul ei).</li>
-<li><b>Camerele statice</b> primesc un bonus de până la <b>+10 puncte</b> când se întâmplă ceva în cadru (oameni care se mișcă).</li>
-<li>În timpul unei <b>mutări de cameră</b> (de la un om la altul), nota acelei camere scade la 15%: aproape niciodată nu se taie pe o mutare.</li>
+<li>Fiecare cameră primește la fiecare jumătate de secundă o notă de calitate: claritate 40%, stabilitate 30%, expunere 30%, iar 40%
+din notă e criteriul cel mai slab.</li>
+<li><b>Camerele din mână</b> sunt judecate după ce strică de fapt un cadru la petrecere (măsurat pe 48 de cadre de la Alex și Andreea,
+judecate cu ochiul): <b>mișcarea reală a camerei</b> (măsurată pe blocuri, nu pe toată imaginea, ca oamenii care sar să nu conteze:
+cadrele bune se mișcă 1–10 px pe 1/8 s, panoramările bruște 12–28 px; stabilitate 100% sub 5 px, 0% la 15 px), <b>claritatea față de
+restul materialului acelei camere</b> (motion blur = sub 40% din claritatea ei obișnuită) și <b>întunericul</b> (media sub 40 din 255
+coboară nota, la 15 e zero). O panoramare bruscă (peste 14 px) sau un cadru mișcat scade nota la 15%. Înainte, oamenii care sar și
+fumul păreau „cameră care se mișcă” și camerele din mână primeau ~10 puncte față de ~110 ale camerei statice, așa că și la Handheld 100
+se folosea mult camera statică.</li>
+<li><b>Camerele statice</b> au nota tehnică ×0,8 (un cadru larg, fix, valorează cât un cadru bun din mână la mijlocul cursorului) plus un
+bonus de până la <b>+10 puncte</b> când se întâmplă ceva în cadru (oameni care se mișcă). Doar o panoramare a camerei statice îi scade nota la 15%.</li>
 <li><b>Static / Handheld</b> se ghicește singur: statică = camera practic nu se mișcă niciodată. Îl schimbi în tab-ul Cameras.</li>
 <li>Apoi aplicația caută drumul cel mai bun prin camere, respectând lungimile de cadru și ritmul de mai jos.</li>
 </ul>
@@ -761,6 +779,11 @@ every file goes straight into the camera folder.</li>
 <li><b>Eject the cards when everything is copied</b>: so you can take them right away.</li>
 <li><b>Then make the Premiere project</b>: when everything is copied and checked, <b>Create Project</b> starts by itself on the copied
 wedding, in the mode chosen there (Chronological or Timecode synchronized sequence), the project named like the wedding folder. You see it in the Analysis Queue.</li>
+<li><b>At the end, copy the whole wedding folder to the backup drive too</b>: choose the backup drive once (the <b>BACKUP</b> section,
+Choose); when every card is copied and checked, the whole wedding folder (every camera and sound folder, the reports) is copied a
+second time there, into <i>backup drive / wedding name</i>, with the same rules: every file checked, identical files already there are
+skipped, nothing is overwritten, dates kept. The report is _backup_report.txt in the backup copy. <b>Back up now</b> does the same at any
+time (for example after you saved the Premiere project in the wedding folder: only what is new is copied).</li>
 </ul>
 <h3>Safety</h3>
 <ul>
@@ -871,11 +894,17 @@ shake and bumps lower it. The app compares the picture's movement between two me
 </ul>
 <h3>The Auto controls</h3>
 <ol>
-<li><b>Selection threshold</b> (20–90, default 60): only the seconds scoring at least this much are kept. Examples at 60: a sharp,
+<li><b>Selection threshold</b> (0–90, default 60): only the seconds scoring at least this much are kept. Examples at 60: a sharp,
 well-exposed shot can drop to ~31% stability and still stays; if the focus is only 70%, the stability must be at least ~43%.</li>
 <li><b>Cut out camera moves</b> (on): when you move the camera from one person to another faster than ~20% of the frame per second (or
 the whole picture changes at once, like a whip pan), the move is cut out and every person becomes a separate shot. Example: 3 people
 filmed 2 s each with moves between them = 3 shots. Slow pans are not cut. Off: the moves stay in when they score well.</li>
+<li><b>Keep every good frame</b> (on): camera moves that stay <b>sharp</b> (gimbal, smooth pans, e.g. in church) are no longer thrown
+away: they stay, as shots of their own, so you can delete them easily if you do not like them. Every second of a move is kept when its
+sharpness is at least 45% of the clip's still parts and it is not dark (mean above 25 of 255); only blurred whip pans are cut out. Also
+a good piece shorter than the minimum cut stays when it touches another kept piece, and a short clip (under twice the minimum cut)
+keeps its good part when it has at least 1 s. Measured on the Alex & Andreea church: of 14 good moments judged by eye the old version
+kept 1, now 12; of 4 blurred moments 2 now stay (it prefers keeping too much to losing a good shot). Off: as before.</li>
 <li><b>Minimum cut length</b> (1–10 s, default 3 s): in Auto, kept shots shorter than this are dropped.</li>
 </ol>
 <h3>To get the most out of Auto</h3>
@@ -983,12 +1012,16 @@ changed them) and builds the edit. The analysis is saved: the second time only n
 the right applies <b>instantly</b>, without a new analysis; the map shows the result right away.</p>
 <h3>How it picks the camera</h3>
 <ul>
-<li>Every camera gets a quality score every half second, with <b>the same formula as Auto</b>: sharpness 40%, stability 30%, exposure
-30%, and 40% of the score is the weakest criterion.</li>
-<li><b>Handheld cameras</b> are also judged against their own footage: half of the stability score is absolute, half is compared with
-that camera's usual shake (a little wobble is part of its look).</li>
-<li><b>Static cameras</b> get a bonus of up to <b>+10 points</b> when something happens in the frame (people moving).</li>
-<li>During a <b>camera move</b> (from one person to another) that camera's score drops to 15%: it almost never cuts to a move.</li>
+<li>Every camera gets a quality score every half second: sharpness 40%, stability 30%, exposure 30%, and 40% of the score is the
+weakest criterion.</li>
+<li><b>Handheld cameras</b> are judged by what really spoils a party shot (measured on 48 frames of Alex & Andreea judged by eye): the
+<b>real camera movement</b> (measured on blocks, not the whole picture, so jumping people do not count: good shots move 1-10 px per
+1/8 s, whip pans 12-28 px; stability 100% under 5 px, 0% at 15 px), the <b>sharpness against that camera's own footage</b> (motion blur
+= under 40% of its usual sharpness) and <b>darkness</b> (a mean under 40 of 255 lowers the score, 15 is zero). A whip pan (over 14 px) or
+a blurred frame drops the score to 15%. Before, jumping people and smoke looked like "the camera is moving" and the handheld cameras got
+~10 points against ~110 for the static one, so even Handheld 100 used the static camera a lot.</li>
+<li><b>Static cameras</b> have their technical score x0.8 (a wide fixed shot is worth a good handheld shot at the middle of the slider)
+plus a bonus of up to <b>+10 points</b> when something happens in the frame (people moving). Only a pan of the static camera drops it to 15%.</li>
 <li><b>Static / Handheld</b> is guessed by itself: static = the camera practically never moves. Change it in the Cameras tab.</li>
 <li>Then the app finds the best path through the cameras, respecting the shot lengths and the pace below.</li>
 </ul>
