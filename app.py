@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import numpy as np
-from PySide6.QtCore import QEvent, QObject, QUrl, QPoint, QPointF, QPropertyAnimation, QRectF, QRegularExpression, QStandardPaths, Qt, QThread, QTimer, Signal
+from PySide6.QtCore import QEvent, QObject, QSize, QUrl, QPoint, QPointF, QPropertyAnimation, QRectF, QRegularExpression, QStandardPaths, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QDesktopServices, QColor, QIcon, QImage, QPainter, QPen, QPixmap, QRegularExpressionValidator
 from PySide6.QtWidgets import (QPlainTextEdit, QTextBrowser, QAbstractItemView, QApplication, QComboBox, QDialog, QFileDialog, QFrame,
                                QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
@@ -50,7 +50,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.14.0"
+APP, VER = "MoneyMakingMachine", "v3.15.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -6943,8 +6943,15 @@ class _LF2Worker(QThread):
 
     def run(self):
         try:
+            made = None
+            if Path(self.xml_path).is_dir():    # straight from the wedding folder: make the sequence first
+                made = longfilm2.folder_xml(self.xml_path, lambda s, f: self.progress.emit(s, 0.05 * f),
+                                            lambda: self._stop, jobs=max(2, self.jobs * 2))
+                self.xml_path = made
             r = longfilm2.build(self.xml_path, self.vornic, self.cache, lambda s, f: self.progress.emit(s, f),
                                 lambda: self._stop, self.jobs, self.base)
+            if made:
+                r["footage_xml"] = made
             self.done.emit(r)
         except InterruptedError:
             self.failed.emit("Cancelled")
@@ -6973,14 +6980,17 @@ class LongFilm2Page(QWidget):
         badge.setStyleSheet(f"background:{C['POOR']};color:white;font-size:10px;font-weight:800;border-radius:9px;padding:2px 8px")
         top.addWidget(badge)
         top.addStretch()
+        self.b_edit = btn("Edit the film", slot=self.edit_film)
         self.b_exp = btn("Export XML", slot=self.export)
         self.b_build = btn("Build", "primary", self.build)
+        top.addWidget(self.b_edit)
         top.addWidget(self.b_exp)
         top.addWidget(self.b_build)
         v.addLayout(top)
-        v.addWidget(lbl("The long film from the sequence of Create Project (Chronological or Timecode synchronized "
-                        "sequence) after you labelled the shots: every colour is handled its own way, in the order of the "
-                        "colours on camera A. One 25 fps 1920x1080 sequence.", "muted", True))
+        v.addWidget(lbl("The long film from the wedding folder or from the sequence of Create Project. With your colours "
+                        "every colour is handled its own way; without colours the moments of the day are found "
+                        "automatically (time, faces, the church's long clips, the recorder). Then Edit the film to correct "
+                        "it. One 25 fps 1920x1080 sequence.", "muted", True))
         v.addSpacing(8)
         body = QHBoxLayout()
         body.setSpacing(18)
@@ -7010,9 +7020,14 @@ class LongFilm2Page(QWidget):
             l.addLayout(h)
             left.addWidget(f)
             return l
-        l1 = card(1, "Your labelled sequence")
-        l1.addWidget(lbl("Export from Premiere the sequence with your labels as XML (put the recorder files in it too, for "
-                         "the party). Only the labelled cameras are used. The colours:<br>"
+        l1 = card(1, "Your wedding")
+        l1.addWidget(lbl("<b>Automatic:</b> choose the wedding folder (the one Card Offload made). The app makes the "
+                         "sequence itself (every camera + the recorder and the lavalieres) and finds the moments: getting "
+                         "ready (the groom is filmed first, the faces tell groom and bride apart), the church (its long "
+                         "clips), the venue (no faces) and the couple after it, the party, the drone. An XML of Create "
+                         "Project without colours works the same way.<br><br>"
+                         "<b>With your colours:</b> export from Premiere the sequence with your labels as XML (put the "
+                         "recorder files in it too, for the party). Only the labelled cameras are used. The colours:<br>"
                          "• Blue groom, Rose bride: selection (Auto, minimum cut 2 s, threshold 60), in the order they were "
                          "filmed;<br>"
                          "• Teal first look: synced, the cameras one above the other;<br>"
@@ -7023,7 +7038,11 @@ class LongFilm2Page(QWidget):
                          "• Tan and the other colours are not used.<br>"
                          "The order of the parts = the order of the colours on camera A (V1 of a timecode sequence, the "
                          "first camera of a chronological one); the party always comes last.", "muted", True))
-        l1.addWidget(btn("Import XML", slot=self.pick_xml))
+        r1 = QHBoxLayout()
+        r1.addWidget(btn("Wedding folder…", "primary", self.pick_folder))
+        r1.addWidget(btn("Import XML", slot=self.pick_xml))
+        r1.addStretch()
+        l1.addLayout(r1)
         self.foot_lbl = QLabel("")
         self.foot_lbl.setWordWrap(True)
         self.foot_lbl.setTextFormat(Qt.RichText)
@@ -7038,7 +7057,33 @@ class LongFilm2Page(QWidget):
         l2.addWidget(lbl("ON: the Forest shots of 2 cameras are synced by their own sound: the main camera whole on V1, the "
                          "second camera whole on V2 (switched off), the cut version on V3. OFF: no vornic, Forest is not "
                          "used.", "muted", True))
-        l3 = card(3, "Party · Auto Director")
+        l4 = card(3, "Colour")
+        cr = QHBoxLayout()
+        cr.addWidget(lbl("Put my look on every clip", "", True), 1)
+        self.sw_col = Switch(False)
+        self.sw_col.toggled.connect(lambda on: self._look("on", on))
+        cr.addWidget(self.sw_col, 0, Qt.AlignTop)
+        l4.addLayout(cr)
+        self.cb_crop = QCheckBox("Crop 10 % at the top and at the bottom")
+        self.cb_crop.toggled.connect(lambda on: self._look("crop", on))
+        l4.addWidget(self.cb_crop)
+        self.lut_rows = {}
+        for k, title in (("1", "LUT"), ("2", "Second LUT (optional)")):
+            l4.addWidget(lbl(title))
+            rr = QHBoxLayout()
+            name = lbl("None", "muted")
+            rr.addWidget(name, 1)
+            rr.addWidget(btn("Choose…", slot=lambda _=False, k=k: self._pick_lut(k)))
+            rr.addWidget(btn("✕", "link", lambda _=False, k=k: self._look("lut" + k, None)))
+            l4.addLayout(rr)
+            sl = SliderRow("Intensity", "Like Premiere's Look intensity: 100 = the LUT as it is, up to 200.", 100, lo=0, hi=200)
+            sl.changed.connect(lambda x, k=k: self._look("int" + k, x))
+            l4.addWidget(sl)
+            self.lut_rows[k] = (name, sl)
+        l4.addWidget(lbl("Premiere cannot receive an adjustment layer through an XML (tested: it becomes a black clip), so "
+                         "the look (Lumetri) and the crop are put on every clip. To change it later, select the clips in "
+                         "Premiere and change the Lumetri of one, then paste its attributes.", "muted", True))
+        l3 = card(4, "Party · Auto Director")
         self.d_rows = {}
         for key, title, sub, lo, hi, suf in (
                 ("minshot", "Minimum shot", "No shot is shorter than this.", 1, 10, " s"),
@@ -7138,6 +7183,7 @@ class LongFilm2Page(QWidget):
             w_.setCurrentIndex(i)
             w_.blockSignals(False)
         self.sw_v.set(p.get("vornic", True))
+        self._show_look()
         self.map.set_zones(p.get("zones", []))
         blob = self.store.load_blob(p["id"]) if p.get("built") else {}
         self.r = blob.get("result")
@@ -7157,6 +7203,12 @@ class LongFilm2Page(QWidget):
         if not f:
             self.foot_lbl.setText("")
             return
+        if Path(f).is_dir():
+            self.foot_lbl.setText(f"<b>{escape(Path(f).name)}</b><br>" + i18n.T(
+                "Wedding folder. Press Build: the app makes the sequence (every camera, the recorder and the lavalieres), "
+                "syncs the cameras on the recorder, looks at the faces and finds the moments. It can take a few hours: "
+                "leave it overnight."))
+            return
         try:
             L = longfilm2.load(f)
         except Exception as e:
@@ -7168,6 +7220,12 @@ class LongFilm2Page(QWidget):
         cams = "<br>".join(f'{i18n.T("Camera")} {"ABCDEFGH"[i] if i < 8 else i + 1}: {escape(c["name"])}'
                            for i, c in enumerate(L["cams"]))
         lay = i18n.T("Timecode synchronized sequence") if L["layout"] == "timecode" else i18n.T("Chronological")
+        if L.get("auto"):
+            txt = (f"<b>{escape(Path(f).name)}</b><br>{lay} · " +
+                   i18n.T("{} clips without colours · {} sound files").format(len(L["pieces"]), len(L["recorder"])) +
+                   "<br>" + cams + "<br>" + i18n.T("The moments will be found automatically when you press Build."))
+            self.foot_lbl.setText(txt)
+            return
         txt = (f"<b>{escape(Path(f).name)}</b><br>{lay} · " +
                i18n.T("{} labelled clips · {} recorder files").format(len(L["pieces"]), len(L["recorder"])) + "<br>" + cams +
                "<br>" + " · ".join(f"{i18n.T(k)} {n}" for k, n in sorted(cnt.items())) + "<br>" +
@@ -7179,11 +7237,59 @@ class LongFilm2Page(QWidget):
         self.foot_lbl.setText(txt)
 
     def _drop(self, paths):
-        xmls, _ = _xml_or_rest(paths)
-        if not xmls:
-            notify(i18n.T("Drop the XML of your labelled sequence here."), error=True)
+        xmls, rest = _xml_or_rest(paths)
+        dirs = [x for x in rest if Path(x).is_dir()]
+        if not xmls and not dirs:
+            notify(i18n.T("Drop the wedding folder or the XML of your sequence here."), error=True)
             return
-        self._set_xml(xmls[0])
+        self._set_xml(xmls[0] if xmls else dirs[0])
+
+    def pick_folder(self):
+        p = self._cur() or {}
+        start = str(Path(p["footage"]).parent) if p.get("footage") else (self.store.app.get("offload", {}) or {}).get("dest", "")
+        d = QFileDialog.getExistingDirectory(self, "The wedding folder", start)
+        if d:
+            self._set_xml(d)
+
+    # ---- colour
+    def _look_s(self):
+        p = self._cur() or {}
+        return {**(self.store.app.get("look") or {}), **(p.get("look") or {})}
+
+    def _look(self, k, x):
+        p = self._cur()
+        if p is None:
+            return
+        lk = self._look_s()
+        lk[k] = x
+        p["look"] = lk
+        self.store.app["look"] = dict(lk)       # the next project starts with the same look
+        self.store.save_app()
+        self._show_look()
+
+    def _pick_lut(self, k):
+        cur = self._look_s().get("lut" + k) or self._look_s().get("lut1") or str(Path.home() / "Documents")
+        f, _ = QFileDialog.getOpenFileName(self, "Choose a LUT", str(Path(cur).parent if Path(cur).suffix else cur),
+                                           "LUT (*.cube *.look *.3dl)")
+        if f:
+            self._look("lut" + k, f)
+            if not self._look_s().get("on"):
+                self._look("on", True)
+
+    def _show_look(self):
+        lk = self._look_s()
+        for w_, val in ((self.sw_col, bool(lk.get("on"))),):
+            w_.set(val)
+        self.cb_crop.blockSignals(True)
+        self.cb_crop.setChecked(bool(lk.get("crop", True)) if "crop" in lk else True)
+        self.cb_crop.blockSignals(False)
+        if "crop" not in lk and self._cur() is not None:
+            (self._cur().setdefault("look", {}))["crop"] = True
+        for k, (name, sl) in self.lut_rows.items():
+            f = lk.get("lut" + k)
+            name.setText(Path(f).stem if f else i18n.T("None"))
+            name.setToolTip(f or "")
+            sl.set(int(lk.get("int" + k, 100)))
 
     def pick_xml(self):
         p = self._cur() or {}
@@ -7196,11 +7302,11 @@ class LongFilm2Page(QWidget):
         if self._busy():
             notify("Wait for the current job to finish (or Cancel it).", error=True)
             return
-        self._remember(footage=f, built=False)
+        self._remember(footage=f, built=False, edits={})
         self.r, self.an = None, {}
         self._summary()
         self.recompute()
-        notify(i18n.T("XML loaded: {}").format(Path(f).name))
+        notify(i18n.T("Folder chosen: {}").format(Path(f).name) if Path(f).is_dir() else i18n.T("XML loaded: {}").format(Path(f).name))
 
     # ---- settings
     def set_d(self, k, x):
@@ -7230,6 +7336,7 @@ class LongFilm2Page(QWidget):
         busy = self._busy()
         self.b_build.setEnabled(bool(p.get("footage")) and not busy)
         self.b_exp.setEnabled(bool(self.parts) and not busy)
+        self.b_edit.setEnabled(bool(self.parts) and not busy and any(k in longfilm2.SELECT for k in self.info.get("keys", [])))
 
     # ---- build
     def build(self):
@@ -7256,7 +7363,9 @@ class LongFilm2Page(QWidget):
         except Exception:
             logging.exception("long film v2: result not saved")
         self.store.save_blob(p["id"], dict(result=r, cache=cache))
-        p.update(built=True, when=datetime.now().isoformat(timespec="seconds"))
+        p.update(built=True, edits={}, when=datetime.now().isoformat(timespec="seconds"))
+        if r.get("footage_xml"):
+            p["footage"] = r["footage_xml"]     # the sequence made from the wedding folder
         self.store.save_app()
         self.pp.hide()
         self.pp.allow_cancel(None)
@@ -7287,7 +7396,8 @@ class LongFilm2Page(QWidget):
         if self.r:
             try:
                 self.parts, self.info = longfilm2.assemble(self.r, self.an, self._dir(), p.get("zones", []),
-                                                           marker=i18n.T, vornic_on=p.get("vornic", True))
+                                                           marker=i18n.T, vornic_on=p.get("vornic", True),
+                                                           edits=p.get("edits") or None)
             except Exception as e:
                 logging.exception("long film v2 assemble failed")
                 self.status.setText(i18n.T("Error: {}").format(str(e)))
@@ -7308,6 +7418,14 @@ class LongFilm2Page(QWidget):
             extra = ""
             if self.r.get("priests"):
                 extra += "  " + i18n.T("The priest found in {} church clips (kept whole).").format(len(self.r["priests"]))
+            if self.r.get("auto"):
+                a = self.r["auto"]
+                extra += "  " + i18n.T("Moments found automatically: {}.").format(
+                    ", ".join(f"{i18n.T(k)} {n}" for k, n in sorted((a.get("counts") or {}).items())))
+                if not a.get("faces"):
+                    extra += " " + i18n.T("(without faces: the face model could not be loaded)")
+            if (self._cur() or {}).get("edits"):
+                extra += "  " + i18n.T("Edited by you.")
             self.status.setText(i18n.T("Ready: the long film is {} long. Press Export XML.").format(fmt_hms(tot)) + extra)
         elif (self._cur() or {}).get("footage"):
             self.status.setText(i18n.T("Press Build."))
@@ -7344,23 +7462,222 @@ class LongFilm2Page(QWidget):
         self.stats.setText(i18n.T("Party: {} shots").format(shots) +
                            (("  ·  " + i18n.T("{} party clips could not be synced by the sound").format(fails)) if fails else ""))
 
+    def edit_film(self):
+        p = self._cur()
+        if not p or not self.parts:
+            return
+        dlg = FilmEditor(self, self.parts, self.info.get("keys", []), str(self.store.dir / "thumbs"))
+        if dlg.exec():
+            self._remember(edits={} if dlg.reset else dlg.edits())
+            self.recompute()
+            notify(i18n.T("The automatic film is back.") if dlg.reset else i18n.T("Your changes are saved."))
+
     def export(self):
         p = self._cur()
         if not p or not self.parts:
             return
-        d = Path(p["footage"]).parent if p.get("footage") else Path.home()
+        d = Path(p["footage"]) if p.get("footage") and Path(p["footage"]).is_dir() else \
+            (Path(p["footage"]).parent if p.get("footage") else Path.home())
         f, _ = QFileDialog.getSaveFileName(self, "Export XML", str(d / f"{p['name']} - Long Film v2.xml"), "XML (*.xml)")
         if not f:
             return
         try:
             n, nv, na = longfilm2.export_xml(self.parts, self.r["infos"], [c["name"] for c in self.r["cams"]], f,
-                                             f"{p['name']} - Long Film v2", marker=lambda s: s)
+                                             f"{p['name']} - Long Film v2", marker=lambda s: s, look=self._look_s())
         except Exception as e:
             logging.exception("long film v2 export failed")
             notify(i18n.T("Export failed: {}").format(str(e)), error=True)
             return
         self.status.setText(i18n.T("Saved {} clips ({} video, {} audio tracks) to {}. Premiere: File > Import.").format(n, nv, na, f))
         notify(i18n.T("XML saved: {}").format(Path(f).name))
+
+
+class _ThumbWorker(QThread):
+    """One small picture from the middle of every shot of the editor (cached in <data>/thumbs)."""
+    one = Signal(str, str)
+
+    def __init__(self, shots, folder):
+        super().__init__()
+        self.shots, self.folder, self._stop = shots, Path(folder), False
+
+    def run(self):
+        import hashlib
+        self.folder.mkdir(parents=True, exist_ok=True)
+        for key, path, t in self.shots:
+            if self._stop:
+                return
+            out = self.folder / (hashlib.md5(key.encode()).hexdigest()[:16] + ".jpg")
+            if not out.exists():
+                try:
+                    subprocess.run([core.ffmpeg_exe(), "-v", "error", "-nostdin", "-ss", f"{max(0.0, t):.2f}", "-i", path,
+                                    "-frames:v", "1", "-vf", "scale=208:-2", "-q:v", "5", "-y", str(out)],
+                                   capture_output=True, timeout=60, **core._NOWIN)
+                except Exception:
+                    continue
+            if out.exists():
+                self.one.emit(key, str(out))
+
+
+class _ShotList(QListWidget):
+    """One part of the film as a row of pictures: drag to reorder or to move a shot to another part."""
+
+    def __init__(self, part):
+        super().__init__()
+        self.part = part
+        self.setViewMode(QListWidget.IconMode)
+        self.setFlow(QListWidget.LeftToRight)
+        self.setWrapping(False)
+        self.setIconSize(QSize(144, 81))
+        self.setGridSize(QSize(156, 112))
+        self.setFixedHeight(136)
+        self.setMovement(QListWidget.Snap)
+        self.setDragDropMode(QAbstractItemView.DragDrop)
+        self.setDefaultDropAction(Qt.MoveAction)
+        self.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.setHorizontalScrollMode(QAbstractItemView.ScrollPerPixel)
+        self.setStyleSheet("QListWidget{background:#1b1b1b;border:1px solid #333;border-radius:8px}"
+                           "QListWidget::item{border:none;padding:2px;color:#bbb}"
+                           "QListWidget::item:selected{background:#2d4f7c;color:white}")
+
+
+class FilmEditor(QDialog):
+    """The integrated editor of Long Film v2: every selection part (getting ready, church, couple, venue, drone) as a
+    row of pictures. Drag a shot to reorder it or to move it into another part; Delete / right-click removes it."""
+
+    def __init__(self, parent, parts, keys, folder, edits=None):
+        super().__init__(parent)
+        self.setWindowTitle("Edit the long film")
+        self.resize(1180, 760)
+        self.lists, self.items = {}, {}
+        v = QVBoxLayout(self)
+        v.setContentsMargins(18, 16, 18, 16)
+        v.addWidget(lbl("Drag a shot to change its place or to move it into another part (a groom shot into the "
+                        "bride's place, a shot into the church...). Select shots and press Delete, or right-click, to take "
+                        "them out. Blue frame = groom, pink = bride. The first look, the vornic and the party are built "
+                        "from the synced cameras and are edited in Premiere.", "muted", True))
+        sc = QScrollArea()
+        sc.setWidgetResizable(True)
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setSpacing(6)
+        shots = []
+        self.heads = {}
+        for (name, ln, its, _rec), k in zip(parts, keys):
+            if k not in longfilm2.SELECT:
+                continue
+            h = lbl("", "h2")
+            self.heads[k] = (h, name)
+            lay.addWidget(h)
+            lw = _ShotList(k)
+            lw.setContextMenuPolicy(Qt.CustomContextMenu)
+            lw.customContextMenuRequested.connect(lambda pos, lw=lw: self._menu(lw, pos))
+            lw.model().rowsInserted.connect(lambda *_: QTimer.singleShot(0, self._heads))
+            lw.model().rowsRemoved.connect(lambda *_: QTimer.singleShot(0, self._heads))
+            for it in its:
+                p, a, b = it[2], it[3], it[4]
+                key = longfilm2.shot_key(p["path"], a, b)
+                li = QListWidgetItem(fmt_hms(b - a) if b - a >= 60 else f"{b - a:.1f} s")
+                li.setData(Qt.UserRole, key)
+                li.setData(Qt.UserRole + 1, b - a)
+                li.setData(Qt.UserRole + 2, p.get("label") or "")
+                li.setToolTip(f"{Path(p['path']).name}  {a:.1f}–{b:.1f} s")
+                li.setIcon(self._icon(None, p.get("label")))
+                lw.addItem(li)
+                shots.append((key, p["path"], (a + b) / 2))
+            self.lists[k] = lw
+            lay.addWidget(lw)
+        lay.addStretch()
+        sc.setWidget(w)
+        v.addWidget(sc, 1)
+        row = QHBoxLayout()
+        self.total = lbl("", "muted")
+        row.addWidget(self.total)
+        row.addStretch()
+        row.addWidget(btn("Back to the automatic film", "link", self._reset))
+        row.addWidget(btn("Cancel", slot=self.reject))
+        row.addWidget(btn("Save", "primary", self.accept))
+        v.addLayout(row)
+        self.reset = False
+        self._heads()
+        self.tw = _ThumbWorker(shots, folder)
+        self.tw.one.connect(self._thumb)
+        self.tw.start()
+
+    def _icon(self, img, label):
+        pm = QPixmap(144, 81)
+        pm.fill(QColor("#262626"))
+        g = QPainter(pm)
+        if img:
+            src = QPixmap(img)
+            if not src.isNull():
+                g.drawPixmap(pm.rect(), src.scaled(144, 81, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation))
+        col = {"Blue": "#3f63e0", "Rose": "#f08ccb"}.get(label)
+        if col:
+            g.setPen(QPen(QColor(col), 5))
+            g.drawRect(2, 2, 140, 77)
+        g.end()
+        return QIcon(pm)
+
+    def _thumb(self, key, img):
+        for lw in self.lists.values():
+            for i in range(lw.count()):
+                it = lw.item(i)
+                if it.data(Qt.UserRole) == key:
+                    it.setIcon(self._icon(img, it.data(Qt.UserRole + 2)))
+
+    def _heads(self):
+        tot = 0.0
+        for k, lw in self.lists.items():
+            ln = sum(float(lw.item(i).data(Qt.UserRole + 1) or 0) for i in range(lw.count()))
+            tot += ln
+            h, name = self.heads[k]
+            h.setText(i18n.T("{}  ·  {} shots  ·  {}").format(i18n.T(name), lw.count(), fmt_hms(ln)))
+        self.total.setText(i18n.T("These parts together: {}").format(fmt_hms(tot)))
+
+    def _menu(self, lw, pos):
+        from PySide6.QtWidgets import QMenu
+        if not lw.selectedItems():
+            it = lw.itemAt(pos)
+            if it is None:
+                return
+            it.setSelected(True)
+        m = QMenu(self)
+        m.addAction(i18n.T("Remove from the film"), lambda: self._remove(lw))
+        sub = m.addMenu(i18n.T("Move to"))
+        for k, other in self.lists.items():
+            if other is not lw:
+                sub.addAction(self.heads[k][1], lambda o=other: self._move(lw, o))
+        m.exec(lw.mapToGlobal(pos))
+
+    def _remove(self, lw):
+        for it in lw.selectedItems():
+            lw.takeItem(lw.row(it))
+        self._heads()
+
+    def _move(self, lw, other):
+        for it in lw.selectedItems():
+            other.addItem(lw.takeItem(lw.row(it)))
+        self._heads()
+
+    def keyPressEvent(self, e):
+        if e.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+            for lw in self.lists.values():
+                if lw.hasFocus():
+                    self._remove(lw)
+            return
+        super().keyPressEvent(e)
+
+    def _reset(self):
+        self.reset = True
+        self.accept()
+
+    def edits(self):
+        return {k: [lw.item(i).data(Qt.UserRole) for i in range(lw.count())] for k, lw in self.lists.items()}
+
+    def done(self, r):
+        self.tw._stop = True
+        self.tw.wait(3000)
+        super().done(r)
 
 
 class StudioCard(QFrame):

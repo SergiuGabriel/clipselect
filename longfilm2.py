@@ -16,6 +16,7 @@ The order of the parts = the order in which the colours appear on camera A (V1 o
 of a chronological one). The export: ONE 25 fps 1920x1080 sequence, other frame sizes scaled to fill it, every camera
 with its own sound tracks (stereo pairs like Premiere), the recorder under the party.
 """
+import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -42,6 +43,9 @@ PRIEST_MIN = 60.0                   # the priest: at least 60 s on him, the came
 PARTY = dict(minshot=3, maxshot=120, pace=50, energy=65, beat=True, drop_beats=4, buildup="accelerate",
              energy_cuts=True)      # owner's party settings (editable on the page)
 SEQ_FPS, SEQ_W, SEQ_H = 25.0, 1920, 1080
+
+
+AUTO = "?"                          # a clip whose moment is not known yet (no colour: found automatically)
 
 
 def part_of(kind):
@@ -92,6 +96,16 @@ def load(xml_path):
                               w=info["w"], h=info["h"], fps=info["fps"], fdur=real))
     if not clips:
         raise ValueError("No video clips found in this XML.")
+    auto = not any(c["kind"] for c in clips)
+    if auto:                                # no colours: every clip once, the moments are found by daymap in build()
+        seen_c, uniq = set(), []
+        for c in sorted(clips, key=lambda c: (c["st"], c["track"])):
+            k = (c["path"], round(c["a"], 2), round(c["b"], 2))
+            if k not in seen_c:
+                seen_c.add(k)
+                c["kind"] = AUTO
+                uniq.append(c)
+        clips = uniq
     # the recorder: sound-only files on the audio tracks (each file once)
     recorder, seen = [], set()
     aud = seq.find("media/audio")
@@ -149,12 +163,16 @@ def load(xml_path):
     if "party" in seen_parts:               # the party always closes the film (Iris shots of the morning on camera A
         seen_parts.remove("party")          # put it before the church in his first test)
         seen_parts.append("party")
-    return dict(pieces=pieces, recorder=recorder, cams=cams, layout=layout, order=seen_parts, skipped=skipped)
+    if auto:
+        seen_parts = []
+    return dict(pieces=pieces, recorder=recorder, cams=cams, layout=layout, order=seen_parts, skipped=skipped, auto=auto)
 
 
 def chrono(ps, layout, infos):
     """Recording order: the timeline itself in a timecode synced sequence; else the cameras' clocks (creation time, else
     time of day) when every piece has one, else the timeline."""
+    if ps and all(p.get("t") is not None for p in ps):          # the automatic day map's common clock
+        return sorted(ps, key=lambda p: (p["t"], p["st"]))
     if layout == "timecode":
         return sorted(ps, key=lambda p: p["st"])
     ct = [(infos.get(p["path"]) or {}).get("ctime") for p in ps]
@@ -362,7 +380,7 @@ def _motion(s):
             f'<value>{s}</value></parameter></effect></filter>')
 
 
-def export_xml(parts, infos, cam_names, out_path, name, marker=lambda s: s):
+def export_xml(parts, infos, cam_names, out_path, name, marker=lambda s: s, look=None):
     """parts: [(part name, length s, items, recorder items)]; items = (video track, t0 in the part, piece, src in,
     src out, flags) with flags in {"sound", "off"} ("off" = the clip is switched off: the vornic's whole 2nd camera);
     recorder items = (t0 in the part, path, src in, src out). One 25 fps 1920x1080 sequence. Every camera has its own
@@ -447,6 +465,8 @@ def export_xml(parts, infos, cam_names, out_path, name, marker=lambda s: s):
                 f'<start>{e["st"]}</start><end>{e["en"]}</end><in>{e["fin"]}</in><out>{e["fin"] + e["en"] - e["st"]}</out>')
 
     lab = lambda e: f'<labels><label2>{escape(e["label"])}</label2></labels>' if e.get("label") else ""
+    import colour
+    looks = colour.clip_filters(look)       # his LUT(s) + crop on every picture clip
     vx = {t: [] for t in range(1, nv + 1)}
     ax = {ti: [] for ti in tix.values()}
     for e in sorted(ents, key=lambda e: e["st"]):
@@ -454,7 +474,7 @@ def export_xml(parts, infos, cam_names, out_path, name, marker=lambda s: s):
         if e.get("vid"):
             s = _scale(i.get("w"), i.get("h"))
             vx[e["vid"][1]].append(head(e["vid"][0], e) + projectsetup._file_xml(e["path"], i, files) +
-                                   (_motion(s) if s else "") + links(e) + lab(e) + "</clipitem>")
+                                   (_motion(s) if s else "") + looks + links(e) + lab(e) + "</clipitem>")
     for e in sorted(ents, key=lambda e: e["st"]):
         i = infos.get(e["path"]) or {}
         for cid, ti, _ci, ch, kind in e["aud"]:
@@ -475,6 +495,140 @@ def export_xml(parts, infos, cam_names, out_path, name, marker=lambda s: s):
            f'{"".join(trk(vx[t]) for t in range(1, nv + 1))}</video>{audio}</media></sequence></xmeml>')
     Path(out_path).write_text(xml, encoding="utf-8")
     return len(ents), nv, len(tracks)
+
+
+# ---------------------------------------------------------------- 4a. straight from the wedding folder
+def _one_per_take(files):
+    """A recorder writes one take as several files (Tascam 260823_0195_3 / _4 / _MIX): keep one per take (the MIX when
+    there is one, else the first track), or the takes would be laid one after the other as if they followed."""
+    takes = {}
+    for f in files:
+        m = re.match(r"(.+?)[_-](\d|MIX|mix|LR|lr)$", Path(f).stem)
+        takes.setdefault(m.group(1) if m else Path(f).stem, []).append(f)
+    out = []
+    for _k, fs in sorted(takes.items()):
+        mix = [f for f in fs if re.search(r"(?i)[_-](mix|lr)$", Path(f).stem)]
+        out.append(mix[0] if mix else sorted(fs)[0])
+    return out
+
+
+def folder_xml(root, progress=None, cancel=None, jobs=4):
+    """The Create Project sequence made right here from the wedding folder (Chronological: every camera whole, one after
+    the other, the drone after them), WITH the sound folders (recorder, lavaliere) at the end so the party can be synced.
+    No colours: the moments are found automatically. Returns the XML path (saved in the wedding folder)."""
+    root = Path(root)
+    cams = projectsetup.find_cameras(root)
+    slots = projectsetup.default_slots(cams)
+    cams = [c for c, s_ in projectsetup.by_slot(cams, slots) if s_ != "sound"]
+    snd = [dict(c, files=_one_per_take(c["files"])) for c in projectsetup.sound_files(root)]
+    if not cams:
+        raise ValueError("No camera folders with video in this folder.")
+    infos = projectsetup.read_all(cams + snd, progress, cancel, jobs=jobs)
+    lay, _bad = projectsetup.layout(cams, infos)
+    items = [(f, 1, 0, st, ln) for _cam, row in lay for f, st, ln in row]
+    sf = projectsetup.SEQ_FPS
+    pos = max((st + ln for _f, _v, _a, st, ln in items), default=0) + round(projectsetup.GAP * sf)
+    for j, c in enumerate(snd, 1):
+        for f in c["files"]:
+            if (infos.get(f) or {}).get("ach") and infos[f].get("dur"):
+                n = int(infos[f]["dur"] * sf)
+                items.append((f, None, j, pos, n))
+                pos += n
+        pos += round(60 * sf)
+    out = projectsetup.free_path(root / f"{root.name} - Long Film v2 (automatic).xml")
+    projectsetup._write(items, infos, str(out), f"{root.name} - automatic", None, [], (), [(c, len(r)) for c, r in lay])
+    return str(out)
+
+
+# ---------------------------------------------------------------- 4b. the moments without colours (daymap)
+def own_clock(paths, infos):
+    """Every file's start on ITS camera's clock: the recording time when every clip of the camera has one, else the
+    file date minus its length (copies keep the date of the end of the recording)."""
+    if paths and all((infos.get(f) or {}).get("ctime") for f in paths):
+        return {f: infos[f]["ctime"] for f in paths}
+    return {f: (infos.get(f) or {}).get("mtime", 0.0) - (infos.get(f) or {}).get("dur", 0.0) for f in paths}
+
+
+def auto_moments(L, pieces, recorder, infos, prog, cancel, jobs, model_dir):
+    """No colours in his sequence: 1. every clip with sound is synced to the recorder (like Multicam) -> every camera's
+    clock error; 2. the faces of 5 frames of every clip; 3. daymap.classify -> colours. Sets p["label"] / p["kind"] /
+    p["t"] (common clock). Returns (info for the page, (masters info, sync results) or None)."""
+    import daymap
+    cams = sorted({p["cam"] for p in pieces})
+    own = {}
+    for c in cams:
+        own.update(own_clock(sorted({p["path"] for p in pieces if p["cam"] == c}), infos))
+    # 1. the recorder sync gives every camera's clock error
+    shift, synced = {c: 0.0 for c in cams}, None
+    tmp = [dict(p, kind="party") for p in pieces]
+    _party, files, masters, extras = party_inputs(tmp, recorder, infos)
+    if masters and recorder:
+        clips = [f for f in files if f not in masters and (infos.get(f) or {}).get("ach")]
+        clocks = {}
+        for f in clips + masters + extras:
+            try:
+                clocks[f] = sync.media_info(f)["clock"]
+            except Exception:
+                clocks[f] = None
+        camk = {p["path"]: str(p["cam"]) for p in pieces}
+        camk.update({f: "rec:" + Path(f).parent.name for f in extras})
+        try:
+            info, res = sync.run_sync(masters, clips + extras, lambda s, f: prog(s, 0.06 + 0.3 * f), cancel,
+                                      clocks=clocks, groups=camk, jobs=jobs)
+            synced = (info, res)
+            starts = sync.master_starts(info)
+            d = {}
+            for p in pieces:
+                r = res.get(p["path"])
+                if r and r.get("conf") == "high" and r.get("master", 0) < len(starts):
+                    d.setdefault(p["cam"], []).append(starts[r.get("master", 0)] + r["offset"] - own[p["path"]])
+            med = {c: float(np.median(v)) for c, v in d.items()}
+            ref = 0 if 0 in med else (min(med) if med else None)
+            if ref is not None:
+                shift = {c: med.get(c, med[ref]) - med[ref] for c in cams}
+        except InterruptedError:
+            raise
+        except Exception:
+            synced = None
+    # 2. faces
+    model = None
+    if model_dir:
+        try:
+            import faces
+            model = faces.Faces(faces.ensure_models(model_dir))
+        except Exception:
+            model = None
+    fz = {}
+    for k, p in enumerate(pieces):
+        if cancel and cancel():
+            raise InterruptedError("Cancelled")
+        prog(f"Looking at who is in every clip: {k + 1} of {len(pieces)}", 0.36 + 0.1 * k / max(1, len(pieces)))
+        feats = []
+        if model is not None and p.get("w"):
+            import faces
+            for f in np.linspace(0.1, 0.9, 5):
+                img = faces.frame_bgr(p["path"], p["a"] + (p["b"] - p["a"]) * f)
+                if img is not None:
+                    try:
+                        feats += [daymap._unit(x[0]) for x in model.faces(img)]
+                    except Exception:
+                        pass
+        fz[key_of(p)] = feats
+    # 3. the moments
+    clips = {key_of(p): dict(t0=own[p["path"]] + shift[p["cam"]] + p["a"], dur=p["b"] - p["a"], path=p["path"])
+             for p in pieces}
+    lab, info = daymap.classify(clips, fz)
+    for p in pieces:
+        k = key_of(p)
+        p["t"] = clips[k]["t0"]
+        p["label"] = lab.get(k, "Iris")
+        p["kind"] = KINDS.get(p["label"], AUTO)
+    info["counts"] = {}
+    for p in pieces:
+        info["counts"][p["label"]] = info["counts"].get(p["label"], 0) + 1
+    info["faces"] = model is not None
+    info["shift"] = {str(c): round(v) for c, v in shift.items()}
+    return info, synced
 
 
 # ---------------------------------------------------------------- 5. the build job (heavy work, in a thread)
@@ -502,6 +656,11 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
             infos[f] = projectsetup.probe(f)
         except Exception:
             infos[f] = dict(video=False, dur=0.0, fps=25.0, w=1920, h=1080, ach=0, arate=48000, ctime=None, tod=None)
+    auto = None
+    psync_res = None
+    if L.get("auto"):
+        auto, psync_res = auto_moments(L, pieces, recorder, infos, prog, cancel, jobs, model_dir)
+        pieces = [p for p in pieces if p["kind"] != AUTO]
     # analyses: every selection range + every party range (once, cached)
     use = [p for p in pieces if part_of(p["kind"]) in SELECT or p["kind"] == "party"]
     analyses, todo = {}, []
@@ -590,8 +749,11 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
                 clocks[f] = None
         camk = {p["path"]: str(p["cam"]) for p in party}
         camk.update({f: "rec:" + Path(f).parent.name for f in extras})
-        info, res = sync.run_sync(masters, clips, lambda s, f: prog(s, 0.68 + 0.22 * f), cancel,
-                                  clocks=clocks, groups=camk, jobs=jobs)
+        if psync_res and all(f in psync_res[1] for f in clips):
+            info, res = psync_res                   # already synced by the automatic day map
+        else:
+            info, res = sync.run_sync(masters, clips, lambda s, f: prog(s, 0.68 + 0.22 * f), cancel,
+                                      clocks=clocks, groups=camk, jobs=jobs)
         for f in pfiles:
             if f in masters:                # the longest party clip itself is the master
                 res[f] = dict(conf="high", master=masters.index(f), offset=0.0, dur=infos[f]["dur"], drift_ppm=0.0)
@@ -605,7 +767,17 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
                 m["music"] = None
         psync = dict(masters=info, results=res, extras=extras)
     prog("Done", 1.0)
-    return dict(pieces=pieces, recorder=recorder, cams=L["cams"], layout=L["layout"], order=L["order"],
+    order = L["order"]
+    if auto is not None:                    # the parts in the order of the day, the party last
+        order = []
+        for p in sorted(pieces, key=lambda p: p.get("t", 0.0)):
+            k = part_of(p["kind"])
+            if k not in order:
+                order.append(k)
+        if "party" in order:
+            order.remove("party")
+            order.append("party")
+    return dict(pieces=pieces, recorder=recorder, cams=L["cams"], layout=L["layout"], order=order, auto=auto,
                 skipped=L["skipped"], missing=missing, infos=infos, sel=sel, priests=priests,
                 firstlook=[fl_len, [(t, t0, key_of(p), a, b, ["sound"]) for t, t0, p, a, b in fl_items]],
                 vornic=[vo_len, [(t, t0, key_of(p), a, b, ["sound"] if t == 1 else (["sound", "off"] if t == 2 else []))
@@ -621,9 +793,64 @@ def roles_of(party, analyses):
     return out
 
 
-def assemble(r, analyses, st, zones, marker=lambda s: s, vornic_on=True):
+def shot_key(path, a, b):
+    return f"{path}|{a:.3f}|{b:.3f}"
+
+
+def alternate(a, b, base=4):
+    """Groom and bride told in parallel the way he cuts the getting ready (longfilm.interleave_blocks, measured on two
+    weddings): a big block of the side filmed first, a big block of the other, then turns of 2-7 shots so both end
+    together. Each side keeps its own order (here: the common clock of the day, so cameras can be mixed)."""
+    if not a or not b:
+        return a + b
+    out = []
+    i = min(len(a), max(4, min(20, round(len(a) * 0.27))))
+    j = min(len(b), max(4, min(14, round(len(b) * 0.2))))
+    out += a[:i] + b[:j]
+    turn = 0
+    while i < len(a) or j < len(b):
+        ra, rb = len(a) - i, len(b) - j
+        if turn == 0 and ra:
+            n = ra if not rb else max(1, min(7, round(base * ra / max(1, rb) * 0.5 + base * 0.5)))
+            out += a[i:i + n]
+            i += n
+        elif rb:
+            n = rb if not ra else max(1, min(7, round(base * rb / max(1, ra) * 0.5 + base * 0.5)))
+            out += b[j:j + n]
+            j += n
+        turn ^= 1
+    return out
+
+
+def apply_edits(parts, keys, edits):
+    """The editor's changes: edits = {part key: [shot keys in order]} for the selection parts. A shot can be moved to
+    another part, removed (missing from every list) or reordered. keys = the part key of every part of `parts`."""
+    if not edits:
+        return parts
+    pool = {}
+    for (name, ln, items, rec), k in zip(parts, keys):
+        if k in SELECT:
+            for it in items:
+                pool[shot_key(it[2]["path"], it[3], it[4])] = it
+    out = []
+    for (name, ln, items, rec), k in zip(parts, keys):
+        if k in SELECT and k in edits:
+            new, t = [], 0.0
+            for sk in edits[k]:
+                it = pool.get(sk)
+                if it:
+                    new.append((1, t, it[2], it[3], it[4], set(it[5])))
+                    t += it[4] - it[3]
+            out.append((name, t, new, rec))
+        else:
+            out.append((name, ln, items, rec))
+    return out
+
+
+def assemble(r, analyses, st, zones, marker=lambda s: s, vornic_on=True, edits=None):
     """The parts in his order, ready for export_xml, + the party edit for the map.
-    r: build() result; st: party settings; zones: Slower cuts zones (timeline seconds of the party map)."""
+    r: build() result; st: party settings; zones: Slower cuts zones (timeline seconds of the party map);
+    edits: the editor's changes (apply_edits). info["keys"] = the part key of every part."""
     by_key = {key_of(p): p for p in r["pieces"]}
     parts, info = [], {}
     stat = {}
@@ -631,13 +858,18 @@ def assemble(r, analyses, st, zones, marker=lambda s: s, vornic_on=True):
         name = marker(PART_NAMES[part])
         if part in SELECT:
             ps = chrono([p for p in r["pieces"] if part_of(p["kind"]) == part], r["layout"], r["infos"])
-            items, t = [], 0.0
+            shots = []
             for p in ps:
                 k = key_of(p)
                 cuts = [(p["a"], p["b"])] if k in r["priests"] else r["sel"].get(k, [])
-                for a, b in cuts:
-                    items.append((1, t, p, a, b, {"sound"}))
-                    t += b - a
+                shots += [(p, a, b) for a, b in cuts]
+            if part == "ready":                 # groom and bride in parallel, not one after the other
+                shots = alternate([x for x in shots if x[0]["kind"] == "groom"],
+                                  [x for x in shots if x[0]["kind"] != "groom"])
+            items, t = [], 0.0
+            for p, a, b in shots:
+                items.append((1, t, p, a, b, {"sound"}))
+                t += b - a
             parts.append((name, t, items, []))
             stat[part] = (len(items), t)
         elif part in ("firstlook", "vornic"):
@@ -660,5 +892,11 @@ def assemble(r, analyses, st, zones, marker=lambda s: s, vornic_on=True):
             parts.append((name, ln, [(*it, set()) for it in items], rec))
             info.update(edits=edits, dcams=dcams, roles=roles)
             stat[part] = (len(items), ln)
+    keys = [k for k in r["order"] if k in stat]
+    if edits:
+        parts = apply_edits(parts, keys, edits)
+        for (name, ln, items, rec), k in zip(parts, keys):
+            stat[k] = (len(items), ln)
     info["stat"] = stat
+    info["keys"] = keys
     return parts, info

@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.14.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.15.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -61,7 +61,9 @@ linking to https://www.instagram.com/sergiugabrielcg/.
 - `faces.py` — local face recognition (OpenCV Zoo YuNet MIT + SFace Apache 2.0, downloaded once into
   <data>/ai_model/faces; cosine >= 0.363 = same person). Used for the vornic; later the bride and groom.
 - `longfilm2.py` — Long Film v2 (BETA): the long film from the labelled Create Project sequence (load, selection,
-  priest, first look, vornic, party multicam, 1920x1080 25 fps export).
+  priest, first look, vornic, party multicam, 1920x1080 25 fps export) or from the wedding folder (automatic).
+- `daymap.py` — the moments of the day without labels (scenes, church, faces of groom / bride, venue / couple, party).
+- `colour.py` — his LUT(s) as Lumetri + 10 % crop on every clip (assets/ = his Lumetri template).
 - `teaser.py` — Teaser Studio engine (labels, music parts, beats, drop, edit, XML export).
 - `make_icons.py` — builds icon.icns / icon.ico / icon.png from `icon_source.png` (run in CI before PyInstaller).
 - `.github/workflows/build.yml` — builds macOS DMGs (Apple Silicon + Intel) and a Windows folder with PyInstaller on every push.
@@ -859,6 +861,39 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 - Multicam sequence size stays the first camera's (4K stays 4K): owner does NOT want 1920x1080 there.
 - His friend's "longv2.xml" (Diana si Vasi, 24 fps 4K, Song · BPM markers, labels per camera) was an OLD Multicam export,
   not Long Film v2.
+
+## v3.15.0: Long Film v2 "complete version" (owner: from Create Project to the XML with little human work)
+- AUTOMATIC mode (daymap.py): an XML without any colour, or the WEDDING FOLDER itself (longfilm2.folder_xml: the Create
+  Project chronological sequence made in the worker, every camera + drone, then the sound folders at the end; a recorder
+  take written as several files (Tascam _3 / _4 / _MIX) -> one file per take, MIX preferred: _one_per_take). In build():
+  longfilm2.auto_moments = 1. every clip with sound synced to the recorder (main = folder with most hours) -> every
+  camera's clock error (median, conf high) relative to camera 0; own clock = ctime when every clip of the camera has it,
+  else mtime - dur; 2. faces of 5 frames per clip (faces.Faces); 3. daymap.classify -> colours (p["label"], p["kind"],
+  p["t"] = common clock; chrono() sorts by p["t"]); part order = order of the day, party last; the sync is reused by
+  the party step. daymap rules (MEASURED on Alex & Andreea fx6 vs his labels: 130/146 = 89 %): scenes = gaps >= 15 min;
+  church = first cluster of long clips (>= 150 s, >= 900 s together, <= 15 min apart) + short clips 5 min before /
+  10 min after; groom = face in most clips of the first scene, bride = most clips of the next scenes (excluding groom);
+  morning: groom / bride face, else first scene = groom; both = Teal; long morning clip = Forest; after the church (its
+  first scene, then until a 40-min break): no faces = Yellow (venue had 0 faces in 14/14), faces = Purple; then party,
+  a party scene with the couple in >= 40 % of >= 4 short (< 40 s median) clips = Purple (sunset session); drone =
+  DJI / mavic / drona. Misses: his 8 "fetching the bride" clips (labelled Iris, app says Rose), 3 Tan interviews.
+  His clocks: fx6 mtime coherent, fx3 ~2 h behind, a74 a day off, lav mtimes = copy time, tascam BWF vs mtime differ.
+  tools/daymap_check.py (synthetic day, >= 95 %) runs in CI.
+- Getting ready alternates groom / bride (longfilm2.alternate = longfilm.interleave_blocks without re-sorting: one clock).
+- Integrated editor (app.FilmEditor + _ShotList + _ThumbWorker): selection parts (ready, church, couple, venue, drone) as
+  rows of thumbnails (<data>/thumbs, ffmpeg frame at the middle of the shot); drag to reorder / move between parts,
+  Delete / right-click remove, Move to; Blue / pink frame = groom / bride. Saved as p["edits"] = {part: [shot keys
+  "path|a|b"]} -> longfilm2.apply_edits in assemble(edits=); cleared on every Build. info["keys"] = part keys.
+- Colour (colour.py + card 3 "Colour" on the v2 page, p["look"] + store.app["look"] default): his LUT as Lumetri
+  Creative Look (template = his own Lumetri from the selects XML: assets/lumetri_filter.xml + assets/lumetri_look.xml;
+  the Look LUT path replaced in the blob (NOT the empty Input LUT), param 24 = UTF-16 base64 path, __Intensity, the
+  embedded LUT hash removed, Highlights -36 of his template reset to 0), optional second LUT = second Lumetri, Crop
+  effect 10 % top / bottom; written on EVERY video clip of the v2 export (export_xml(look=)). TESTED IN HIS PREMIERE
+  2026 through computer use: an ADJUSTMENT LAYER in xmeml (exactly as Premiere exports it) imports as an opaque
+  "Black Video" clip -> never write adjustment layers; per-clip Lumetri + crop import fine. assets/ is bundled
+  (PyInstaller --add-data assets; colour._ASSETS uses sys._MEIPASS).
+- Analysis material of Alex & Andreea kept in /home/claude/day (probe.json, th/ th640/ thumbnails, faces.json, score.py)
+  and on his Mac in Documents/_mmm_analiza/day.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

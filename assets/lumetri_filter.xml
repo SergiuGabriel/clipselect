@@ -1,0 +1,241 @@
+<filter>
+							<effect>
+								<name></name>
+								<effectid>Lumetri</effectid>
+								<effecttype>filter</effecttype>
+								<mediatype>video</mediatype>
+								<pproBypass>false</pproBypass>
+								<parameter authoringApp="PremierePro">
+									<parameterid>1</parameterid>
+									<name>Blob</name>
+									<hash>264dd41c-9836-c697-210e-4d7d00003afb</hash>
+									<value>PEx1bWV0cmk+CiAgPGd1aWQ+IjhkNDAxMTAwLTlmYTItMTFmMS1iYWQxLTYyMmI3ODMyODAxMCI8L2d1aWQ+CiAgPHZlcnNpb24+IjMiPC92ZXJzaW9uPgogIDxuYW1lPiIiPC9uYW1lPgogIDxrZXlmcmFtZT4KICAgIDx0aW1lPiIwIjwvdGltZT4KICAgIDx0d2Vlbj4iMCI8L3R3ZWVuPgogICAgPGVhc2Vpbj4iMSI8L2Vhc2Vpbj4KICAgIDxlYXNlb3V0PiIxIjwvZWFzZW91dD4KICAgIDxzZWxlY3RlZGxheWVyPiIwIjwvc2VsZWN0ZWRsYXllcj4KICAgIDxzaGFkZXI+CiAgICAgIDxuYW1lPiJfX0dyb3VwQmVnaW4iPC9uYW1lPgogICAgICA8Y3VzdG9tbmFtZT4iX19Hcm91cEJlZ2luIjwvY3VzdG9tbmFtZT4KICAgICAgPHZpc2libGU+IjEiPC92aXNpYmxlPgogICAgICA8bG9ja2VkdmlzaWJsZT4iMCI8L2xvY2tlZHZpc2libGU+CiAgICAgIDxvcGFjaXR5PiIxIjwvb3BhY2l0eT4KICAgICAgPG1hc2s+IjAiPC9tYXNrPgogICAgICA8dmVjdG9ybWFzaz4iMCI8L3ZlY3Rvcm1hc2s+CiAgICAgIDxsaW5rZWQ+IjAiPC9saW5rZWQ+CiAgICAgIDxwYXJhbWV0ZXJzPgogICAgICAgIDxfX1ByQ29sb3I+IjEiPC9fX1ByQ29sb3I+CiAgICAgICAgPF9fQ3VzdG9tT24+IjEiPC9fX0N1c3RvbU9uPgogICAgICA8L3BhcmFtZXRlcnM+CiAgICA8L3NoYWRlcj4KICAgIDxzaGFkZXI+CiAgICAgIDxuYW1lPiJfX0dyb3VwQmVnaW4iPC9uYW1lPgogICAgICA8Y3VzdG9tbmFtZT4iX19Hcm91cEJlZ2luIjwvY3VzdG9tbmFtZT4KICAgICAgPHZpc2libGU+IjEiPC92aXNpYmxlPgogICAgICA8bG9ja2VkdmlzaWJsZT4iMCI8L2xvY2tlZHZpc2libGU+CiAgICAgIDxvcGFjaXR5PiIxIjwvb3BhY2l0eT4KICAgICAgPG1hc2s+IjAiPC9tYXNrPgogICAgICA8dmVjdG9ybWFzaz4iMCI8L3ZlY3Rvcm1hc2s+CiAgICAgIDxsaW5rZWQ+IjAiPC9saW5rZWQ+CiAgICAgIDxwYXJhbWV0ZXJzPgogICAgICA8L3BhcmFtZXRlcnM+CiAgICA8L3NoYWRlcj4KICAgIDxzaGFkZXI+CiAgICAgIDxuYW1lPiJMVVQiPC9uYW1lPgogICAgICA8Y3VzdG9tbmFtZT4iTFVUIjwvY3VzdG9tbmFtZT4KICAgICAgPHZpc2libGU+IjEiPC92aXNpYmxlPgogICAgICA8bG9ja2VkdmlzaWJsZT4iMCI8L2xvY2tlZHZpc2libGU+CiAgICAgIDxvcGFjaXR5PiIxIjwvb3BhY2l0eT4KICAgICAgPG1hc2s+IjAiPC9tYXNrPgogICAgICA8dmVjdG9ybWFzaz4iMCI8L3ZlY3Rvcm1hc2s+CiAgICAgIDxsaW5rZWQ+IjAiPC9saW5rZWQ+CiAgICAgIDxwYXJhbWV0ZXJzPgogICAgICAgIDxfX0VtYmVkPiIxIjwvX19FbWJlZD4KICAgICAgICA8TFVUPiIiPC9MVVQ+CiAgICAgIDwvcGFyYW1ldGVycz4KICAgIDwvc2hhZGVyPgogICAgPHNoYWRlcj4KICAgICAgPG5hbWU+IkxpbmVhcml6ZSI8L25hbWU+CiAgICAgIDxjdXN0b21uYW1lPiJHYW1tYSAyLjQgdG8gTGluZWFyIjwvY3VzdG9tbmFtZT4KICAgICAgPHZpc2libGU+IjEiPC92aXNpYmxlPgogICAgICA8bG9ja2VkdmlzaWJsZT4iMCI8L2xvY2tlZHZpc2libGU+CiAgICAgIDxvcGFjaXR5PiIxIjwvb3BhY2l0eT4KICAgICAgPG1hc2s+IjAiPC9tYXNrPgogICAgICA8dmVjdG9ybWFzaz4iMCI8L3ZlY3Rvcm1hc2s+CiAgICAgIDxsaW5rZWQ+IjAiPC9saW5rZWQ+CiAgICAgIDxwYXJhbWV0ZXJzPgogICAgICAgIDxHYW1tYT4iMi40IjwvR2FtbWE+CiAgICAgIDwvcGFyYW1ldGVycz4KICAgIDwvc2hhZGVyPgogICAgPHNoYWRlcj4KICAgICAgPG5hbWU+IkJhc2ljQ29ycmVjdGlvbjMiPC9uYW1lPgogICAgICA8Y3VzdG9tbmFtZT4iQmFzaWMgQ29ycmVjdGlvbiI8L2N1c3RvbW5hbWU+CiAgICAgIDx2aXNpYmxlPiIxIjwvdmlzaWJsZT4KICAgICAgPGxvY2tlZHZpc2libGU+IjAiPC9sb2NrZWR2aXNpYmxlPgogICAgICA8b3BhY2l0eT4iMSI8L29wYWNpdHk+CiAgICAgIDxtYXNrPiIwIjwvbWFzaz4KICAgICAgPHZlY3Rvcm1hc2s+IjAiPC92ZWN0b3JtYXNrPgogICAgICA8bGlua2VkPiIwIjwvbGlua2VkPgogICAgICA8cGFyYW1ldGVycz4KICAgICAgICA8RXhwb3N1cmU+IkQwIjwvRXhwb3N1cmU+CiAgICAgICAgPEJsYWNrcz4iRDAiPC9CbGFja3M+CiAgICAgICAgPERpZmZXaGl0ZT4iTjEwMCI8L0RpZmZXaGl0ZT4KICAgICAgICA8Q29udHJhc3Q+IkQwIjwvQ29udHJhc3Q+CiAgICAgICAgPFNoYWRvd3M+IkQwIjwvU2hhZG93cz4KICAgICAgICA8VGVtcD4iRDAiPC9UZW1wPgogICAgICAgIDxXaGl0ZXM+IkQwIjwvV2hpdGVzPgogICAgICAgIDxTcGVjdWxhcj4iRDAiPC9TcGVjdWxhcj4KICAgICAgICA8SGlnaGxpZ2h0cz4iRDAiPC9IaWdobGlnaHRzPgogICAgICAgIDxTYXR1cmF0aW9uPiJEMTAwIjwvU2F0dXJhdGlvbj4KICAgICAgICA8VGludD4iRDAiPC9UaW50PgogICAgICA8L3BhcmFtZXRlcnM+CiAgICA8L3NoYWRlcj4KICAgIDxzaGFkZXI+CiAgICAgIDxuYW1lPiJfX0dyb3VwRW5kIjwvbmFtZT4KICAgICAgPGN1c3RvbW5hbWU+IkJhc2ljIENvcnJlY3Rpb24iPC9jdXN0b21uYW1lPgogICAgICA8dmlzaWJsZT4iMSI8L3Zpc2libGU+CiAgICAgIDxsb2NrZWR2aXNpYmxlPiIwIjwvbG9ja2VkdmlzaWJsZT4KICAgICAgPG9wYWNpdHk+IjEiPC9vcGFjaXR5PgogICAgICA8bWFzaz4iMCI8L21hc2s+CiAgICAgIDx2ZWN0b3JtYXNrPiIwIjwvdmVjdG9ybWFzaz4KICAgICAgPGxpbmtlZD4iMCI8L2xpbmtlZD4KICAgICAgPHBhcmFtZXRlcnM+CiAgICAgICAgPENvbGxhcHNlZD4iMSI8L0NvbGxhcHNlZD4KICAgICAgICA8X19CYXNpYz4iMSI8L19fQmFzaWM+CiAgICAgIDwvcGFyYW1ldGVycz4KICAgIDwvc2hhZGVyPgogICAgPHNoYWRlcj4KICAgICAgPG5hbWU+Il9fR3JvdXBCZWdpbiI8L25hbWU+CiAgICAgIDxjdXN0b21uYW1lPiJfX0dyb3VwQmVnaW4iPC9jdXN0b21uYW1lPgogICAgICA8dmlzaWJsZT4iMSI8L3Zpc2libGU+CiAgICAgIDxsb2NrZWR2aXNpYmxlPiIwIjwvbG9ja2VkdmlzaWJsZT4KICAgICAgPG9wYWNpdHk+IjEiPC9vcGFjaXR5PgogICAgICA8bWFzaz4iMCI8L21hc2s+CiAgICAgIDx2ZWN0b3JtYXNrPiIwIjwvdmVjdG9ybWFzaz4KICAgICAgPGxpbmtlZD4iMCI8L2xpbmtlZD4KICAgICAgPHBhcmFtZXRlcnM+CiAgICAgIDwvcGFyYW1ldGVycz4KICAgIDwvc2hhZGVyPgogICAgPHNoYWRlcj4KICAgICAgPG5hbWU+Il9fR3JvdXBCZWdpbiI8L25hbWU+CiAgICAgIDxjdXN0b21uYW1lPiJfX0dyb3VwQmVnaW4iPC9jdXN0b21uYW1lPgogICAgICA8dmlzaWJsZT4iMSI8L3Zpc2libGU+CiAgICAgIDxsb2NrZWR2aXNpYmxlPiIwIjwvbG9ja2VkdmlzaWJsZT4KICAgICAgPG9wYWNpdHk+IjEiPC9vcGFjaXR5PgogICAgICA8bWFzaz4iMCI8L21hc2s+CiAgICAgIDx2ZWN0b3JtYXNrPiIwIjwvdmVjdG9ybWFzaz4KICAgICAgPGxpbmtlZD4iMCI8L2xpbmtlZD4KICAgICAgPHBhcmFtZXRlcnM+CiAgICAgICAgPF9fRW1iZWQ+IjEiPC9fX0VtYmVkPgogICAgICAgIDxfX1ByZXNldD4iL1VzZXJzL3NlcmdpdWdhYnJpZWwvRG9jdW1lbnRzLyAyMDI1IGx1dHMvQXZlbmdlcnMgRW5kZ2FtZSAtIFMtTG9nMy5jdWJlIjwvX19QcmVzZXQ+CiAgICAgIDwvcGFyYW1ldGVycz4KICAgIDwvc2hhZGVyPgogICAgPHNoYWRlcj4KICAgICAgPG5hbWU+IkxpbmVhcml6ZSI8L25hbWU+CiAgICAgIDxjdXN0b21uYW1lPiJMaW5lYXIgdG8gR2FtbWEgMi40IjwvY3VzdG9tbmFtZT4KICAgICAgPHZpc2libGU+IjEiPC92aXNpYmxlPgogICAgICA8bG9ja2VkdmlzaWJsZT4iMCI8L2xvY2tlZHZpc2libGU+CiAgICAgIDxvcGFjaXR5PiIxIjwvb3BhY2l0eT4KICAgICAgPG1hc2s+IjAiPC9tYXNrPgogICAgICA8dmVjdG9ybWFzaz4iMCI8L3ZlY3Rvcm1hc2s+CiAgICAgIDxsaW5rZWQ+IjAiPC9saW5rZWQ+CiAgICAgIDxwYXJhbWV0ZXJzPgogICAgICAgIDxHYW1tYT4iMC40MTY2NyI8L0dhbW1hPgogICAgICA8L3BhcmFtZXRlcnM+CiAgICA8L3NoYWRlcj4KICAgIDxzaGFkZXI+CiAgICAgIDxuYW1lPiJMVVQiPC9uYW1lPgogICAgICA8Y3VzdG9tbmFtZT4iTFVUIjwvY3VzdG9tbmFtZT4KICAgICAgPHZpc2libGU+IjEiPC92aXNpYmxlPgogICAgICA8bG9ja2VkdmlzaWJsZT4iMCI8L2xvY2tlZHZpc2libGU+CiAgICAgIDxvcGFjaXR5PiIxIjwvb3BhY2l0eT4KICAgICAgPG1hc2s+IjAiPC9tYXNrPgogICAgICA8dmVjdG9ybWFzaz4iMCI8L3ZlY3Rvcm1hc2s+CiAgICAgIDxsaW5rZWQ+IjAiPC9saW5rZWQ+CiAgICAgIDxwYXJhbWV0ZXJzPgogICAgICAgIDxMb29rQ29sb3JTcGFjZT4iY2RjNDkxMzQtMjExZS1mMDJhLTlhZjAtYTRlMTE5NzY4MTczIjwvTG9va0NvbG9yU3BhY2U+CiAgICAgICAgPExVVD4iL1VzZXJzL3NlcmdpdWdhYnJpZWwvRG9jdW1lbnRzLyAyMDI1IGx1dHMvQXZlbmdlcnMgRW5kZ2FtZSAtIFMtTG9nMy5jdWJlIjwvTFVUPgogICAgICA8L3BhcmFtZXRlcnM+CiAgICA8L3NoYWRlcj4KICAgIDxzaGFkZXI+CiAgICAgIDxuYW1lPiJMaW5lYXJpemUiPC9uYW1lPgogICAgICA8Y3VzdG9tbmFtZT4iR2FtbWEgMi40IHRvIGxpbmVhciI8L2N1c3RvbW5hbWU+CiAgICAgIDx2aXNpYmxlPiIxIjwvdmlzaWJsZT4KICAgICAgPGxvY2tlZHZpc2libGU+IjAiPC9sb2NrZWR2aXNpYmxlPgogICAgICA8b3BhY2l0eT4iMSI8L29wYWNpdHk+CiAgICAgIDxtYXNrPiIwIjwvbWFzaz4KICAgICAgPHZlY3Rvcm1hc2s+IjAiPC92ZWN0b3JtYXNrPgogICAgICA8bGlua2VkPiIwIjwvbGlua2VkPgogICAgICA8cGFyYW1ldGVycz4KICAgICAgICA8R2FtbWE+IjIuNCI8L0dhbW1hPgogICAgICA8L3BhcmFtZXRlcnM+CiAgICA8L3NoYWRlcj4KICAgIDxzaGFkZXI+CiAgICAgIDxuYW1lPiJfX0dyb3VwRW5kIjwvbmFtZT4KICAgICAgPGN1c3RvbW5hbWU+IlByZXNldCI8L2N1c3RvbW5hbWU+CiAgICAgIDx2aXNpYmxlPiIxIjwvdmlzaWJsZT4KICAgICAgPGxvY2tlZHZpc2libGU+IjAiPC9sb2NrZWR2aXNpYmxlPgogICAgICA8b3BhY2l0eT4iMSI8L29wYWNpdHk+CiAgICAgIDxtYXNrPiIwIjwvbWFzaz4KICAgICAgPHZlY3Rvcm1hc2s+IjAiPC92ZWN0b3JtYXNrPgogICAgICA8bGlua2VkPiIwIjwvbGlua2VkPgogICAgICA8cGFyYW1ldGVycz4KICAgICAgICA8X19JbnRlbnNpdHk+IjEwMCI8L19fSW50ZW5zaXR5PgogICAgICA8L3BhcmFtZXRlcnM+CiAgICA8L3NoYWRlcj4KICAgIDxzaGFkZXI+CiAgICAgIDxuYW1lPiJMb29rQWRqdXN0bWVudHMiPC9uYW1lPgogICAgICA8Y3VzdG9tbmFtZT4iTG9vayBBZGp1c3RtZW50cyI8L2N1c3RvbW5hbWU+CiAgICAgIDx2aXNpYmxlPiIxIjwvdmlzaWJsZT4KICAgICAgPGxvY2tlZHZpc2libGU+IjAiPC9sb2NrZWR2aXNpYmxlPgogICAgICA8b3BhY2l0eT4iMSI8L29wYWNpdHk+CiAgICAgIDxtYXNrPiIwIjwvbWFzaz4KICAgICAgPHZlY3Rvcm1hc2s+IjAiPC92ZWN0b3JtYXNrPgogICAgICA8bGlua2VkPiIwIjwvbGlua2VkPgogICAgICA8cGFyYW1ldGVycz4KICAgICAgICA8TG9IaVNwbGl0PiJEMCI8L0xvSGlTcGxpdD4KICAgICAgICA8U2hhZG93VGludC5aPiJEMSI8L1NoYWRvd1RpbnQuWj4KICAgICAgICA8SGlnaGxpZ2h0VGludC5aPiJEMSI8L0hpZ2hsaWdodFRpbnQuWj4KICAgICAgICA8VmlicmFuY2U+IkQwIjwvVmlicmFuY2U+CiAgICAgICAgPEZhZGU+IkQwIjwvRmFkZT4KICAgICAgICA8U2hhZG93VGludC5ZPiJEMSI8L1NoYWRvd1RpbnQuWT4KICAgICAgICA8SGlnaGxpZ2h0VGludC5YPiJEMSI8L0hpZ2hsaWdodFRpbnQuWD4KICAgICAgICA8SGlnaGxpZ2h0VGludC5ZPiJEMSI8L0hpZ2hsaWdodFRpbnQuWT4KICAgICAgICA8U2F0dXJhdGlvbj4iRDEwMCI8L1NhdHVyYXRpb24+CiAgICAgICAgPFNoYWRvd1RpbnQuWD4iRDEiPC9TaGFkb3dUaW50Llg+CiAgICAgIDwvcGFyYW1ldGVycz4KICAgIDwvc2hhZGVyPgogICAgPHNoYWRlcj4KICAgICAgPG5hbWU+IlNoYXJwbmVzcyI8L25hbWU+CiAgICAgIDxjdXN0b21uYW1lPiJTaGFycG5lc3MiPC9jdXN0b21uYW1lPgogICAgICA8dmlzaWJsZT4iMSI8L3Zpc2libGU+CiAgICAgIDxsb2NrZWR2aXNpYmxlPiIwIjwvbG9ja2VkdmlzaWJsZT4KICAgICAgPG9wYWNpdHk+IjEiPC9vcGFjaXR5PgogICAgICA8bWFzaz4iMCI8L21hc2s+CiAgICAgIDx2ZWN0b3JtYXNrPiIwIjwvdmVjdG9ybWFzaz4KICAgICAgPGxpbmtlZD4iMCI8L2xpbmtlZD4KICAgICAgPHBhcmFtZXRlcnM+CiAgICAgICAgPFNoYXJwbmVzcz4iRDAiPC9TaGFycG5lc3M+CiAgICAgIDwvcGFyYW1ldGVycz4KICAgIDwvc2hhZGVyPgogICAgPHNoYWRlcj4KICAgICAgPG5hbWU+Il9fR3JvdXBFbmQiPC9uYW1lPgogICAgICA8Y3VzdG9tbmFtZT4iTG9vayI8L2N1c3RvbW5hbWU+CiAgICAgIDx2aXNpYmxlPiIxIjwvdmlzaWJsZT4KICAgICAgPGxvY2tlZHZpc2libGU+IjAiPC9sb2NrZWR2aXNpYmxlPgogICAgICA8b3BhY2l0eT4iMSI8L29wYWNpdHk+CiAgICAgIDxtYXNrPiIwIjwvbWFzaz4KICAgICAgPHZlY3Rvcm1hc2s+IjAiPC92ZWN0b3JtYXNrPgogICAgICA8bGlua2VkPiIwIjwvbGlua2VkPgogICAgICA8cGFyYW1ldGVycz4KICAgICAgICA8X19Mb29rPiIxIjwvX19Mb29rPgogICAgICAgIDxDb2xsYXBzZWQ+IjEiPC9Db2xsYXBzZWQ+CiAgICAgIDwvcGFyYW1ldGVycz4KICAgIDwvc2hhZGVyPgogICAgPHNoYWRlcj4KICAgICAgPG5hbWU+Il9fR3JvdXBCZWdpbiI8L25hbWU+CiAgICAgIDxjdXN0b21uYW1lPiJfX0dyb3VwQmVnaW4iPC9jdXN0b21uYW1lPgogICAgICA8dmlzaWJsZT4iMSI8L3Zpc2libGU+CiAgICAgIDxsb2NrZWR2aXNpYmxlPiIwIjwvbG9ja2VkdmlzaWJsZT4KICAgICAgPG9wYWNpdHk+IjEiPC9vcGFjaXR5PgogICAgICA8bWFzaz4iMCI8L21hc2s+CiAgICAgIDx2ZWN0b3JtYXNrPiIwIjwvdmVjdG9ybWFzaz4KICAgICAgPGxpbmtlZD4iMCI8L2xpbmtlZD4KICAgICAgPHBhcmFtZXRlcnM+CiAgICAgIDwvcGFyYW1ldGVycz4KICAgIDwvc2hhZGVyPgogICAgPHNoYWRlcj4KICAgICAgPG5hbWU+IlRvbmVDdXJ2ZXMiPC9uYW1lPgogICAgICA8Y3VzdG9tbmFtZT4iVG9uZStSR0IgQ3VydmVzIjwvY3VzdG9tbmFtZT4KICAgICAgPHZpc2libGU+IjEiPC92aXNpYmxlPgogICAgICA8bG9ja2VkdmlzaWJsZT4iMCI8L2xvY2tlZHZpc2libGU+CiAgICAgIDxvcGFjaXR5PiIxIjwvb3BhY2l0eT4KICAgICAgPG1hc2s+IjAiPC9tYXNrPgogICAgICA8dmVjdG9ybWFzaz4iMCI8L3ZlY3Rvcm1hc2s+CiAgICAgIDxsaW5rZWQ+IjAiPC9saW5rZWQ+CiAgICAgIDxwYXJhbWV0ZXJzPgogICAgICAgIDxUb25lQ3VydmVzTHVtYT4iY3ViaWMsdmFsdWU6MEAwOzFAMSI8L1RvbmVDdXJ2ZXNMdW1hPgogICAgICAgIDxUb25lQ3VydmVzQmx1ZT4iY3ViaWMsdmFsdWU6MEAwOzFAMSI8L1RvbmVDdXJ2ZXNCbHVlPgogICAgICAgIDxUb25lQ3VydmVzR3JlZW4+ImN1YmljLHZhbHVlOjBAMDsxQDEiPC9Ub25lQ3VydmVzR3JlZW4+CiAgICAgICAgPFJhbmdlPiIxMDAiPC9SYW5nZT4KICAgICAgICA8VG9uZUN1cnZlc1JlZD4iY3ViaWMsdmFsdWU6MEAwOzFAMSI8L1RvbmVDdXJ2ZXNSZWQ+CiAgICAgIDwvcGFyYW1ldGVycz4KICAgIDwvc2hhZGVyPgogICAgPHNoYWRlcj4KICAgICAgPG5hbWU+IkNvbG9yQ3VydmVzIjwvbmFtZT4KICAgICAgPGN1c3RvbW5hbWU+Ikh1ZS9IdWUgSHVlL0x1bSBIdWUvU2F0IEx1bS9TYXQgQ3VydmVzIjwvY3VzdG9tbmFtZT4KICAgICAgPHZpc2libGU+IjEiPC92aXNpYmxlPgogICAgICA8bG9ja2VkdmlzaWJsZT4iMCI8L2xvY2tlZHZpc2libGU+CiAgICAgIDxvcGFjaXR5PiIxIjwvb3BhY2l0eT4KICAgICAgPG1hc2s+IjAiPC9tYXNrPgogICAgICA8dmVjdG9ybWFzaz4iMCI8L3ZlY3Rvcm1hc2s+CiAgICAgIDxsaW5rZWQ+IjAiPC9saW5rZWQ+CiAgICAgIDxwYXJhbWV0ZXJzPgogICAgICAgIDxIdWVIdWVFbmFibGVkPiIxIjwvSHVlSHVlRW5hYmxlZD4KICAgICAgICA8SHVlSHVlQ3VydmU+Im5vbi1vdmVyLWNvbnN0LHZhbHVlOjFAMDsxQDEiPC9IdWVIdWVDdXJ2ZT4KICAgICAgICA8U2F0U2F0RW5hYmxlZD4iMSI8L1NhdFNhdEVuYWJsZWQ+CiAgICAgICAgPEh1ZVNhdEVuYWJsZWQ+IjEiPC9IdWVTYXRFbmFibGVkPgogICAgICAgIDxMdW1TYXRFbmFibGVkPiIxIjwvTHVtU2F0RW5hYmxlZD4KICAgICAgICA8U2F0U2F0Q3VydmU+Im5vbi1vdmVyLWNvbnN0LHZhbHVlOjBAMDswQDEiPC9TYXRTYXRDdXJ2ZT4KICAgICAgICA8SHVlTHVtRW5hYmxlZD4iMSI8L0h1ZUx1bUVuYWJsZWQ+CiAgICAgICAgPEh1ZUx1bUN1cnZlPiJub24tb3Zlci1jb25zdCx2YWx1ZToxQDA7MUAxIjwvSHVlTHVtQ3VydmU+CiAgICAgICAgPEx1bVNhdEN1cnZlPiJub24tb3Zlci1jb25zdCx2YWx1ZTowQDA7MEAxIjwvTHVtU2F0Q3VydmU+CiAgICAgICAgPEh1ZVNhdEN1cnZlPiJub24tb3Zlci1jb25zdCx2YWx1ZToxQDA7MUAxIjwvSHVlU2F0Q3VydmU+CiAgICAgIDwvcGFyYW1ldGVycz4KICAgIDwvc2hhZGVyPgogICAgPHNoYWRlcj4KICAgICAgPG5hbWU+Il9fR3JvdXBFbmQiPC9uYW1lPgogICAgICA8Y3VzdG9tbmFtZT4iQ3VydmVzIjwvY3VzdG9tbmFtZT4KICAgICAgPHZpc2libGU+IjEiPC92aXNpYmxlPgogICAgICA8bG9ja2VkdmlzaWJsZT4iMCI8L2xvY2tlZHZpc2libGU+CiAgICAgIDxvcGFjaXR5PiIxIjwvb3BhY2l0eT4KICAgICAgPG1hc2s+IjAiPC9tYXNrPgogICAgICA8dmVjdG9ybWFzaz4iMCI8L3ZlY3Rvcm1hc2s+CiAgICAgIDxsaW5rZWQ+IjAiPC9saW5rZWQ+CiAgICAgIDxwYXJhbWV0ZXJzPgogICAgICAgIDxDb2xsYXBzZWQ+IjEiPC9Db2xsYXBzZWQ+CiAgICAgICAgPF9fQ3VydmVzPiIxIjwvX19DdXJ2ZXM+CiAgICAgIDwvcGFyYW1ldGVycz4KICAgIDwvc2hhZGVyPgogICAgPHNoYWRlcj4KICAgICAgPG5hbWU+Il9fR3JvdXBCZWdpbiI8L25hbWU+CiAgICAgIDxjdXN0b21uYW1lPiJfX0dyb3VwQmVnaW4iPC9jdXN0b21uYW1lPgogICAgICA8dmlzaWJsZT4iMSI8L3Zpc2libGU+CiAgICAgIDxsb2NrZWR2aXNpYmxlPiIwIjwvbG9ja2VkdmlzaWJsZT4KICAgICAgPG9wYWNpdHk+IjEiPC9vcGFjaXR5PgogICAgICA8bWFzaz4iMCI8L21hc2s+CiAgICAgIDx2ZWN0b3JtYXNrPiIwIjwvdmVjdG9ybWFzaz4KICAgICAgPGxpbmtlZD4iMCI8L2xpbmtlZD4KICAgICAgPHBhcmFtZXRlcnM+CiAgICAgIDwvcGFyYW1ldGVycz4KICAgIDwvc2hhZGVyPgogICAgPHNoYWRlcj4KICAgICAgPG5hbWU+IldoZWVscyI8L25hbWU+CiAgICAgIDxjdXN0b21uYW1lPiJXaGVlbHMiPC9jdXN0b21uYW1lPgogICAgICA8dmlzaWJsZT4iMSI8L3Zpc2libGU+CiAgICAgIDxsb2NrZWR2aXNpYmxlPiIwIjwvbG9ja2VkdmlzaWJsZT4KICAgICAgPG9wYWNpdHk+IjEiPC9vcGFjaXR5PgogICAgICA8bWFzaz4iMCI8L21hc2s+CiAgICAgIDx2ZWN0b3JtYXNrPiIwIjwvdmVjdG9ybWFzaz4KICAgICAgPGxpbmtlZD4iMCI8L2xpbmtlZD4KICAgICAgPHBhcmFtZXRlcnM+CiAgICAgICAgPERpZmZXaGl0ZT4iTjEwMCI8L0RpZmZXaGl0ZT4KICAgICAgICA8TWlkdG9uZXMuWj4iRDAiPC9NaWR0b25lcy5aPgogICAgICAgIDxTaGFkb3dzLlk+IkQwIjwvU2hhZG93cy5ZPgogICAgICAgIDxTcGVjdWxhci5aPiJEMCI8L1NwZWN1bGFyLlo+CiAgICAgICAgPFNoYWRvd3MuWD4iRDAiPC9TaGFkb3dzLlg+CiAgICAgICAgPEhpZ2hsaWdodHMuWj4iRDAiPC9IaWdobGlnaHRzLlo+CiAgICAgICAgPEhpZ2hsaWdodHMuWD4iRDAiPC9IaWdobGlnaHRzLlg+CiAgICAgICAgPFNoYWRvd3MuWj4iRDAiPC9TaGFkb3dzLlo+CiAgICAgICAgPFNwZWN1bGFyLlk+IkQwIjwvU3BlY3VsYXIuWT4KICAgICAgICA8TWlkdG9uZXMuWT4iRDAiPC9NaWR0b25lcy5ZPgogICAgICAgIDxNaWR0b25lcy5YPiJEMCI8L01pZHRvbmVzLlg+CiAgICAgICAgPFNwZWN1bGFyLlg+IkQwIjwvU3BlY3VsYXIuWD4KICAgICAgICA8SGlnaGxpZ2h0cy5ZPiJEMCI8L0hpZ2hsaWdodHMuWT4KICAgICAgPC9wYXJhbWV0ZXJzPgogICAgPC9zaGFkZXI+CiAgICA8c2hhZGVyPgogICAgICA8bmFtZT4iX19Hcm91cEVuZCI8L25hbWU+CiAgICAgIDxjdXN0b21uYW1lPiJXaGVlbHMiPC9jdXN0b21uYW1lPgogICAgICA8dmlzaWJsZT4iMSI8L3Zpc2libGU+CiAgICAgIDxsb2NrZWR2aXNpYmxlPiIwIjwvbG9ja2VkdmlzaWJsZT4KICAgICAgPG9wYWNpdHk+IjEiPC9vcGFjaXR5PgogICAgICA8bWFzaz4iMCI8L21hc2s+CiAgICAgIDx2ZWN0b3JtYXNrPiIwIjwvdmVjdG9ybWFzaz4KICAgICAgPGxpbmtlZD4iMCI8L2xpbmtlZD4KICAgICAgPHBhcmFtZXRlcnM+CiAgICAgICAgPENvbGxhcHNlZD4iMSI8L0NvbGxhcHNlZD4KICAgICAgICA8X19XaGVlbHM+IjEiPC9fX1doZWVscz4KICAgICAgPC9wYXJhbWV0ZXJzPgogICAgPC9zaGFkZXI+CiAgICA8c2hhZGVyPgogICAgICA8bmFtZT4iX19Hcm91cEJlZ2luIjwvbmFtZT4KICAgICAgPGN1c3RvbW5hbWU+Il9fR3JvdXBCZWdpbiI8L2N1c3RvbW5hbWU+CiAgICAgIDx2aXNpYmxlPiIxIjwvdmlzaWJsZT4KICAgICAgPGxvY2tlZHZpc2libGU+IjAiPC9sb2NrZWR2aXNpYmxlPgogICAgICA8b3BhY2l0eT4iMSI8L29wYWNpdHk+CiAgICAgIDxtYXNrPiIwIjwvbWFzaz4KICAgICAgPHZlY3Rvcm1hc2s+IjAiPC92ZWN0b3JtYXNrPgogICAgICA8bGlua2VkPiIwIjwvbGlua2VkPgogICAgICA8cGFyYW1ldGVycz4KICAgICAgPC9wYXJhbWV0ZXJzPgogICAgPC9zaGFkZXI+CiAgICA8c2hhZGVyPgogICAgICA8bmFtZT4iU2Vjb25kYXJ5TGF5ZXIiPC9uYW1lPgogICAgICA8Y3VzdG9tbmFtZT4iU2Vjb25kYXJ5TGF5ZXIiPC9jdXN0b21uYW1lPgogICAgICA8dmlzaWJsZT4iMSI8L3Zpc2libGU+CiAgICAgIDxsb2NrZWR2aXNpYmxlPiIwIjwvbG9ja2VkdmlzaWJsZT4KICAgICAgPG9wYWNpdHk+IjEiPC9vcGFjaXR5PgogICAgICA8bWFzaz4iMCI8L21hc2s+CiAgICAgIDx2ZWN0b3JtYXNrPiIwIjwvdmVjdG9ybWFzaz4KICAgICAgPGxpbmtlZD4iMCI8L2xpbmtlZD4KICAgICAgPHBhcmFtZXRlcnM+CiAgICAgICAgPGVuYWJsZUhMUy5ZPiJOMSI8L2VuYWJsZUhMUy5ZPgogICAgICAgIDxNaWR0b25lcy5aPiJEMCI8L01pZHRvbmVzLlo+CiAgICAgICAgPFNoYWRvd3MuWT4iRDAiPC9TaGFkb3dzLlk+CiAgICAgICAgPFNwZWN1bGFyLlo+IkQwIjwvU3BlY3VsYXIuWj4KICAgICAgICA8dG9sZXJhbmNlSExTLlo+Ik4wIjwvdG9sZXJhbmNlSExTLlo+CiAgICAgICAgPHJhbmdlSExTLlg+Ik4wIjwvcmFuZ2VITFMuWD4KICAgICAgICA8RGVub2lzZT4iRDAiPC9EZW5vaXNlPgogICAgICAgIDxyYW5nZUhMUy5ZPiJOMCI8L3JhbmdlSExTLlk+CiAgICAgICAgPG1pZGRsZUhMUy5aPiJOMC41IjwvbWlkZGxlSExTLlo+CiAgICAgICAgPFNoYWRvd3MuWD4iRDAiPC9TaGFkb3dzLlg+CiAgICAgICAgPFNoYXJwbmVzcz4iRDAiPC9TaGFycG5lc3M+CiAgICAgICAgPGVuYWJsZUhMUy5YPiJOMSI8L2VuYWJsZUhMUy5YPgogICAgICAgIDxIaWdobGlnaHRzLlo+IkQwIjwvSGlnaGxpZ2h0cy5aPgogICAgICAgIDxpbnZlcnQuWD4iRDAiPC9pbnZlcnQuWD4KICAgICAgICA8SGlnaGxpZ2h0cy5YPiJEMCI8L0hpZ2hsaWdodHMuWD4KICAgICAgICA8ZW5hYmxlSExTLlo+Ik4xIjwvZW5hYmxlSExTLlo+CiAgICAgICAgPENvbnRyYXN0PiJEMCI8L0NvbnRyYXN0PgogICAgICAgIDxtaWRkbGVITFMuWD4iTjE4MCI8L21pZGRsZUhMUy5YPgogICAgICAgIDx0b2xlcmFuY2VITFMuWT4iTjAiPC90b2xlcmFuY2VITFMuWT4KICAgICAgICA8U2hhZG93cy5aPiJEMCI8L1NoYWRvd3MuWj4KICAgICAgICA8U3BlY3VsYXIuWT4iRDAiPC9TcGVjdWxhci5ZPgogICAgICAgIDxNaWR0b25lcy5ZPiJEMCI8L01pZHRvbmVzLlk+CiAgICAgICAgPFRlbXA+IkQwIjwvVGVtcD4KICAgICAgICA8dG9sZXJhbmNlSExTLlg+Ik4wIjwvdG9sZXJhbmNlSExTLlg+CiAgICAgICAgPE1pZHRvbmVzLlg+IkQwIjwvTWlkdG9uZXMuWD4KICAgICAgICA8U3BlY3VsYXIuWD4iRDAiPC9TcGVjdWxhci5YPgogICAgICAgIDxCbHVyPiJEMCI8L0JsdXI+CiAgICAgICAgPG1pZGRsZUhMUy5ZPiJOMC41IjwvbWlkZGxlSExTLlk+CiAgICAgICAgPHJhbmdlSExTLlo+Ik4wIjwvcmFuZ2VITFMuWj4KICAgICAgICA8U2F0dXJhdGlvbj4iRDEwMCI8L1NhdHVyYXRpb24+CiAgICAgICAgPEhpZ2hsaWdodHMuWT4iRDAiPC9IaWdobGlnaHRzLlk+CiAgICAgICAgPFRpbnQ+IkQwIjwvVGludD4KICAgICAgICA8U2hvd0tleT4iRDAiPC9TaG93S2V5PgogICAgICA8L3BhcmFtZXRlcnM+CiAgICA8L3NoYWRlcj4KICAgIDxzaGFkZXI+CiAgICAgIDxuYW1lPiJfX0dyb3VwRW5kIjwvbmFtZT4KICAgICAgPGN1c3RvbW5hbWU+IlNlY29uZGFyaWVzIjwvY3VzdG9tbmFtZT4KICAgICAgPHZpc2libGU+IjEiPC92aXNpYmxlPgogICAgICA8bG9ja2VkdmlzaWJsZT4iMCI8L2xvY2tlZHZpc2libGU+CiAgICAgIDxvcGFjaXR5PiIxIjwvb3BhY2l0eT4KICAgICAgPG1hc2s+IjAiPC9tYXNrPgogICAgICA8dmVjdG9ybWFzaz4iMCI8L3ZlY3Rvcm1hc2s+CiAgICAgIDxsaW5rZWQ+IjAiPC9saW5rZWQ+CiAgICAgIDxwYXJhbWV0ZXJzPgogICAgICAgIDxfX1NlY29uZGFyaWVzPiIxIjwvX19TZWNvbmRhcmllcz4KICAgICAgICA8Q29sbGFwc2VkPiIxIjwvQ29sbGFwc2VkPgogICAgICA8L3BhcmFtZXRlcnM+CiAgICA8L3NoYWRlcj4KICAgIDxzaGFkZXI+CiAgICAgIDxuYW1lPiJfX0dyb3VwQmVnaW4iPC9uYW1lPgogICAgICA8Y3VzdG9tbmFtZT4iX19Hcm91cEJlZ2luIjwvY3VzdG9tbmFtZT4KICAgICAgPHZpc2libGU+IjEiPC92aXNpYmxlPgogICAgICA8bG9ja2VkdmlzaWJsZT4iMCI8L2xvY2tlZHZpc2libGU+CiAgICAgIDxvcGFjaXR5PiIxIjwvb3BhY2l0eT4KICAgICAgPG1hc2s+IjAiPC9tYXNrPgogICAgICA8dmVjdG9ybWFzaz4iMCI8L3ZlY3Rvcm1hc2s+CiAgICAgIDxsaW5rZWQ+IjAiPC9saW5rZWQ+CiAgICAgIDxwYXJhbWV0ZXJzPgogICAgICA8L3BhcmFtZXRlcnM+CiAgICA8L3NoYWRlcj4KICAgIDxzaGFkZXI+CiAgICAgIDxuYW1lPiJWaWduZXR0ZSI8L25hbWU+CiAgICAgIDxjdXN0b21uYW1lPiJWaWduZXR0ZSI8L2N1c3RvbW5hbWU+CiAgICAgIDx2aXNpYmxlPiIxIjwvdmlzaWJsZT4KICAgICAgPGxvY2tlZHZpc2libGU+IjAiPC9sb2NrZWR2aXNpYmxlPgogICAgICA8b3BhY2l0eT4iMSI8L29wYWNpdHk+CiAgICAgIDxtYXNrPiIwIjwvbWFzaz4KICAgICAgPHZlY3Rvcm1hc2s+IjIiPC92ZWN0b3JtYXNrPgogICAgICA8bGlua2VkPiIwIjwvbGlua2VkPgogICAgICA8c2hhZGVybWFzaz4KICAgICAgICA8bmFtZT4iIjwvbmFtZT4KICAgICAgICA8bWlkcG9pbnQ+IjUwIjwvbWlkcG9pbnQ+CiAgICAgICAgPHJvdW5kbmVzcz4iMCI8L3JvdW5kbmVzcz4KICAgICAgICA8ZmVhdGhlcj4iNTAiPC9mZWF0aGVyPgogICAgICA8L3NoYWRlcm1hc2s+CiAgICAgIDxwYXJhbWV0ZXJzPgogICAgICAgIDxfX0ZlYXRoZXI+IjUwIjwvX19GZWF0aGVyPgogICAgICAgIDxfX1JvdW5kbmVzcz4iRDAiPC9fX1JvdW5kbmVzcz4KICAgICAgICA8VmlnbmV0dGU+IkQwIjwvVmlnbmV0dGU+CiAgICAgICAgPF9fTWlkcG9pbnQ+IjUwIjwvX19NaWRwb2ludD4KICAgICAgPC9wYXJhbWV0ZXJzPgogICAgPC9zaGFkZXI+CiAgICA8c2hhZGVyPgogICAgICA8bmFtZT4iSGlnaGxpZ2h0UmVjb3ZlcnkiPC9uYW1lPgogICAgICA8Y3VzdG9tbmFtZT4iSGlnaGxpZ2h0UmVjb3ZlcnkiPC9jdXN0b21uYW1lPgogICAgICA8dmlzaWJsZT4iMSI8L3Zpc2libGU+CiAgICAgIDxsb2NrZWR2aXNpYmxlPiIwIjwvbG9ja2VkdmlzaWJsZT4KICAgICAgPG9wYWNpdHk+IjEiPC9vcGFjaXR5PgogICAgICA8bWFzaz4iMCI8L21hc2s+CiAgICAgIDx2ZWN0b3JtYXNrPiIwIjwvdmVjdG9ybWFzaz4KICAgICAgPGxpbmtlZD4iMCI8L2xpbmtlZD4KICAgICAgPHBhcmFtZXRlcnM+CiAgICAgICAgPEdhbW1hPiIyLjQiPC9HYW1tYT4KICAgICAgPC9wYXJhbWV0ZXJzPgogICAgPC9zaGFkZXI+CiAgICA8c2hhZGVyPgogICAgICA8bmFtZT4iX19Hcm91cEVuZCI8L25hbWU+CiAgICAgIDxjdXN0b21uYW1lPiJFZmZlY3RzIjwvY3VzdG9tbmFtZT4KICAgICAgPHZpc2libGU+IjEiPC92aXNpYmxlPgogICAgICA8bG9ja2VkdmlzaWJsZT4iMCI8L2xvY2tlZHZpc2libGU+CiAgICAgIDxvcGFjaXR5PiIxIjwvb3BhY2l0eT4KICAgICAgPG1hc2s+IjAiPC9tYXNrPgogICAgICA8dmVjdG9ybWFzaz4iMCI8L3ZlY3Rvcm1hc2s+CiAgICAgIDxsaW5rZWQ+IjAiPC9saW5rZWQ+CiAgICAgIDxwYXJhbWV0ZXJzPgogICAgICAgIDxDb2xsYXBzZWQ+IjEiPC9Db2xsYXBzZWQ+CiAgICAgICAgPF9fRWZmZWN0cz4iMSI8L19fRWZmZWN0cz4KICAgICAgPC9wYXJhbWV0ZXJzPgogICAgPC9zaGFkZXI+CiAgICA8c2hhZGVyPgogICAgICA8bmFtZT4iX19Hcm91cEVuZCI8L25hbWU+CiAgICAgIDxjdXN0b21uYW1lPiJQcmVtaWVyZSBDb2xvciI8L2N1c3RvbW5hbWU+CiAgICAgIDx2aXNpYmxlPiIxIjwvdmlzaWJsZT4KICAgICAgPGxvY2tlZHZpc2libGU+IjAiPC9sb2NrZWR2aXNpYmxlPgogICAgICA8b3BhY2l0eT4iMSI8L29wYWNpdHk+CiAgICAgIDxtYXNrPiIwIjwvbWFzaz4KICAgICAgPHZlY3Rvcm1hc2s+IjAiPC92ZWN0b3JtYXNrPgogICAgICA8bGlua2VkPiIwIjwvbGlua2VkPgogICAgICA8cGFyYW1ldGVycz4KICAgICAgICA8Q29sbGFwc2VkPiIxIjwvQ29sbGFwc2VkPgogICAgICA8L3BhcmFtZXRlcnM+CiAgICA8L3NoYWRlcj4KICA8L2tleWZyYW1lPgogIDxlbWJlZGRlZGx1dD4KICAgIDxoYXNoPjY5MjhDMTY4RTlDOTc0MjI2MUU4Mjc0Q0E1RjVGNDk4PC9oYXNoPgogICAgPGZpbGVuYW1lPi9Vc2Vycy9zZXJnaXVnYWJyaWVsL0RvY3VtZW50cy8gMjAyNSBsdXRzL0F2ZW5nZXJzIEVuZGdhbWUgLSBTLUxvZzMuY3ViZTwvZmlsZW5hbWU+CiAgPC9lbWJlZGRlZGx1dD4KICA8cHJvcGVydGllcz4KICA8L3Byb3BlcnRpZXM+CjwvTHVtZXRyaT4K</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>3</parameterid>
+									<name> </name>
+									<value>-91445760000000000,true,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>4</parameterid>
+									<name> </name>
+									<hash>63866a15-9327-e4cb-ff31-c9ea0000000e</hash>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>5</parameterid>
+									<name>Input LUT</name>
+									<LowerBound>0</LowerBound>
+									<UpperBound>11</UpperBound>
+									<value>0,0,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>7</parameterid>
+									<name>Temperature</name>
+									<LowerBound>-300</LowerBound>
+									<UpperBound>300</UpperBound>
+									<LowerUIBound>-100</LowerUIBound>
+									<UpperUIBound>100</UpperUIBound>
+									<value>-91445760000000000,0.,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>8</parameterid>
+									<name>Tint</name>
+									<LowerBound>-300</LowerBound>
+									<UpperBound>300</UpperBound>
+									<LowerUIBound>-100</LowerUIBound>
+									<UpperUIBound>100</UpperUIBound>
+									<value>-91445760000000000,0.,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>20</parameterid>
+									<name>Saturation</name>
+									<LowerBound>0</LowerBound>
+									<UpperBound>300</UpperBound>
+									<UpperUIBound>200</UpperUIBound>
+									<value>-91445760000000000,100.,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>11</parameterid>
+									<name>Exposure</name>
+									<LowerBound>-7</LowerBound>
+									<UpperBound>7</UpperBound>
+									<LowerUIBound>-5</LowerUIBound>
+									<UpperUIBound>5</UpperUIBound>
+									<value>-91445760000000000,0.,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>12</parameterid>
+									<name>Contrast</name>
+									<LowerBound>-150</LowerBound>
+									<UpperBound>150</UpperBound>
+									<LowerUIBound>-100</LowerUIBound>
+									<UpperUIBound>100</UpperUIBound>
+									<value>-91445760000000000,0.,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>13</parameterid>
+									<name>Highlights</name>
+									<LowerBound>-150</LowerBound>
+									<UpperBound>150</UpperBound>
+									<LowerUIBound>-100</LowerUIBound>
+									<UpperUIBound>100</UpperUIBound>
+									<value>-91445760000000000,-35.94132232666015625,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>14</parameterid>
+									<name>Shadows</name>
+									<LowerBound>-150</LowerBound>
+									<UpperBound>150</UpperBound>
+									<LowerUIBound>-100</LowerUIBound>
+									<UpperUIBound>100</UpperUIBound>
+									<value>-91445760000000000,0.,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>15</parameterid>
+									<name>Whites</name>
+									<LowerBound>-150</LowerBound>
+									<UpperBound>150</UpperBound>
+									<LowerUIBound>-100</LowerUIBound>
+									<UpperUIBound>100</UpperUIBound>
+									<value>-91445760000000000,0.,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>16</parameterid>
+									<name>Blacks</name>
+									<LowerBound>-150</LowerBound>
+									<UpperBound>150</UpperBound>
+									<LowerUIBound>-100</LowerUIBound>
+									<UpperUIBound>100</UpperUIBound>
+									<value>-91445760000000000,0.,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>23</parameterid>
+									<name> </name>
+									<value>-91445760000000000,true,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>24</parameterid>
+									<name> </name>
+									<hash>cba883d9-bb01-3ee8-8482-f27a0000009e</hash>
+									<value>LwBVAHMAZQByAHMALwBzAGUAcgBnAGkAdQBnAGEAYgByAGkAZQBsAC8ARABvAGMAdQBtAGUAbgB0AHMALwAgADIAMAAyADUAIABsAHUAdABzAC8AQQB2AGUAbgBnAGUAcgBzACAARQBuAGQAZwBhAG0AZQAgAC0AIABTAC0ATABvAGcAMwAuAGMAdQBiAGUAAAA=</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>25</parameterid>
+									<name>Look</name>
+									<LowerBound>0</LowerBound>
+									<UpperBound>68</UpperBound>
+									<value>0,0,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>26</parameterid>
+									<name>Intensity</name>
+									<LowerBound>0</LowerBound>
+									<UpperBound>200</UpperBound>
+									<value>-91445760000000000,100.,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>28</parameterid>
+									<name>Faded Film</name>
+									<LowerBound>0</LowerBound>
+									<UpperBound>150</UpperBound>
+									<UpperUIBound>100</UpperUIBound>
+									<value>-91445760000000000,0.,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>29</parameterid>
+									<name>Sharpen</name>
+									<LowerBound>-100</LowerBound>
+									<UpperBound>100</UpperBound>
+									<value>-91445760000000000,0.,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>30</parameterid>
+									<name>Vibrance</name>
+									<LowerBound>-100</LowerBound>
+									<UpperBound>100</UpperBound>
+									<value>-91445760000000000,0.,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>31</parameterid>
+									<name>Saturation</name>
+									<LowerBound>0</LowerBound>
+									<UpperBound>300</UpperBound>
+									<UpperUIBound>200</UpperUIBound>
+									<value>-91445760000000000,100.,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>32</parameterid>
+									<name></name>
+									<hash>49d2fca5-ddd1-a393-0544-f6d80000002c</hash>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>33</parameterid>
+									<name>Tint Balance</name>
+									<LowerBound>-150</LowerBound>
+									<UpperBound>150</UpperBound>
+									<LowerUIBound>-100</LowerUIBound>
+									<UpperUIBound>100</UpperUIBound>
+									<value>-91445760000000000,0.,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>37</parameterid>
+									<name> </name>
+									<value>-91445760000000000,true,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>39</parameterid>
+									<name> </name>
+									<hash>261f3840-e8cf-a8cd-fa5e-bac10000082c</hash>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>42</parameterid>
+									<name>Hue vs Sat</name>
+									<hash>f146cafe-eab3-19ed-0ee8-de0e00000214</hash>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>46</parameterid>
+									<name> </name>
+									<value>-91445760000000000,true,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>47</parameterid>
+									<name> </name>
+									<hash>0b5436c4-bae0-bb64-a2f6-c8c40000006c</hash>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>50</parameterid>
+									<name> </name>
+									<value>-91445760000000000,true,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>51</parameterid>
+									<name>Amount</name>
+									<LowerBound>-5</LowerBound>
+									<UpperBound>5</UpperBound>
+									<LowerUIBound>-3</LowerUIBound>
+									<UpperUIBound>3</UpperUIBound>
+									<value>-91445760000000000,0.,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>52</parameterid>
+									<name>Midpoint</name>
+									<LowerBound>0</LowerBound>
+									<UpperBound>100</UpperBound>
+									<value>-91445760000000000,50.,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>53</parameterid>
+									<name>Roundness</name>
+									<LowerBound>-100</LowerBound>
+									<UpperBound>100</UpperBound>
+									<value>-91445760000000000,0.,0,0,0,0,0,0</value>
+								</parameter>
+								<parameter authoringApp="PremierePro">
+									<parameterid>54</parameterid>
+									<name>Feather</name>
+									<LowerBound>0</LowerBound>
+									<UpperBound>100</UpperBound>
+									<value>-91445760000000000,50.,0,0,0,0,0,0</value>
+								</parameter>
+							</effect>
+						</filter>

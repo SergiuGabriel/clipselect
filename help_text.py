@@ -563,6 +563,47 @@ fișierelor. A doua cameră nu are nevoie de biserică: fără Brown, first look
 și selecțiile nunții noi cu aceleași culori, în orice ordine.</li>
 <li><b>Transcriere</b>: orice fișier cu sunet; Import XML ia clipurile în ordinea de pe timeline.</li>
 </ul>
+<h3>Automat, fără culori (din folderul nunții)</h3>
+<p>Apeși <b>Folderul nunții…</b> și alegi folderul făcut de Card Offload (sau imporți un XML din Creează proiectul fără nicio
+culoare). Aplicația face singură secvența: toate camerele întregi, drona, iar la final recorderul și lavalierele (pentru un
+recorder care scrie mai multe fișiere pe aceeași înregistrare, de exemplu Tascam _3 / _4 / _MIX, se ia unul singur: MIX dacă există).
+La Build:</p>
+<ul>
+<li><b>Ceasul camerelor</b>: fiecare cameră are ceasul ei (ora de filmare din fișier, altfel data fișierului minus durata). Toate
+clipurile cu sunet sunt sincronizate pe recorder, ca la Multicam; de acolo iese eroarea de ceas a fiecărei camere (la Alex și Andreea
+fx3 era cu ~2 ore în urmă, a74 cu o zi) și toate ajung pe același ceas.</li>
+<li><b>Fețele</b>: 5 cadre din fiecare clip, recunoaștere facială locală. Mirele = fața văzută în cele mai multe clipuri din prima
+scenă a zilei (mirele e filmat primul), mireasa = fața din cele mai multe clipuri ale scenelor următoare.</li>
+<li><b>Scenele</b>: o pauză de 15 minute în care nu filmează nicio cameră desparte două scene.</li>
+<li><b>Biserica</b> = primul grup de clipuri lungi (cel puțin 150 s fiecare, cel puțin 900 s împreună, la cel mult 15 minute unul de
+altul), plus clipurile scurte până la 5 minute înainte și 10 minute după.</li>
+<li><b>Înainte de biserică</b>: mirele (fața lui, altfel prima scenă), mireasa (fața ei, altfel scenele următoare), amândoi în cadru =
+first look, clipurile lungi de dimineață (150 s+) = vornicul.</li>
+<li><b>După biserică</b> (prima scenă, apoi până la o pauză de 40+ minute): clipurile fără nicio față = <b>sala</b> (la Alex și
+Andreea 14 din 14), cele cu fețe = <b>cuplul</b>.</li>
+<li><b>Restul = petrecerea</b>; o scenă din petrecere cu mirii în cel puțin 40 % din clipuri, clipuri scurte (sub 40 s), 4 sau mai
+multe = cuplu (ședința de la apus). Drona = folderele / fișierele de dronă (DJI, mavic, drona).</li>
+</ul>
+<p>Măsurat pe Alex și Andreea (fx6, comparat cu etichetele tale): 130 din 146 clipuri în momentul corect (89 %). Greșelile: cele 8
+clipuri de la luarea miresei pe care tu le-ai pus Iris (aplicația le pune la mireasă) și cele 3 interviuri Tan (ajung la petrecere).
+Restul îl corectezi în editor.</p>
+<h3>Editează filmul</h3>
+<p>După Build, butonul <b>Editează filmul</b> deschide editorul: fiecare parte făcută din selecție (mirii, biserica, sala, cuplul,
+drona) e un rând de imagini, una din mijlocul fiecărui cadru. Tragi un cadru ca să-i schimbi locul sau ca să-l muți în altă parte
+(un cadru al mirelui ajuns la mireasă, un cadru care e de fapt de la biserică); selectezi cadre și apeși Delete (sau click dreapta)
+ca să le scoți; click dreapta &gt; Mută la. Chenar albastru = mirele, roz = mireasa. „Înapoi la filmul automat” șterge modificările.
+First look, vornicul și petrecerea sunt făcute din camerele sincronizate și le tai în Premiere. Un Build nou pornește de la filmul
+automat (modificările vechi nu se mai potrivesc pe cadrele noi).</p>
+<p><b>Pregătirile mirilor</b> nu mai sunt unul după altul: sunt alternate ca la tine (măsurat pe Mada și Radu, Alexandra și Vlad):
+un bloc mare din partea filmată prima (cam un sfert, 4–20 cadre), un bloc mare din cealaltă (cam o cincime, 4–14), apoi rânduri de
+2–7 cadre (de obicei 3–4), ca să se termine amândouă odată.</p>
+<h3>Culoarea</h3>
+<p>Cardul <b>Culoare</b>: comutatorul „Pune look-ul meu pe fiecare clip”, „Crop 10 % sus și jos”, un LUT (Alege…, de exemplu din
+Documents/2025 luts) cu intensitatea lui 0–200 (ca Look din Lumetri: 100 = LUT-ul așa cum e) și, opțional, al doilea LUT cu
+intensitatea lui. Look-ul ales rămâne pentru proiectele noi. <b>Important:</b> Premiere nu poate primi un adjustment layer printr-un
+XML: am încercat în Premiere-ul tău (24 noiembrie 2026) chiar în forma în care îl exportă Premiere, și s-a importat ca „Black Video”,
+un clip negru peste tot. Așa că Lumetri (cu LUT-ul ca Look) și crop-ul sunt puse pe fiecare clip; în același test crop-ul și LUT-ul
+au apărut corect. Ca să schimbi după aceea: modifici Lumetri pe un clip, Copy, selectezi restul și Paste Attributes.</p>
 <p>Pagina Long Film v2 are și ea un desen: secvența din Creează proiectul, fiecare clip colorat după moment (nu după cameră),
 camera A cu toate momentele, celelalte camere, drona, recorderul (doar sunet) și clipurile fără culoare (nefolosite).</p>
 <p>Pagina Long Film are jos un desen cu ordinea: trenulețe de culori, cu numele fiecăruia deasupra și camerele dedesubt. Cu 3, 4 sau 5
@@ -1278,6 +1319,46 @@ file numbers. The second camera does not need a church: without Brown, its first
 shows) and the new wedding's selects with the same colours, in any order.</li>
 <li><b>Transcribe</b>: any file with sound; Import XML takes the clips in the timeline's order.</li>
 </ul>
+<h3>Automatic, without colours (from the wedding folder)</h3>
+<p>Press <b>Wedding folder…</b> and choose the folder Card Offload made (or import an XML of Create Project with no colours at all).
+The app makes the sequence itself: every camera whole, the drone, and at the end the recorder and the lavalieres (a recorder that
+writes one take as several files, e.g. Tascam _3 / _4 / _MIX, gives one file per take: the MIX when there is one). On Build:</p>
+<ul>
+<li><b>The cameras' clocks</b>: every camera has its own clock (the recording time in the file, else the file date minus its length).
+Every clip with sound is synced to the recorder, like Multicam; that gives every camera's clock error (at Alex & Andreea the fx3 was
+~2 hours behind, the a74 a day off) and puts them all on one clock.</li>
+<li><b>Faces</b>: 5 frames of every clip, local face recognition. The groom = the face seen in the most clips of the day's first
+scene (the groom is filmed first), the bride = the face in the most clips of the following scenes.</li>
+<li><b>Scenes</b>: a pause of 15 minutes where no camera films separates two scenes.</li>
+<li><b>The church</b> = the first group of long clips (at least 150 s each, at least 900 s together, at most 15 minutes apart), plus
+the short clips up to 5 minutes before and 10 minutes after.</li>
+<li><b>Before the church</b>: the groom (his face, else the first scene), the bride (her face, else the following scenes), both in the
+frame = first look, long morning clips (150 s+) = the vornic.</li>
+<li><b>After the church</b> (its first scene, then until a break of 40+ minutes): clips without any face = <b>the venue</b> (14 of 14
+at Alex & Andreea), clips with faces = <b>the couple</b>.</li>
+<li><b>The rest = the party</b>; a party scene with the couple in at least 40 % of the clips, short clips (under 40 s), 4 or more =
+couple (the sunset session). Drone = drone folders / files (DJI, mavic, drona).</li>
+</ul>
+<p>Measured on Alex & Andreea (fx6, compared with your labels): 130 of 146 clips in the right moment (89 %). The misses: the 8 clips
+of fetching the bride you labelled Iris (the app puts them with the bride) and the 3 Tan interviews (they end up in the party). You
+correct the rest in the editor.</p>
+<h3>Edit the film</h3>
+<p>After Build, <b>Edit the film</b> opens the editor: every part made by the selection (groom and bride, church, venue, couple, drone)
+is a row of pictures, one from the middle of every shot. Drag a shot to change its place or to move it into another part (a groom
+shot that landed with the bride, a shot that is really from the church); select shots and press Delete (or right-click) to take them
+out; right-click &gt; Move to. Blue frame = groom, pink = bride. "Back to the automatic film" drops your changes. The first look, the
+vornic and the party are built from the synced cameras: you cut them in Premiere. A new Build starts from the automatic film again
+(old changes do not fit the new shots).</p>
+<p><b>The getting ready</b> is no longer one side after the other: groom and bride alternate the way you cut it (measured on Mada &
+Radu, Alexandra & Vlad): a big block of the side filmed first (about a quarter, 4-20 shots), a big block of the other (about a fifth,
+4-14), then turns of 2-7 shots (mostly 3-4) so both end together.</p>
+<h3>Colour</h3>
+<p>The <b>Colour</b> card: "Put my look on every clip", "Crop 10 % at the top and at the bottom", one LUT (Choose…, e.g. from
+Documents/2025 luts) with its intensity 0-200 (like Lumetri's Look: 100 = the LUT as it is) and an optional second LUT with its own
+intensity. The chosen look stays for new projects. <b>Important:</b> Premiere cannot receive an adjustment layer through an XML: we
+tried it in your Premiere (24 November 2026), written exactly the way Premiere exports it, and it came in as "Black Video", a black
+clip over everything. So the Lumetri (with the LUT as the Look) and the crop go on every clip; in the same test the crop and the LUT
+came in correctly. To change it later: change the Lumetri of one clip, Copy, select the others and Paste Attributes.</p>
 <p>The Long Film v2 page has a drawing too: the Create Project sequence, every clip labelled by its moment (not by camera), camera A
 with every moment, the other cameras, the drone, the recorder (sound only) and the clips without a colour (not used).</p>
 <p>The Long Film page has a drawing of the order at the bottom: trains of colours, the name of each above it and the cameras under it.

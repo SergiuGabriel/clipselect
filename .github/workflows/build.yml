@@ -41,8 +41,9 @@ jobs:
           python tools/story_check.py
           python tools/speakers_check.py
           python tools/transcribe_check.py
+          python tools/daymap_check.py
       - run: python make_icons.py
-      - run: ${{ env.PYI }} $MLX_FLAGS --exclude-module torch --icon icon.icns --add-data "icon.png:." --osx-bundle-identifier com.moneymakingmachine.app app.py
+      - run: ${{ env.PYI }} $MLX_FLAGS --exclude-module torch --icon icon.icns --add-data "icon.png:." --add-data "assets:assets" --osx-bundle-identifier com.moneymakingmachine.app app.py
       - name: Check bundled FFmpeg and ad-hoc sign
         run: |
           find dist/MoneyMakingMachine.app -name 'ffmpeg*' -type f
@@ -69,8 +70,9 @@ jobs:
           python tools/story_check.py
           python tools/speakers_check.py
           python tools/transcribe_check.py
+          python tools/daymap_check.py
       - run: python make_icons.py
-      - run: ${{ env.PYI }} --icon icon.ico --add-data "icon.png;." app.py
+      - run: ${{ env.PYI }} --icon icon.ico --add-data "icon.png;." --add-data "assets;assets" app.py
       - uses: actions/upload-artifact@v4
         with: { name: MoneyMakingMachine-Windows, path: dist/MoneyMakingMachine }
   release:

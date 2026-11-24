@@ -422,6 +422,47 @@ EXACT.update({
 })
 
 
+EXACT.update({
+    "<b>Automatic:</b> choose the wedding folder (the one Card Offload made). The app makes the sequence itself (every camera + the recorder and the lavalieres) and finds the moments: getting ready (the groom is filmed first, the faces tell groom and bride apart), the church (its long clips), the venue (no faces) and the couple after it, the party, the drone. An XML of Create Project without colours works the same way.<br><br><b>With your colours:</b> export from Premiere the sequence with your labels as XML (put the recorder files in it too, for the party). Only the labelled cameras are used. The colours:<br>• Blue groom, Rose bride: selection (Auto, minimum cut 2 s, threshold 60), in the order they were filmed;<br>• Teal first look: synced, the cameras one above the other;<br>• Forest vornic: 2 cameras synced by their sound, cut automatically (switch below);<br>• Brown church: selection; the priest's shot (at least 1 minute on him) stays whole;<br>• Yellow venue, Purple couple, Violet drone: selection;<br>• Iris or Cerulean party: multicam of every camera + the recorder, cut by the Auto Director;<br>• Tan and the other colours are not used.<br>The order of the parts = the order of the colours on camera A (V1 of a timecode sequence, the first camera of a chronological one); the party always comes last.": '<b>Automat:</b> alege folderul nunții (cel făcut de Card Offload). Aplicația face singură secvența (toate camerele + recorderul și lavalierele) și găsește momentele: pregătirile (mirele e filmat primul, fețele îi deosebesc pe mire și mireasă), biserica (clipurile ei lungi), sala (fără fețe) și cuplul după ea, petrecerea, drona. Un XML din Create Project fără culori merge la fel.<br><br><b>Cu culorile tale:</b> exportă din Premiere secvența cu etichetele tale ca XML (pune în ea și fișierele recorderului, pentru petrecere). Se folosesc doar camerele etichetate. Culorile:<br>• Blue mirele, Rose mireasa: selecție (Auto, tăietură minimă 2 s, prag 60), în ordinea în care au fost filmate;<br>• Teal first look: sincronizat, camerele una peste alta;<br>• Forest vornicul: 2 camere sincronizate după sunetul lor, tăiat automat (comutatorul de mai jos);<br>• Brown biserica: selecție; cadrul cu preotul (cel puțin 1 minut pe el) rămâne întreg;<br>• Yellow sala, Purple cadre cu mirii, Violet drona: selecție;<br>• Iris sau Cerulean petrecerea: multicam din toate camerele + recorderul, tăiat de Auto Director;<br>• Tan și celelalte culori nu sunt folosite.<br>Ordinea părților = ordinea culorilor de pe camera A (V1 la o secvență pe timecode, prima cameră la una cronologică); petrecerea vine mereu la final.',
+    'Edit the film': 'Editează filmul',
+    "The long film from the wedding folder or from the sequence of Create Project. With your colours every colour is handled its own way; without colours the moments of the day are found automatically (time, faces, the church's long clips, the recorder). Then Edit the film to correct it. One 25 fps 1920x1080 sequence.": 'Filmul lung din folderul nunții sau din secvența Create Project. Cu culorile tale, fiecare culoare e tratată în felul ei; fără culori, momentele zilei sunt găsite automat (ora, fețele, clipurile lungi de la biserică, recorderul). Apoi Editează filmul ca să-l corectezi. O singură secvență 25 fps 1920x1080.',
+    'Your wedding': 'Nunta ta',
+    'Wedding folder…': 'Folderul nunții…',
+    'Colour': 'Culoare',
+    'Put my look on every clip': 'Pune look-ul meu pe fiecare clip',
+    'Crop 10 % at the top and at the bottom': 'Crop 10 % sus și jos',
+    'Second LUT (optional)': 'Al doilea LUT (opțional)',
+    'None': 'Niciunul',
+    'Choose…': 'Alege…',
+    'Intensity': 'Intensitate',
+    "Like Premiere's Look intensity: 100 = the LUT as it is, up to 200.": 'Ca intensitatea Look din Premiere: 100 = LUT-ul așa cum e, până la 200.',
+    'Premiere cannot receive an adjustment layer through an XML (tested: it becomes a black clip), so the look (Lumetri) and the crop are put on every clip. To change it later, select the clips in Premiere and change the Lumetri of one, then paste its attributes.': 'Premiere nu poate primi un adjustment layer printr-un XML (testat: devine un clip negru), așa că look-ul (Lumetri) și crop-ul sunt puse pe fiecare clip. Ca să-l schimbi după, modifici Lumetri pe un clip în Premiere și apoi îi lipești atributele (Paste Attributes) pe celelalte.',
+    'Drop the wedding folder or the XML of your sequence here.': 'Trage aici folderul nunții sau XML-ul secvenței tale.',
+    'The wedding folder': 'Folderul nunții',
+    'Choose a LUT': 'Alege un LUT',
+    'Wedding folder. Press Build: the app makes the sequence (every camera, the recorder and the lavalieres), syncs the cameras on the recorder, looks at the faces and finds the moments. It can take a few hours: leave it overnight.': 'Folderul nunții. Apasă Build: aplicația face secvența (toate camerele, recorderul și lavalierele), sincronizează camerele pe recorder, se uită la fețe și găsește momentele. Poate dura câteva ore: las-o peste noapte.',
+    'The moments will be found automatically when you press Build.': 'Momentele vor fi găsite automat când apeși Build.',
+    '(without faces: the face model could not be loaded)': '(fără fețe: modelul de fețe nu a putut fi încărcat)',
+    'Edited by you.': 'Editat de tine.',
+    'The automatic film is back.': 'Filmul automat a revenit.',
+    'Your changes are saved.': 'Modificările tale sunt salvate.',
+    'Edit the long film': 'Editează filmul lung',
+    "Drag a shot to change its place or to move it into another part (a groom shot into the bride's place, a shot into the church...). Select shots and press Delete, or right-click, to take them out. Blue frame = groom, pink = bride. The first look, the vornic and the party are built from the synced cameras and are edited in Premiere.": 'Trage un cadru ca să-i schimbi locul sau să-l muți în altă parte (un cadru cu mirele în locul miresei, un cadru la biserică...). Selectează cadre și apasă Delete, sau click dreapta, ca să le scoți. Chenar albastru = mirele, roz = mireasa. First look, vornicul și petrecerea sunt făcute din camerele sincronizate și se editează în Premiere.',
+    'Back to the automatic film': 'Înapoi la filmul automat',
+    'Remove from the film': 'Scoate din film',
+    'Move to': 'Mută la',
+    'No camera folders with video in this folder.': 'În acest folder nu sunt foldere de camere cu video.',
+})
+TEMPLATES.update({
+    'Folder chosen: {}': 'Folder ales: {}',
+    '{} clips without colours · {} sound files': '{} clipuri fără culori · {} fișiere de sunet',
+    'Moments found automatically: {}.': 'Momente găsite automat: {}.',
+    '{}  ·  {} shots  ·  {}': '{}  ·  {} cadre  ·  {}',
+    'These parts together: {}': 'Părțile acestea împreună: {}',
+    'Looking at who is in every clip: {} of {}': 'Mă uit cine apare în fiecare clip: {} din {}',
+})
+
+
 def set_lang(lang):
     global LANG, _PATS
     LANG = lang if lang in ("en", "ro") else "en"
