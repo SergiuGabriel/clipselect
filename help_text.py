@@ -196,6 +196,14 @@ secundă de mișcare e păstrată dacă claritatea ei e cel puțin 45% din clari
 când se atinge de altă bucată păstrată, iar un clip scurt (sub de două ori tăietura minimă) își păstrează partea bună dacă are cel puțin
 1 s. Măsurat pe biserica de la Alex și Andreea: din 14 momente bune judecate cu ochiul, versiunea veche păstra 1, acum 12; din 4 momente
 mișcate, acum rămân 2 (preferă să păstreze în plus decât să piardă un cadru bun). Oprit: ca înainte.</li>
+<li><b>Filmări de la petrecere</b> (Party footage; oprit): doar când îi dai petrecerea. Când îl pornești, aplicația te întreabă
+o dată „Ești sigur că îmi dai cadre de la petrecere de selectat?” (Da / Nu). Pornit, cadrele sunt judecate ca la camerele din mână
+din Multicam: stabilitatea vine din mișcarea camerei însăși (mediana pe blocuri a imaginii, nu ține cont de oamenii care sar),
+claritatea e comparată și cu restul clipului, întunericul scade nota până la 0 la media 15 din 255, iar smuciturile (deplasare peste
+14 px), cadrele mișcate (sub 0,4 din claritatea clipului) și camera lăsată jos (2 s fără nimic în mișcare) iau doar 15 % din notă.
+Doar smuciturile împart clipul în cadre (oamenii care se mișcă, nu). Măsurat pe petrecerea de la Alex și Andreea (49 min pe fiecare
+cameră): din momentele alese de Multicam, versiunea obișnuită păstra 61 % (fx3) și 73 % (fx6), cu petrecerea pornită 77 % și 84 %, în
+cadre întregi (fx3: 303 cadre în loc de 1419 bucăți). Oprit: selecția merge exact ca înainte.</li>
 <li><b>Lungimea minimă a tăieturii</b> (Minimum cut length; 1–10 s, implicit 3 s): în Auto, cadrele păstrate mai scurte de atât sunt aruncate.</li>
 </ol>
 <h3>Ca să scoți maximum din Auto</h3>
@@ -514,18 +522,22 @@ descărca, ajung camera nemișcată și vorbirea) și se vorbește cel puțin ju
 <li><b>Yellow (sala), Purple (cadre cu mirii), Violet (drona)</b>: selecție Auto.</li>
 <li><b>Iris sau Cerulean (petrecerea)</b>: multicam ca la pagina Multicam: toate camerele etichetate + fișierele de recorder din
 secvență, sincronizate după sunet (fără recorder: pe cel mai lung clip de petrecere), apoi Auto Director pe intervalele tale
-etichetate. Setările tale implicite: cadru minim 3 s, maxim 120 s, ritm 50, Static ↔ Handheld 65, pe drop schimbă camera la 1
+etichetate. Ca la Multicam, recorderul principal e folderul de fișiere doar-sunet cu cele mai multe ore (de exemplu tascam);
+celelalte foldere de sunet (al doilea recorder, lavalierele) sunt sincronizate ca niște clipuri și puse întregi pe pistele lor.
+Petrecerea vine mereu la finalul filmului. Setările tale implicite: cadru minim 3 s, maxim 120 s, ritm 50, Static ↔ Handheld 65, pe drop schimbă camera la 1
 măsură (4 beat-uri), înainte de drop „Tăieturi tot mai dese”; le poți schimba pe pagină (Înapoi la setările mele de petrecere le
 readuce). Tăieturile cad pe beat (1 cadru înainte), mai dese pe muzica intensă. Pe hartă (ca la Multicam) tragi zone
 <b>Slower cuts</b> pentru horă: acolo se folosesc setările de horă (minim 6 s, maxim 120 s, ritm 50, 45).</li>
 <li><b>Tan</b> (interviuri) și celelalte culori nu sunt folosite deocamdată.</li>
 </ul>
 <p><b>Ordinea părților</b> = ordinea în care apar culorile pe camera A (la o secvență pe timecode camera de pe V1, la una cronologică
-prima cameră din timeline); culorile care nu apar pe camera A vin după, în ordinea obișnuită. „În ordinea filmării”: la o secvență pe
+prima cameră din timeline); culorile care nu apar pe camera A vin după, în ordinea obișnuită. Petrecerea e mereu ultima (Iris filmat dimineața pe camera A nu o mai aduce înainte de biserică). „În ordinea filmării”: la o secvență pe
 timecode poziția din timeline, la una cronologică ora de filmare din fișiere.</p>
 <p><b>Exportul</b>: o singură secvență 25 fps, 1920x1080, cu un marker pe fiecare parte. Clipurile cu altă rezoluție sunt micșorate
 ca să umple cadrul (4K = 50 %). Fiecare cameră își are pistele ei de sunet, legate de imagine, ca la Creează proiectul (FX6 = A1 și
-A2 stereo, FX3 / A7 = o pistă stereo); recorderul e sub toată petrecerea. Build citește filmările (o dată: analizele rămân salvate);
+A2 stereo, FX3 / A7 = o pistă stereo). La petrecere e ca exportul Multicam: fiecare cameră pe pista ei video doar cu tăieturile ei,
+iar sunetul fiecărei camere e <b>întreg</b> (fiecare interval etichetat, netăiat) pe pistele ei; recorderul și celelalte surse de
+sunet sunt întregi sub toată petrecerea. Build citește filmările (o dată: analizele rămân salvate);
 schimbarea setărilor de petrecere și a zonelor se vede imediat, fără alt Build.</p>
 
 <h2>Cum trebuie să arate selecția</h2>
@@ -551,6 +563,8 @@ fișierelor. A doua cameră nu are nevoie de biserică: fără Brown, first look
 și selecțiile nunții noi cu aceleași culori, în orice ordine.</li>
 <li><b>Transcriere</b>: orice fișier cu sunet; Import XML ia clipurile în ordinea de pe timeline.</li>
 </ul>
+<p>Pagina Long Film v2 are și ea un desen: secvența din Creează proiectul, fiecare clip colorat după moment (nu după cameră),
+camera A cu toate momentele, celelalte camere, drona, recorderul (doar sunet) și clipurile fără culoare (nefolosite).</p>
 <p>Pagina Long Film are jos un desen cu ordinea: trenulețe de culori, cu numele fiecăruia deasupra și camerele dedesubt. Cu 3, 4 sau 5
 camere se continuă la fel, una după alta; cadrele cu cuplul pot sta la mijlocul petrecerii; drona rămâne ultima.</p>
 
@@ -906,6 +920,14 @@ sharpness is at least 45% of the clip's still parts and it is not dark (mean abo
 a good piece shorter than the minimum cut stays when it touches another kept piece, and a short clip (under twice the minimum cut)
 keeps its good part when it has at least 1 s. Measured on the Alex & Andreea church: of 14 good moments judged by eye the old version
 kept 1, now 12; of 4 blurred moments 2 now stay (it prefers keeping too much to losing a good shot). Off: as before.</li>
+<li><b>Party footage</b> (off): only when you give it the party. When you switch it on the app asks once "Are you sure you are giving me
+party footage to select?" (Yes / No). On, the shots are judged like the handheld cameras of Multicam: stability comes from the
+camera's own movement (a block median of the picture, it ignores people jumping), sharpness is also compared with the rest of the
+clip, darkness lowers the score down to 0 at a mean of 15 of 255, and whip pans (shift above 14 px), blurred shots (under 0.4 of the
+clip's sharpness) and a camera put down (2 s with nothing moving) keep only 15 % of their score. Only whip pans split a clip into
+shots (people moving never do). Measured on the Alex & Andreea party (49 min per camera): of the moments Multicam picked, the usual
+selection kept 61 % (fx3) and 73 % (fx6), party footage on 77 % and 84 %, in whole shots (fx3: 303 shots instead of 1419 pieces).
+Off: the selection works exactly as before.</li>
 <li><b>Minimum cut length</b> (1–10 s, default 3 s): in Auto, kept shots shorter than this are dropped.</li>
 </ol>
 <h3>To get the most out of Auto</h3>
@@ -1215,7 +1237,9 @@ stays still (no move longer than 1 s), the same face all the time (local face re
 downloaded, the still camera and the speech are enough) and someone speaks at least half of the time. The priest's clip stays whole.</li>
 <li><b>Yellow (venue), Purple (couple shots), Violet (drone)</b>: Auto selection.</li>
 <li><b>Iris or Cerulean (party)</b>: multicam like the Multicam page: every labelled camera + the recorder files of the sequence,
-synced by the sound (no recorder: on the longest party clip), then the Auto Director on your labelled ranges. Your defaults: minimum
+synced by the sound (no recorder: on the longest party clip), then the Auto Director on your labelled ranges. Like Multicam, the main
+recorder is the folder of sound-only files with the most hours (e.g. tascam); the other sound folders (a second recorder, the
+lavaliers) are synced like clips and put whole on their own tracks. The party always closes the film. Your defaults: minimum
 shot 3 s, maximum 120 s, pace 50, Static ↔ Handheld 65, on a drop change camera every 1 bar (4 beats), before a drop "Cut faster and
 faster"; change them on the page (Back to my party settings brings them back). Cuts fall on the beat (1 frame before), faster on
 intense music. On the map (like Multicam) you drag <b>Slower cuts</b> zones for the hora: there the hora settings are used (minimum
@@ -1223,11 +1247,12 @@ intense music. On the map (like Multicam) you drag <b>Slower cuts</b> zones for 
 <li><b>Tan</b> (interviews) and the other colours are not used for now.</li>
 </ul>
 <p><b>The order of the parts</b> = the order in which the colours appear on camera A (the V1 camera of a timecode sequence, the first
-camera of a chronological one); colours that are not on camera A come after, in the usual order. "In the order they were filmed": in
+camera of a chronological one); colours that are not on camera A come after, in the usual order. The party is always last (Iris filmed in the morning on camera A no longer brings it before the church). "In the order they were filmed": in
 a timecode sequence the timeline position, in a chronological one the recording time in the files.</p>
 <p><b>The export</b>: one 25 fps 1920x1080 sequence with a marker on every part. Clips of another size are scaled to fill the frame
 (4K = 50 %). Every camera has its own sound tracks, linked to the picture, like Create Project (FX6 = A1 and A2 stereo, FX3 / A7 = one
-stereo track); the recorder is under the whole party. Build reads the footage (once: the analyses are kept); changing the party
+stereo track). The party is like the Multicam export: every camera on its own video track with only its cuts, and every camera's
+sound <b>whole</b> (each labelled range, uncut) on its own tracks; the recorder and the other sound sources are whole under the party. Build reads the footage (once: the analyses are kept); changing the party
 settings and the zones shows at once, without another Build.</p>
 
 <h2>What your selects need</h2>
@@ -1253,6 +1278,8 @@ file numbers. The second camera does not need a church: without Brown, its first
 shows) and the new wedding's selects with the same colours, in any order.</li>
 <li><b>Transcribe</b>: any file with sound; Import XML takes the clips in the timeline's order.</li>
 </ul>
+<p>The Long Film v2 page has a drawing too: the Create Project sequence, every clip labelled by its moment (not by camera), camera A
+with every moment, the other cameras, the drone, the recorder (sound only) and the clips without a colour (not used).</p>
 <p>The Long Film page has a drawing of the order at the bottom: trains of colours, the name of each above it and the cameras under it.
 With 3, 4 or 5 cameras it continues the same way, one after the other; couple shots can sit in the middle of the party; the drone stays last.</p>
 

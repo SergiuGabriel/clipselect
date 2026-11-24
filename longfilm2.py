@@ -103,7 +103,7 @@ def load(xml_path):
                 continue
             tt = teaser._times(ci, sfps, xmlimport._rate(ci, sfps))
             seen.add(info["path"])
-            recorder.append(dict(path=info["path"], st=tt[0] if tt else 0.0))
+            recorder.append(dict(path=info["path"], st=tt[0] if tt else 0.0, group=Path(info["path"]).parent.name))
     recorder.sort(key=lambda r: r["st"])
     # cameras by their files; camera A = the camera of the first clip on the lowest video track
     keys = {}
@@ -146,6 +146,9 @@ def load(xml_path):
     for k in DEFAULT_ORDER:
         if k not in seen_parts and any(part_of(p["kind"]) == k for p in pieces):
             seen_parts.append(k)
+    if "party" in seen_parts:               # the party always closes the film (Iris shots of the morning on camera A
+        seen_parts.remove("party")          # put it before the church in his first test)
+        seen_parts.append("party")
     return dict(pieces=pieces, recorder=recorder, cams=cams, layout=layout, order=seen_parts, skipped=skipped)
 
 
@@ -260,15 +263,26 @@ def is_priest(p, an, model=None):
 
 # ---------------------------------------------------------------- 3. the party (multicam)
 def party_inputs(pieces, recorder, infos):
-    """Masters (recorder files of the sequence, else the longest party file with sound) and the party files."""
+    """Like Multicam (sync.classify): the MAIN recorder = the folder of sound-only files with the most hours, sorted by
+    name; the other sound folders (a second recorder, lavaliers) are EXTRA sources synced like clips and exported whole
+    on their own tracks. No recorder: the longest party file with sound. Returns (party, files, masters, extras)."""
     party = [p for p in pieces if p["kind"] == "party"]
     files = sorted({p["path"] for p in party})
-    masters = [r["path"] for r in recorder if Path(r["path"]).exists()]
+    rec = [r for r in recorder if Path(r["path"]).exists()]
+    masters, extras = [], []
+    if rec:
+        tot = {}
+        for r in rec:
+            g = r.get("group") or Path(r["path"]).parent.name
+            tot[g] = tot.get(g, 0.0) + ((infos.get(r["path"]) or {}).get("dur") or 0.0)
+        main = max(tot, key=lambda g: (tot[g], g))
+        masters = sorted(r["path"] for r in rec if (r.get("group") or Path(r["path"]).parent.name) == main)
+        extras = sorted(r["path"] for r in rec if r["path"] not in masters)
     if not masters:
         snd = [f for f in files if (infos.get(f) or {}).get("ach")]
         if snd:
             masters = [max(snd, key=lambda f: infos[f]["dur"])]
-    return party, files, masters
+    return party, files, masters, extras
 
 
 def party_edit(party, results, masters, analyses, cams_n, roles, st):
@@ -290,9 +304,11 @@ def party_edit(party, results, masters, analyses, cams_n, roles, st):
     return edits, dcams, by_key
 
 
-def party_layout(edits, by_key, masters, rec_paths=None):
-    """The party part: every camera's cuts on its own track (camera index + 1), the recorder under the whole party.
-    Returns (length, items, recorder items, spans for the map)."""
+def party_layout(edits, by_key, masters, rec_paths=None, results=None, extras=()):
+    """The party part, laid out like the Multicam export: every camera's cuts on its own video track (camera index + 1,
+    picture only), every camera's sound WHOLE (each labelled party range uncut) on that camera's audio tracks, the main
+    recorder and every extra sound source (second recorder, lavaliers) uncut under the party.
+    Returns (length, video items, audio items); audio items = (t0, path, src in, src out, audio key, label)."""
     starts = sync.master_starts(masters)
     cuts = []
     for e in edits or []:
@@ -307,12 +323,25 @@ def party_layout(edits, by_key, masters, rec_paths=None):
     G0, G1 = min(c[0] for c in cuts), max(c[1] for c in cuts)
     items = [(p["cam"] + 1, t0 - G0, p, a, b) for t0, _t1, p, a, b in sorted(cuts, key=lambda c: c[0])]
     rec = []
+
+    def put(g0, path, a, b, key, label=None):
+        lo, hi = max(G0, g0), min(G1, g0 + (b - a))
+        if hi - lo > 0.1:
+            rec.append((lo - G0, path, a + lo - g0, a + hi - g0, key, label))
+    results = results or {}
+    for p in sorted(by_key.values(), key=lambda p: (p["cam"], p["a"])):   # the cameras' sound, whole
+        r = results.get(p["path"])
+        if r and r.get("conf") in ("high", "medium") and r.get("master", 0) < len(starts):
+            put(starts[r.get("master", 0)] + r["offset"] + p["a"], p["path"], p["a"], p["b"], ("cam", p["cam"]), p.get("label"))
     for m, s in zip(masters, starts):
         if not m.get("path") or (rec_paths is not None and m["path"] not in rec_paths):
             continue                        # no recorder: the master is a party clip, its sound is already there
-        lo, hi = max(G0, s), min(G1, s + m["duration"])
-        if hi - lo > 0.1:
-            rec.append((lo - G0, m["path"], lo - s, hi - s))
+        put(s, m["path"], 0.0, m["duration"], ("rec", 0))
+    for j, f in enumerate(extras, 1):       # extra sound sources, each folder its own tracks
+        r = results.get(f)
+        if r and r.get("conf") in ("high", "medium") and r.get("master", 0) < len(starts):
+            put(starts[r.get("master", 0)] + r["offset"], f, 0.0, r.get("dur") or 0.0,
+                ("rec", 1 + sorted({Path(x).parent.name for x in extras}).index(Path(f).parent.name)))
     return G1 - G0, items, rec
 
 
@@ -352,10 +381,11 @@ def export_xml(parts, infos, cam_names, out_path, name, marker=lambda s: s):
             en = st + max(1, round((b - a) * sf))
             ents.append(dict(path=p["path"], v=track, st=st, en=en, fin=max(0, round(a * sf)), label=p.get("label"),
                              ak=("cam", p["cam"]) if "sound" in flags else None, on="off" not in flags))
-        for t0, path, a, b in rec:
+        for it in rec:
+            t0, path, a, b = it[:4]
             st = round((g + t0) * sf)
             ents.append(dict(path=path, v=None, st=st, en=st + max(1, round((b - a) * sf)), fin=max(0, round(a * sf)),
-                             label=None, ak=("rec", 0), on=True))
+                             label=it[5] if len(it) > 5 else None, ak=it[4] if len(it) > 4 else ("rec", 0), on=True))
         g += length
     if not ents:
         raise ValueError("Nothing to export yet: press Build first.")
@@ -548,10 +578,10 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
         vo_len, vo_items = longfilm.vornic_cut(mp, op, progress=lambda s, f: prog(s, 0.62 + 0.06 * f), cancel=cancel)
     chk()
     # the party: sync with the recorder + its music
-    party, pfiles, masters = party_inputs(pieces, recorder, infos)
+    party, pfiles, masters, extras = party_inputs(pieces, recorder, infos)
     psync = None
     if party and masters:
-        clips = [f for f in pfiles if f not in masters and (infos.get(f) or {}).get("ach")]
+        clips = [f for f in pfiles if f not in masters and (infos.get(f) or {}).get("ach")] + extras
         clocks = {}
         for f in clips + masters:
             try:
@@ -559,6 +589,7 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
             except Exception:
                 clocks[f] = None
         camk = {p["path"]: str(p["cam"]) for p in party}
+        camk.update({f: "rec:" + Path(f).parent.name for f in extras})
         info, res = sync.run_sync(masters, clips, lambda s, f: prog(s, 0.68 + 0.22 * f), cancel,
                                   clocks=clocks, groups=camk, jobs=jobs)
         for f in pfiles:
@@ -572,7 +603,7 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
                 m["music"] = music.analyze(sync.audio_pcm(m["path"]))
             except Exception:
                 m["music"] = None
-        psync = dict(masters=info, results=res)
+        psync = dict(masters=info, results=res, extras=extras)
     prog("Done", 1.0)
     return dict(pieces=pieces, recorder=recorder, cams=L["cams"], layout=L["layout"], order=L["order"],
                 skipped=L["skipped"], missing=missing, infos=infos, sel=sel, priests=priests,
@@ -624,8 +655,9 @@ def assemble(r, analyses, st, zones, marker=lambda s: s, vornic_on=True):
             roles = roles_of(party, analyses)
             edits, dcams, bk = party_edit(party, ps["results"], ps["masters"], analyses, len(r["cams"]), roles,
                                           {**director.DEFAULTS, **st, "zones": zones})
-            ln, items, rec = party_layout(edits, bk, ps["masters"], {x["path"] for x in r["recorder"]})
-            parts.append((name, ln, [(*it, {"sound"}) for it in items], rec))
+            ln, items, rec = party_layout(edits, bk, ps["masters"], {x["path"] for x in r["recorder"]},
+                                          ps["results"], ps.get("extras") or ())
+            parts.append((name, ln, [(*it, set()) for it in items], rec))
             info.update(edits=edits, dcams=dcams, roles=roles)
             stat[part] = (len(items), ln)
     info["stat"] = stat

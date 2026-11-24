@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.13.1), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.14.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -833,6 +833,32 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 - New rule director._resting: a handheld camera put down (2 s median frame diff < 4 and shift < 0.5) -> x0.15. His
   FX6 lying on a table (63299, src 79-97 s) scored 99 and was used for 21 s; in 52 min of footage only that stretch
   matches. Old analyses stay valid.
+
+## v3.14.0 (his first real Long Film v2 test: Alex & Andreea, "the party is not cut like Multicam, the sound is cut")
+- His export (money test - Long Film v2.xml) showed: party part 840 min long, only 229 min covered. Cause: his sequence
+  had TWO recorders (tascam 260823_019x_3.wav + zoom 230826-*.WAV, the zoom's clock a year off) and v2 used all 8 files
+  as masters -> sync.master_starts laid them out hours apart. Now longfilm2.party_inputs works like sync.classify: main
+  recorder = the sound-only FOLDER with the most hours (tascam), sorted by name; other sound folders = extras, synced like
+  clips (run_sync groups "rec:<folder>") and put WHOLE on their own audio tracks (("rec", j) keys).
+- Party audio like the Multicam export: video cuts per camera on its own track WITHOUT sound; every camera's sound =
+  each synced labelled party range WHOLE (party_layout audio items (t0, path, in, out, key, label)), clipped to the party
+  span; recorder + extras whole. export_xml rec items take an optional key + label.
+- Party ALWAYS last (load: his 8 morning Iris clips on camera A put the party before the church and the venue after it).
+- SelectsMap(groups) + SelectsMap.GROUPS_V2: the Long Film v2 page draws its sequence (camera A every moment, camera B,
+  C/D, drone, recorder "Sound only", no colour hatched); PR_LABEL + Forest / Cerulean / Tan / Sound. The v2 right column
+  is a scroll area now.
+- Progress (owner: "nothing shows in real time, 2:50 left jumps to 2:10 after 40 s"): EtaClock (app.py) = elapsed ticks
+  every 0.5 s (QTimer in ProgressPanel and AnalyzingPage), time left smoothed (0.7 / 0.3) and counting DOWN between the
+  job's reports, "almost done" under 5 s. Every progress panel uses it.
+- Footage Selection "Party footage" switch (settings party, default OFF, Yes / No popup "Are you sure you are giving me
+  party footage to select?" when switched on; No puts it back off). core.party_quality = the director's handheld judgement
+  (robust shift, sharpness relative to the clip, darkness, whip pan > PARTY_WHIP 14, blur < 0.4, camera put down x0.15);
+  auto_segments(..., party=True): holds split only by whip pans, 1 s windows kept when mean quality >= thr, no kept
+  moves. OFF = exactly the old selection. On his night party (49 min / camera): of Multicam's picked frames old kept
+  fx3 61 % / fx6 73 %, party 77 % / 84 %; fx3 303 shots instead of 1419 pieces.
+- Multicam sequence size stays the first camera's (4K stays 4K): owner does NOT want 1920x1080 there.
+- His friend's "longv2.xml" (Diana si Vasi, 24 fps 4K, Song · BPM markers, labels per camera) was an OLD Multicam export,
+  not Long Film v2.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

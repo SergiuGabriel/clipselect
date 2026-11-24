@@ -304,7 +304,50 @@ def _kept_moves(fs, mv):
     return out
 
 
-def auto_segments(a, thr, min_len, cut_moves=True, keep_all=False):
+PARTY_WHIP = 14.0   # party mode: robust shift above this = a whip pan / blur (same as director.HAND_WHIP)
+
+
+def _med3(x):
+    x = np.asarray(x, float)
+    if len(x) < 3:
+        return x
+    return np.median(np.vstack([np.r_[x[:1], x[:-1]], x, np.r_[x[1:], x[-1:]]]), axis=0)
+
+
+def party_quality(fs):
+    """Party mode of Footage Selection ("Party footage", off by default): every sample judged like a HANDHELD camera
+    in the Multicam director (v3.13.0, measured on his Alex & Andreea party) instead of the original Auto score, which
+    takes people jumping in front of the camera for a shaking camera. Stability = the camera's own ROBUST shift (block
+    median, ignores the people), sharpness also relative to the clip's own median (motion blur), darkness fades to 0 at
+    15 of 255; whip pans (shift > PARTY_WHIP), blur (< 0.4 x the clip's sharpness) and a camera put down x0.15.
+    Returns (quality per sample, whip-pan mask)."""
+    lap = np.asarray(fs["lap"], float)
+    mean = np.asarray(fs["mean"], float)
+    sp = _med3(np.hypot(fs["sx"], fs["sy"]))
+    lapr = lap / max(1.0, float(np.median(lap)) if len(lap) else 1.0)
+    F = np.minimum(focus_vec(lap), np.clip(lapr / 0.6, 0, 1))
+    E = np.minimum(exposure_vec(mean, fs["bright"]), np.clip((mean - 15) / 25, 0, 1))
+    S = np.clip(1 - (sp - 5) / 10, 0, 1)
+    whip = sp > PARTY_WHIP
+    bad = whip | (lapr < 0.4)
+    df = np.asarray(fs["diff"], float)
+    w = 2 * SAMPLE_FPS
+    if len(df) >= w:                         # a camera put down: nothing moves in the picture for 2 s
+        from numpy.lib.stride_tricks import sliding_window_view as win
+        pad = lambda x: np.r_[np.full(w // 2, x[0]), x, np.full(w - w // 2 - 1, x[-1])]
+        bad |= (np.median(win(pad(df), w), axis=1)[:len(df)] < 4) & (np.median(win(pad(sp), w), axis=1)[:len(df)] < 0.5)
+    q = 100 * (0.6 * (0.4 * F + 0.3 * S + 0.3 * E) + 0.4 * np.minimum(np.minimum(F, S), E))
+    d = bad.copy()
+    d[1:] |= bad[:-1]
+    d[:-1] |= bad[1:]
+    q[d] *= 0.15
+    w2 = whip.copy()
+    w2[1:] |= whip[:-1]
+    w2[:-1] |= whip[1:]
+    return q, w2
+
+
+def auto_segments(a, thr, min_len, cut_moves=True, keep_all=False, party=False):
     """AUTO mode (the original algorithm, finer): the clip is split into 'holds' between camera moves; every second of
     a hold is scored like the first version; kept parts (level 2) shorter than min_len are dropped (level 0).
     keep_all ("Keep every good frame"): sharp camera moves are kept as shots of their own (only blurred whip pans are
@@ -317,7 +360,12 @@ def auto_segments(a, thr, min_len, cut_moves=True, keep_all=False):
     else:
         fs, sr = a.fs, SAMPLE_FPS
         n = len(fs["lap"])
-        mv = moving_mask(fs) if cut_moves else np.zeros(n, bool)
+        if party:                           # whip pans split the shots; people moving never do
+            pq, whip = party_quality(fs)
+            mv = whip if cut_moves else np.zeros(n, bool)
+            keep_all = False                # a move here is a whip pan: never kept
+        else:
+            mv = moving_mask(fs) if cut_moves else np.zeros(n, bool)
         jit = jitter_vec(fs)
         sel = np.zeros(n, bool)
         i = 0
@@ -333,7 +381,8 @@ def auto_segments(a, thr, min_len, cut_moves=True, keep_all=False):
                 b.pop()
             b.append(j)
             for x0, x1 in zip(b[:-1], b[1:]):
-                if x1 - x0 >= 2 and _v1_score(fs, x0, x1, jit) >= thr:
+                sc = float(np.mean(pq[x0:x1])) if party else _v1_score(fs, x0, x1, jit) if x1 - x0 >= 2 else -1
+                if x1 - x0 >= 2 and sc >= thr:
                     sel[x0:x1] = True
             i = j
         mvk = np.zeros(n, bool)
@@ -436,7 +485,7 @@ def grade_segments(analyses, s):
         return []
     if s.get("mode", "auto") == "auto":
         return [auto_segments(a, s.get("thr", 60), float(s.get("mincut", 3)), s.get("cutmoves", True),
-                              s.get("keepall", True)) for a in analyses]
+                              s.get("keepall", True), s.get("party", False)) for a in analyses]
     else:
         on = s.get("on", {})
         weights = {k: (s.get(k, 50) / 100 if on.get(k, True) else 0) for k in KEYS}

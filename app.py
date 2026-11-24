@@ -50,7 +50,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.13.1"
+APP, VER = "MoneyMakingMachine", "v3.14.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -77,7 +77,7 @@ SEQ_RATES = ["Match footage", "23.976", "24", "25", "29.97", "30", "50", "59.94"
 SEQ_FIELDS = {"Lower Field First": "lower", "Upper Field First": "upper", "None (Progressive)": "none"}
 SEQ_DEFAULT = dict(size="Match footage", rate="25", fields="Lower Field First")      # final sequences are 25 fps
 DEFAULT_ON = {k: True for k, _, _ in SLIDERS}
-DEFAULTS = dict(mode="auto", thr=60, mincut=3, cutmoves=True, keepall=True, protect=True, contrast=50, exposure=50, focus=60, importance=40,
+DEFAULTS = dict(mode="auto", thr=60, mincut=3, cutmoves=True, keepall=True, party=False, protect=True, contrast=50, exposure=50, focus=60, importance=40,
                 stability=50, preset="Normal", p1=25, p2=65)
 
 
@@ -696,6 +696,36 @@ def _fmt_dur(s):
     return f"{s // 3600}h {s % 3600 // 60:02d}m" if s >= 3600 else f"{s // 60}m {s % 60:02d}s" if s >= 60 else f"{s}s"
 
 
+class EtaClock:
+    """Elapsed + time left that move every second, even when the job reports rarely (one long clip, one long step).
+    The estimate is smoothed and counts down between reports instead of freezing and then jumping."""
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.t0 = time.time()
+        self.f, self.total, self.tf = 0.0, None, self.t0
+
+    def feed(self, f):
+        now = time.time()
+        if f < self.f - 0.2:                    # a new job reuses the panel
+            self.reset()
+        el = now - self.t0
+        if f > 0.03 and el > 3 and f < 1 and f > self.f:
+            est = el / f
+            self.total = est if self.total is None else 0.7 * self.total + 0.3 * est
+        self.f, self.tf = f, now
+
+    def text(self):
+        el = time.time() - self.t0
+        out = f"{_fmt_dur(el)} elapsed"
+        if self.total is not None and 0 < self.f < 1:
+            left = self.total - el
+            out += f"  ·  about {_fmt_dur(left)} left" if left >= 5 else "  ·  almost done"
+        return out
+
+
 class ProgressPanel(QFrame):
     """The same loading bar for every long process: step text, percentage, a thick bar, elapsed and time left."""
 
@@ -728,7 +758,27 @@ class ProgressPanel(QFrame):
         self._cancel_cb = None
         self.b_cancel.clicked.connect(lambda: self._cancel_cb and self._cancel_cb())
         self.t0 = time.time()
+        self.clock = EtaClock()
+        self._tick = QTimer(self)
+        self._tick.setInterval(500)
+        self._tick.timeout.connect(self._refresh)
         self.hide()
+
+    def _refresh(self):
+        try:
+            if not self.isVisible() or self.clock.f >= 1:
+                return
+            self.detail.setText(self.clock.text())
+        except Exception:                       # a timer must never raise
+            pass
+
+    def showEvent(self, e):
+        self._tick.start()
+        super().showEvent(e)
+
+    def hideEvent(self, e):
+        self._tick.stop()
+        super().hideEvent(e)
 
     def allow_cancel(self, cb):
         self._cancel_cb = cb
@@ -736,6 +786,7 @@ class ProgressPanel(QFrame):
 
     def start(self, text="Starting…"):
         self.t0 = time.time()
+        self.clock.reset()
         self.set(text, 0.0)
         self.show()
 
@@ -744,9 +795,8 @@ class ProgressPanel(QFrame):
         self.title.setText(text)
         self.pct.setText(f"{int(f * 100)}%")
         self.bar.setValue(int(f * 1000))
-        el = time.time() - self.t0
-        left = f"  ·  about {_fmt_dur(el * (1 - f) / f)} left" if f > 0.03 and el > 3 and f < 1 else ""
-        self.detail.setText(f"{_fmt_dur(el)} elapsed{left}")
+        self.clock.feed(f)
+        self.detail.setText(self.clock.text())
 
 
 class JobCard(QFrame):
@@ -1117,6 +1167,19 @@ class ProjectPage(QWidget):
         self.sw_keep.toggled.connect(lambda v: self.set_s("keepall", v))
         kr.addWidget(self.sw_keep)
         av.addLayout(kr)
+        pr = QHBoxLayout()
+        pr.addWidget(lbl("Party footage"))
+        pq = lbl("?", "muted")
+        pq.setToolTip("Only for party footage (people dancing, jumping, lights). The shots are judged like the handheld "
+                      "cameras of Multicam: people moving in front of the camera no longer count as a shaking camera; "
+                      "only whip pans, blur, dark shots and a camera put down are cut out. Leave it off for everything "
+                      "else: then the selection works exactly as before.")
+        pr.addWidget(pq)
+        pr.addStretch()
+        self.sw_party = Switch(False)
+        self.sw_party.toggled.connect(self._party_toggled)
+        pr.addWidget(self.sw_party)
+        av.addLayout(pr)
         mv.addWidget(self.auto_box)
 
         # CUSTOM box
@@ -1244,6 +1307,7 @@ class ProjectPage(QWidget):
         self.sw_protect.set(s["protect"])
         self.sw_moves.set(s["cutmoves"])
         self.sw_keep.set(s.get("keepall", True))
+        self.sw_party.set(s.get("party", False))
         self.apply_mode()
         self.refresh_videos()
         self.refresh_history()
@@ -1367,6 +1431,24 @@ class ProjectPage(QWidget):
         self.p["settings"][k] = x
         self.store.save()
         self.refresh_preview()
+
+    def _party_toggled(self, on):
+        """Party footage: a double check (Yes / No) before the party judgement is switched on."""
+        if on:
+            from PySide6.QtWidgets import QMessageBox
+            m = QMessageBox(self)
+            m.setIcon(QMessageBox.Question)
+            m.setWindowTitle(i18n.T("Party footage"))
+            m.setText(i18n.T("Are you sure you are giving me party footage to select?"))
+            m.setInformativeText(i18n.T("The shots will be judged like the handheld cameras of Multicam. For anything "
+                                        "else (church, getting ready, couple) leave this off."))
+            yes = m.addButton(i18n.T("Yes"), QMessageBox.YesRole)
+            m.addButton(i18n.T("No"), QMessageBox.NoRole)
+            m.exec()
+            if m.clickedButton() is not yes:
+                self.sw_party.set(False)
+                return
+        self.set_s("party", on)
 
     def preset(self, name):
         if name in PRESETS:
@@ -1516,6 +1598,10 @@ class AnalyzingPage(QWidget):
         v.addWidget(os_, 1)
         self.cards, self.total, self.fin, self.part, self.state = [], 0, 0, [], []
         self.paused = False
+        self.clock = EtaClock()
+        self._tick = QTimer(self)
+        self._tick.setInterval(500)
+        self._tick.timeout.connect(self._tick_eta)
 
     def _toggle(self):
         self.paused = not self.paused
@@ -1535,9 +1621,21 @@ class AnalyzingPage(QWidget):
         self.total, self.fin, self.part = len(paths), 0, [0.0] * len(paths)
         self.state = ["waiting"] * len(paths)
         self.t0 = time.time()
+        self.clock.reset()
+        self._tick.start()
         self.paused = False
         self.b_pause.setText("Pause Analysis")
         self._upd()
+
+    def _tick_eta(self):
+        try:
+            if self.total and self.fin >= self.total:
+                self._tick.stop()
+                return
+            if not self.paused:
+                self.eta.setText(self.clock.text())
+        except Exception:
+            pass
 
     def _upd(self):
         f = sum(self.part) / max(1, self.total)
@@ -1546,8 +1644,8 @@ class AnalyzingPage(QWidget):
         running = self.state.count("running")
         waiting = self.state.count("waiting")
         self.count.setText(f"{self.fin} of {self.total} clips done  ·  {running} running  ·  {waiting} waiting")
-        el = time.time() - getattr(self, "t0", time.time())
-        self.eta.setText(f"{_fmt_dur(el)} elapsed" + (f"  ·  about {_fmt_dur(el * (1 - f) / f)} left" if 0.03 < f < 1 and el > 3 else ""))
+        self.clock.feed(f)
+        self.eta.setText(self.clock.text())
         self.run_t.setText(f"RUNNING NOW  {running}")
         self.ok_t.setText(f"COMPLETED  {self.fin}")
 
@@ -4362,7 +4460,8 @@ class TeaserPage(QWidget):
 
 # Premiere label colours (approximately as Premiere shows them)
 PR_LABEL = {"Blue": "#3f63e0", "Rose": "#f08ccb", "Teal": "#1f9e96", "Iris": "#6d78d6", "Brown": "#9a6233",
-            "Yellow": "#e3cf3e", "Purple": "#9b4fc2", "Violet": "#b29de6", "Caribbean": "#22b8a5", "Mango": "#f39c2c"}
+            "Yellow": "#e3cf3e", "Purple": "#9b4fc2", "Violet": "#b29de6", "Caribbean": "#22b8a5", "Mango": "#f39c2c",
+            "Forest": "#3d8b37", "Cerulean": "#2d9ad8", "Tan": "#c8a97e", "Sound": "#4a5a52"}
 
 
 class SelectsMap(QWidget):
@@ -4377,10 +4476,24 @@ class SelectsMap(QWidget):
         ("Drone", [(4, "Violet", "Drone")]),
         ("Copies", [(4, None, "Left out")]),
     ]
+    # Long Film v2: the Create Project sequence (chronological: the cameras one after the other), labelled by moment
+    GROUPS_V2 = [
+        ("Camera A (e.g. fx6)", [(6, "Blue", "Groom"), (5, "Rose", "Bride"), (3, "Teal", "First look"),
+                                 (3, "Forest", "Vornic"), (6, "Brown", "Church"), (3, "Yellow", "Venue"),
+                                 (3, "Purple", "Couple"), (6, "Iris", "Party")]),
+        ("Camera B (e.g. fx3)", [(3, "Teal", "First look"), (3, "Forest", "Vornic"), (4, "Brown", "Church"),
+                                 (5, "Iris", "Party")]),
+        ("Cameras C, D…", [(5, "Iris", "Party")]),
+        ("Drone", [(3, "Violet", "Drone")]),
+        ("Recorder", [(5, "Sound", "Sound only")]),
+        ("No colour", [(3, None, "Left out")]),
+    ]
     ROW, BAR, GAP = 15, 26, 12
 
-    def __init__(self):
+    def __init__(self, groups=None):
         super().__init__()
+        if groups:
+            self.GROUPS = groups
         self.setMinimumWidth(300)
         self._h = 0
         self.setFixedHeight(120)
@@ -6909,7 +7022,7 @@ class LongFilm2Page(QWidget):
                          "• Iris or Cerulean party: multicam of every camera + the recorder, cut by the Auto Director;<br>"
                          "• Tan and the other colours are not used.<br>"
                          "The order of the parts = the order of the colours on camera A (V1 of a timecode sequence, the "
-                         "first camera of a chronological one).", "muted", True))
+                         "first camera of a chronological one); the party always comes last.", "muted", True))
         l1.addWidget(btn("Import XML", slot=self.pick_xml))
         self.foot_lbl = QLabel("")
         self.foot_lbl.setWordWrap(True)
@@ -6952,9 +7065,15 @@ class LongFilm2Page(QWidget):
         left.addStretch()
         sc.setWidget(lw)
         body.addWidget(sc)
-        right = QVBoxLayout()
+        rsc = QScrollArea()                     # the right column scrolls too (nothing squeezed on small screens)
+        rsc.setWidgetResizable(True)
+        rsc.setFrameShape(QFrame.NoFrame)
+        rw = QWidget()
+        right = QVBoxLayout(rw)
+        right.setContentsMargins(0, 0, 8, 0)
         right.addWidget(lbl("YOUR LONG FILM", "section"))
         self.table = QTableWidget(0, 3)
+        self.table.setMinimumHeight(300)
         self.table.setHorizontalHeaderLabels(["Part", "Shots", "Length"])
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.table.verticalHeader().hide()
@@ -6975,7 +7094,14 @@ class LongFilm2Page(QWidget):
         self.stats = lbl("", "muted", True)
         right.addWidget(self.stats)
         right.addStretch()
-        body.addLayout(right, 1)
+        right.addWidget(lbl("HOW YOUR SEQUENCE SHOULD LOOK", "section"))
+        right.addWidget(lbl("The sequence of Create Project, every clip labelled by its MOMENT (not by camera): the "
+                            "order of the colours on camera A gives the order of the film, the party always comes last. Put "
+                            "the recorder files in the sequence too. Clips without a colour are not used.", "muted", True))
+        self.smap = SelectsMap(SelectsMap.GROUPS_V2)
+        right.addWidget(self.smap)
+        rsc.setWidget(rw)
+        body.addWidget(rsc, 1)
         self.timer = QTimer(singleShot=True, interval=300)
         self.timer.timeout.connect(self.recompute)
         self._buttons()
