@@ -418,7 +418,13 @@ def export_xml(parts, infos, cam_names, out_path, name, marker=lambda s: s, look
     recorder items = (t0 in the part, path, src in, src out). One 25 fps 1920x1080 sequence. Every camera has its own
     audio tracks (stereo pairs / mono like Premiere, projectsetup.groups), the recorder last; links = position in the
     track. Returns (clips written, video tracks, audio tracks)."""
-    rate_xml, sf = core._rate(SEQ_FPS)
+    ents, markers = _ents(parts)
+    return _write(ents, markers, infos, out_path, name, marker, look)
+
+
+def _ents(parts):
+    """The parts laid one after the other -> (entries in sequence frames, markers [(name, seconds)])."""
+    _rate_xml, sf = core._rate(SEQ_FPS)
     ents, markers, g = [], [], 0.0
     for pname, length, items, rec in parts:
         if not items and not rec:
@@ -437,6 +443,12 @@ def export_xml(parts, infos, cam_names, out_path, name, marker=lambda s: s, look
             ents.append(dict(path=path, v=None, st=st, en=st + max(1, round((b - a) * sf)), fin=max(0, round(a * sf)),
                              label=it[5] if len(it) > 5 else None, ak=it[4] if len(it) > 4 else ("rec", 0), on=True))
         g += length
+    return ents, markers
+
+
+def _write(ents, markers, infos, out_path, name, marker=lambda s: s, look=None):
+    """Writes the entries as ONE 25 fps 1920x1080 xmeml (cameras' audio tracks, recorder last, links by position)."""
+    rate_xml, sf = core._rate(SEQ_FPS)
     if not ents:
         raise ValueError("Nothing to export yet: press Build first.")
     for e in ents:                          # never past the end of the file
@@ -489,11 +501,12 @@ def export_xml(parts, infos, cam_names, out_path, name, marker=lambda s: s, look
                 f'<clipindex>{ci}</clipindex><groupindex>1</groupindex></link>' for cid, ti, ci, _ch, _k in e["aud"]]
         return "".join(out) if len(out) > 1 else ""
 
-    def head(cid, e, attr=""):
+    def head(cid, e, attr="", on=None):
         i = infos.get(e["path"]) or {}
         sdur = max(e["fin"] + e["en"] - e["st"], int((i.get("dur") or 0) * sf))
+        on = e["on"] if on is None else on
         return (f'<clipitem id="{cid}"{attr}><name>{escape(Path(e["path"]).name)}</name>'
-                f'<enabled>{"TRUE" if e["on"] else "FALSE"}</enabled><duration>{sdur}</duration>{rate_xml}'
+                f'<enabled>{"TRUE" if on else "FALSE"}</enabled><duration>{sdur}</duration>{rate_xml}'
                 f'<start>{e["st"]}</start><end>{e["en"]}</end><in>{e["fin"]}</in><out>{e["fin"] + e["en"] - e["st"]}</out>')
 
     lab = lambda e: f'<labels><label2>{escape(e["label"])}</label2></labels>' if e.get("label") else ""
@@ -510,7 +523,7 @@ def export_xml(parts, infos, cam_names, out_path, name, marker=lambda s: s, look
     for e in sorted(ents, key=lambda e: e["st"]):
         i = infos.get(e["path"]) or {}
         for cid, ti, _ci, ch, kind in e["aud"]:
-            ax[ti].append(head(cid, e, f' premiereChannelType="{kind}"') + projectsetup._file_xml(e["path"], i, files) +
+            ax[ti].append(head(cid, e, f' premiereChannelType="{kind}"', on=e.get("aon", True)) + projectsetup._file_xml(e["path"], i, files) +
                           f'<sourcetrack><mediatype>audio</mediatype><trackindex>{ch}</trackindex></sourcetrack>' +
                           links(e) + lab(e) + "</clipitem>")
     total = max(e["en"] for e in ents)
@@ -527,6 +540,33 @@ def export_xml(parts, infos, cam_names, out_path, name, marker=lambda s: s, look
            f'{"".join(trk(vx[t]) for t in range(1, nv + 1))}</video>{audio}</media></sequence></xmeml>')
     Path(out_path).write_text(xml, encoding="utf-8")
     return len(ents), nv, len(tracks)
+
+
+# ---------------------------------------------------------------- 4c. the editor's timeline
+def timeline(parts, marker=lambda s: s):
+    """The whole film as a free timeline for the editor (Premiere-like): items in SECONDS.
+    item = dict(path, v (video track or None), ak (audio lane key list or None), start, src, dur, label, on, aon)."""
+    ents, markers = _ents(parts)
+    _r, sf = core._rate(SEQ_FPS)
+    items = [dict(path=e["path"], v=e["v"], ak=list(e["ak"]) if e["ak"] else None, start=e["st"] / sf, src=e["fin"] / sf,
+                  dur=(e["en"] - e["st"]) / sf, label=e.get("label"), on=bool(e["on"]), aon=True) for e in ents]
+    return dict(items=items, markers=[[marker(m), t] for m, t in markers])
+
+
+def export_timeline(tl, infos, out_path, name, look=None, hidden=(), muted=()):
+    """The editor's timeline -> XML (hidden video tracks = clips switched off, muted audio lanes = sound switched off)."""
+    _r, sf = core._rate(SEQ_FPS)
+    ents = []
+    for it in tl["items"]:
+        if it["dur"] <= 0.02:
+            continue
+        st = round(it["start"] * sf)
+        ak = tuple(it["ak"]) if it.get("ak") else None
+        ents.append(dict(path=it["path"], v=it.get("v"), st=st, en=st + max(1, round(it["dur"] * sf)),
+                         fin=max(0, round(it["src"] * sf)), label=it.get("label"), ak=ak,
+                         on=bool(it.get("on", True)) and it.get("v") not in set(hidden),
+                         aon=bool(it.get("aon", True)) and (list(ak) if ak else None) not in [list(m) for m in muted]))
+    return _write(ents, [tuple(m) for m in tl.get("markers", [])], infos, out_path, name, lambda s: s, look)
 
 
 # ---------------------------------------------------------------- 4a. straight from the wedding folder

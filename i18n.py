@@ -477,6 +477,31 @@ TEMPLATES.update({
 })
 
 
+EXACT.update({
+    'Previous edit (Up)': 'Tăietura anterioară (Sus)',
+    'One frame back (Left)': 'Un cadru înapoi (Stânga)',
+    'Play / pause (Space)': 'Redare / pauză (Space)',
+    'One frame forward (Right)': 'Un cadru înainte (Dreapta)',
+    'Next edit (Down)': 'Tăietura următoare (Jos)',
+    'Selection (V)': 'Selecție (V)',
+    'Razor (C)': 'Tăiere (C)',
+    'Snap (S)': 'Aliniere (S)',
+    'Delete': 'Șterge',
+    'Ripple delete': 'Șterge și închide golul',
+    'Fit (\\)': 'Tot filmul (\\)',
+    'source': 'sursă',
+    'Edited by you in the editor: Export XML writes your version.': 'Editat de tine în editor: Export XML scrie varianta ta.',
+})
+TEMPLATES.update({
+    '{} clips · {}': '{} clipuri · {}',
+    'Sound {}': 'Sunet {}',
+    'Camera {}': 'Camera {}',
+})
+
+
+EXACT.update({'Undo': 'Anulează pasul', 'Redo': 'Refă pasul'})
+
+
 def set_lang(lang):
     global LANG, _PATS
     LANG = lang if lang in ("en", "ro") else "en"

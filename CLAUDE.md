@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.15.1), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.16.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -63,6 +63,7 @@ linking to https://www.instagram.com/sergiugabrielcg/.
 - `longfilm2.py` — Long Film v2 (BETA): the long film from the labelled Create Project sequence (load, selection,
   priest, first look, vornic, party multicam, 1920x1080 25 fps export) or from the wedding folder (automatic).
 - `daymap.py` — the moments of the day without labels (scenes, church, faces of groom / bride, venue / couple, party).
+- `editor.py` — the Premiere-like editor of Long Film v2 (monitor, V / A tracks, overwrite, razor, trim, undo).
 - `colour.py` — his LUT(s) as Lumetri + 10 % crop on every clip (assets/ = his Lumetri template).
 - `teaser.py` — Teaser Studio engine (labels, music parts, beats, drop, edit, XML export).
 - `make_icons.py` — builds icon.icns / icon.ico / icon.png from `icon_source.png` (run in CI before PyInstaller).
@@ -908,6 +909,27 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   6 s are kept whole (labelled mode only; not in automatic mode).
 - Not done yet: the drone part at Alex & Andreea is the fireworks (mavic doar artificii, at night) but goes before the
   party; Lumetri effect name is empty in his template (<name></name>) - check that the look shows in Premiere.
+
+## v3.16.0: the editor as a real mini Premiere (owner: "several video / audio tracks, move one up, another in its place,
+## preview video + timeline, same principle as Premiere")
+- editor.py (new): Editor dialog = Program monitor (FrameReader: ffmpeg frame under the playhead, newest request wins;
+  Play = QMediaPlayer + QVideoWidget + QAudioOutput playing the TOPMOST visible clip, source switched at every edit,
+  seek applied on LoadedMedia; no Qt Multimedia -> still frames) + transport (Space, Left/Right frame, Up/Down edit,
+  Home/End, timecode 25 fps) + tools (Selection V, Razor C, Snap S, Undo/Redo, Delete, Ripple delete, zoom, Fit \) +
+  TimelineView (custom painted, own horizontal scrollbar, ruler with part markers, V1..Vn + one free track, audio
+  lanes per source (camera sound / recorder / extras), clips with label colour and pictures along them (ThumbReader,
+  <data>/thumbs), linked sound drawn on its lane and moved with the picture, eye = hide video track, M = mute lane).
+  Model: items in seconds; move (time + video track) with Premiere OVERWRITE (covered clips trimmed / split /
+  removed, by video track or by audio lane for sound-only clips), trim edges (within the file), razor, delete /
+  ripple delete (only when nothing else is in the gap), undo / redo of every step (300), snapping (8 px) to edges,
+  playhead, markers.
+- longfilm2: export_xml split into _ents(parts) + _write(ents, ...); timeline(parts) = the whole film as editor items;
+  export_timeline(tl, infos, out, name, look, hidden, muted) (hidden video track -> clips off, muted lane -> audio clips
+  off). Round trip timeline -> export is IDENTICAL to export_xml (tested). The page keeps p["timeline"] / hidden /
+  muted, Export XML uses it, Build / new footage clears it. The old row editor (FilmEditor / p["edits"]) is gone from
+  the UI (apply_edits stays in assemble for old projects).
+- Build: Qt Multimedia is no longer excluded (PyInstaller --hidden-import PySide6.QtMultimediaWidgets). In the sandbox
+  QAudioOutput hangs on PipeWire: tests set MMM_NO_PLAYER=1. Real playback NOT testable here (no screen / audio).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

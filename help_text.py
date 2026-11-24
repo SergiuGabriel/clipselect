@@ -593,14 +593,23 @@ multe = cuplu (ședința de la apus). Drona = folderele / fișierele de dronă (
 clipuri de la luarea miresei pe care tu le-ai pus Iris (aplicația le pune la mireasă) și cele 3 interviuri Tan (ajung la petrecere).
 Restul îl corectezi în editor.</p>
 <h3>Editează filmul</h3>
-<p>După Build, butonul <b>Editează filmul</b> deschide editorul, făcut ca timeline-ul din Premiere: o pistă cu toate cadrele
-părților din selecție (mirii, biserica, sala, cuplul, drona), fiecare cadru atât de lat cât de lung e, cu imaginea lui și culoarea
-etichetei, părțile ca benzi colorate deasupra și o riglă de timp. Tragi un cadru și îl lași pe linia albastră (intră în partea de sub
-ea); Delete îl scoate; selectezi două (Shift / Cmd + click) și apeși <b>Schimbă</b> ca să le inversezi; click dreapta &gt; Mută la.
-<b>Anulează</b> / <b>Refă</b> (Cmd+Z, Shift+Cmd+Z) pentru fiecare schimbare. Zoom din cursor sau Cmd + rotița. „Înapoi la filmul
-automat” șterge modificările.
-First look, vornicul și petrecerea sunt făcute din camerele sincronizate și le tai în Premiere. Un Build nou pornește de la filmul
-automat (modificările vechi nu se mai potrivesc pe cadrele noi).</p>
+<p>După Build, butonul <b>Editează filmul</b> deschide editorul, făcut ca Premiere, pe <b>tot filmul</b> (inclusiv petrecerea):
+sus monitorul (cadrul de sub playhead; Redare îl redă cu sunetul lui), jos timeline-ul cu rigla de timp și markerele părților,
+pistele video V1, V2, V3 și una liberă deasupra, apoi pistele audio (sunetul fiecărei camere, recorderul, celelalte surse). Fiecare
+clip e atât de lung cât e, cu imagini de-a lungul lui și culoarea etichetei.</p>
+<ul>
+<li><b>Selecție (V)</b>: tragi clipurile în timp și între pistele video (de exemplu unul sus pe V3, altul în locul lui, apoi primul
+jos). Un clip lăsat peste altele le <b>suprascrie</b>, ca în Premiere. Tragi de marginea unui clip ca să-l scurtezi / lungești.
+Shift / Cmd + click selectează mai multe și le muți împreună.</li>
+<li><b>Tăiere (C)</b>: click pe un clip îl taie în două în acel punct.</li>
+<li>Delete scoate clipul (rămâne gol), Shift+Delete îl scoate și închide golul (doar dacă nimic altceva nu e acolo). Cmd+Z /
+Shift+Cmd+Z anulează / refac fiecare pas. S pornește / oprește alinierea la marginile clipurilor, playhead și markere.</li>
+<li>Space redă / oprește, Stânga / Dreapta un cadru, Sus / Jos tăietura anterioară / următoare, Home / End. Zoom din cursor,
+Cmd + rotița, + / −, iar tasta &#92; arată tot filmul. Click sau trage pe riglă ca să muți playhead-ul.</li>
+<li>Ochiul unei piste video o ascunde (clipurile ei sunt exportate oprite), M pe o pistă audio îi oprește sunetul.</li>
+</ul>
+<p>Salvează păstrează varianta ta în proiect; <b>Export XML</b> scrie exact ce ai în editor. „Înapoi la filmul automat” o șterge.
+Un Build nou pornește iar de la filmul automat.</p>
 <p><b>Pregătirile mirilor</b> nu mai sunt unul după altul: sunt alternate ca la tine (măsurat pe Mada și Radu, Alexandra și Vlad):
 un bloc mare din partea filmată prima (cam un sfert, 4–20 cadre), un bloc mare din cealaltă (cam o cincime, 4–14), apoi rânduri de
 2–7 cadre (de obicei 3–4), ca să se termine amândouă odată.</p>
@@ -1355,13 +1364,23 @@ couple (the sunset session). Drone = drone folders / files (DJI, mavic, drona).<
 of fetching the bride you labelled Iris (the app puts them with the bride) and the 3 Tan interviews (they end up in the party). You
 correct the rest in the editor.</p>
 <h3>Edit the film</h3>
-<p>After Build, <b>Edit the film</b> opens the editor, laid out like Premiere's timeline: one track with every shot of the selection
-parts (groom and bride, church, venue, couple, drone), each as wide as it is long with its picture and its label colour, the parts as
-coloured bands above and a time ruler. Drag a shot and drop it on the blue line (it joins the part under it); Delete removes it;
-select two (Shift / Cmd + click) and press <b>Swap</b> to exchange them; right-click &gt; Move to. <b>Undo</b> / <b>Redo</b> (Cmd+Z,
-Shift+Cmd+Z) for every change. Zoom with the slider or Cmd + wheel. "Back to the automatic film" drops your changes. The first look, the
-vornic and the party are built from the synced cameras: you cut them in Premiere. A new Build starts from the automatic film again
-(old changes do not fit the new shots).</p>
+<p>After Build, <b>Edit the film</b> opens the editor, laid out like Premiere, on the <b>whole film</b> (the party included): the
+monitor on top (the frame under the playhead; Play plays it with its sound), the timeline below with the time ruler and the parts'
+markers, video tracks V1, V2, V3 and a free one on top, then the audio tracks (each camera's sound, the recorder, the other sound
+sources). Every clip is as long as it is, with pictures along it and its label colour.</p>
+<ul>
+<li><b>Selection (V)</b>: drag clips in time and between video tracks (for example one up on V3, another into its place, then the
+first one down). A clip dropped over others <b>overwrites</b> them, like Premiere. Drag a clip's edge to trim it. Shift / Cmd + click
+selects more and moves them together.</li>
+<li><b>Razor (C)</b>: a click cuts a clip in two at that point.</li>
+<li>Delete lifts the clip (a gap stays), Shift+Delete removes it and closes the gap (only when nothing else is there). Cmd+Z /
+Shift+Cmd+Z undo / redo every step. S switches snapping to clip edges, the playhead and markers.</li>
+<li>Space plays / stops, Left / Right one frame, Up / Down previous / next edit, Home / End. Zoom with the slider, Cmd + wheel, + / -,
+and the &#92; key shows the whole film. Click or drag on the ruler to move the playhead.</li>
+<li>The eye of a video track hides it (its clips are exported switched off), M on an audio track mutes it.</li>
+</ul>
+<p>Save keeps your version in the project; <b>Export XML</b> writes exactly what is in the editor. "Back to the automatic film" drops
+it. A new Build starts from the automatic film again.</p>
 <p><b>The getting ready</b> is no longer one side after the other: groom and bride alternate the way you cut it (measured on Mada &
 Radu, Alexandra & Vlad): a big block of the side filmed first (about a quarter, 4-20 shots), a big block of the other (about a fifth,
 4-14), then turns of 2-7 shots (mostly 3-4) so both end together.</p>

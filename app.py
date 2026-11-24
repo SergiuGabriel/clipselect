@@ -50,7 +50,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.15.1"
+APP, VER = "MoneyMakingMachine", "v3.16.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -7302,7 +7302,7 @@ class LongFilm2Page(QWidget):
         if self._busy():
             notify("Wait for the current job to finish (or Cancel it).", error=True)
             return
-        self._remember(footage=f, built=False, edits={})
+        self._remember(footage=f, built=False, edits={}, timeline=None, hidden=[], muted=[])
         self.r, self.an = None, {}
         self._summary()
         self.recompute()
@@ -7336,7 +7336,7 @@ class LongFilm2Page(QWidget):
         busy = self._busy()
         self.b_build.setEnabled(bool(p.get("footage")) and not busy)
         self.b_exp.setEnabled(bool(self.parts) and not busy)
-        self.b_edit.setEnabled(bool(self.parts) and not busy and any(k in longfilm2.SELECT for k in self.info.get("keys", [])))
+        self.b_edit.setEnabled(bool(self.parts) and not busy)
 
     # ---- build
     def build(self):
@@ -7363,7 +7363,7 @@ class LongFilm2Page(QWidget):
         except Exception:
             logging.exception("long film v2: result not saved")
         self.store.save_blob(p["id"], dict(result=r, cache=cache))
-        p.update(built=True, edits={}, when=datetime.now().isoformat(timespec="seconds"))
+        p.update(built=True, edits={}, timeline=None, hidden=[], muted=[], when=datetime.now().isoformat(timespec="seconds"))
         if r.get("footage_xml"):
             p["footage"] = r["footage_xml"]     # the sequence made from the wedding folder
         self.store.save_app()
@@ -7424,8 +7424,8 @@ class LongFilm2Page(QWidget):
                     ", ".join(f"{i18n.T(k)} {n}" for k, n in sorted((a.get("counts") or {}).items())))
                 if not a.get("faces"):
                     extra += " " + i18n.T("(without faces: the face model could not be loaded)")
-            if (self._cur() or {}).get("edits"):
-                extra += "  " + i18n.T("Edited by you.")
+            if (self._cur() or {}).get("timeline"):
+                extra += "  " + i18n.T("Edited by you in the editor: Export XML writes your version.")
             self.status.setText(i18n.T("Ready: the long film is {} long. Press Export XML.").format(fmt_hms(tot)) + extra)
         elif (self._cur() or {}).get("footage"):
             self.status.setText(i18n.T("Press Build."))
@@ -7462,13 +7462,26 @@ class LongFilm2Page(QWidget):
         self.stats.setText(i18n.T("Party: {} shots").format(shots) +
                            (("  ·  " + i18n.T("{} party clips could not be synced by the sound").format(fails)) if fails else ""))
 
+    def _lane_name(self, ak):
+        cams = [c["name"] for c in (self.r or {}).get("cams", [])]
+        if ak and ak[0] == "cam":
+            return cams[ak[1]] if ak[1] < len(cams) else f"Camera {ak[1] + 1}"
+        return "Recorder" if not ak or ak[1] == 0 else f"Sound {ak[1] + 1}"
+
     def edit_film(self):
+        """The Premiere-like editor (editor.py) on the whole film: every track, every part, the party included."""
         p = self._cur()
         if not p or not self.parts:
             return
-        dlg = FilmEditor(self, self.parts, self.info.get("keys", []), str(self.store.dir / "thumbs"))
+        import editor
+        tl = p.get("timeline") or longfilm2.timeline(self.parts, marker=i18n.T)
+        dlg = editor.Editor(self, tl, self.r["infos"], PR_LABEL, self._lane_name, str(self.store.dir / "thumbs"),
+                            p.get("hidden", []), p.get("muted", []))
         if dlg.exec():
-            self._remember(edits={} if dlg.reset else dlg.edits())
+            if dlg.reset:
+                self._remember(timeline=None, hidden=[], muted=[], edits={})
+            else:
+                self._remember(timeline=dlg.timeline(), hidden=sorted(dlg.m.hidden), muted=dlg.m.muted)
             self.recompute()
             notify(i18n.T("The automatic film is back.") if dlg.reset else i18n.T("Your changes are saved."))
 
@@ -7482,405 +7495,19 @@ class LongFilm2Page(QWidget):
         if not f:
             return
         try:
-            n, nv, na = longfilm2.export_xml(self.parts, self.r["infos"], [c["name"] for c in self.r["cams"]], f,
-                                             f"{p['name']} - Long Film v2", marker=lambda s: s, look=self._look_s())
+            if p.get("timeline"):                  # the film as he edited it in the editor
+                n, nv, na = longfilm2.export_timeline(p["timeline"], self.r["infos"], f, f"{p['name']} - Long Film v2",
+                                                      look=self._look_s(), hidden=p.get("hidden", []),
+                                                      muted=p.get("muted", []))
+            else:
+                n, nv, na = longfilm2.export_xml(self.parts, self.r["infos"], [c["name"] for c in self.r["cams"]], f,
+                                                 f"{p['name']} - Long Film v2", marker=lambda s: s, look=self._look_s())
         except Exception as e:
             logging.exception("long film v2 export failed")
             notify(i18n.T("Export failed: {}").format(str(e)), error=True)
             return
         self.status.setText(i18n.T("Saved {} clips ({} video, {} audio tracks) to {}. Premiere: File > Import.").format(n, nv, na, f))
         notify(i18n.T("XML saved: {}").format(Path(f).name))
-
-
-class _ThumbWorker(QThread):
-    """One small picture from the middle of every shot of the editor (cached in <data>/thumbs)."""
-    one = Signal(str, str)
-
-    def __init__(self, shots, folder):
-        super().__init__()
-        self.shots, self.folder, self._stop = shots, Path(folder), False
-
-    def run(self):
-        import hashlib
-        self.folder.mkdir(parents=True, exist_ok=True)
-        for key, path, t in self.shots:
-            if self._stop:
-                return
-            out = self.folder / (hashlib.md5(key.encode()).hexdigest()[:16] + ".jpg")
-            if not out.exists():
-                try:
-                    subprocess.run([core.ffmpeg_exe(), "-v", "error", "-nostdin", "-ss", f"{max(0.0, t):.2f}", "-i", path,
-                                    "-frames:v", "1", "-vf", "scale=208:-2", "-q:v", "5", "-y", str(out)],
-                                   capture_output=True, timeout=60, **core._NOWIN)
-                except Exception:
-                    continue
-            if out.exists():
-                self.one.emit(key, str(out))
-
-
-PART_COL = {"ready": "#3f63e0", "church": "#9a6233", "couple": "#9b4fc2", "venue": "#e3cf3e", "drone": "#b29de6"}
-
-
-class Timeline(QWidget):
-    """A Premiere-like timeline of the selection parts: one picture track, every shot as wide as it is long with its
-    picture inside, the parts as coloured bands above (like markers), a time ruler. Click to select (Shift / Cmd for
-    more), drag to move (the shot lands where the blue line is, in the part under it), Delete removes, Swap exchanges
-    two shots, Undo / Redo every change. Mouse wheel scrolls, Cmd / Ctrl + wheel zooms."""
-    changed = Signal()
-    H_RULER, H_BAND, H_CLIP = 22, 22, 96
-
-    def __init__(self, shots, parts):
-        super().__init__()
-        self.shots, self.parts = shots, parts           # shots: dicts key, part, dur, label, name, pix
-        self.pps = 6.0                                  # pixels per second
-        self.sel, self.undo_st, self.redo_st = set(), [], []
-        self.drag = None
-        self.setMouseTracking(True)
-        self.setFocusPolicy(Qt.StrongFocus)
-        self._size()
-
-    # ---- model
-    def _snap(self):
-        return [dict(x) for x in self.shots]
-
-    def _push(self):
-        self.undo_st.append(self._snap())
-        self.undo_st = self.undo_st[-200:]
-        self.redo_st.clear()
-
-    def _order(self):                    # keep the parts in their order, shots inside in their order
-        rank = {k: i for i, k in enumerate(self.parts)}
-        self.shots.sort(key=lambda x: rank.get(x["part"], 99))
-
-    def undo(self):
-        if self.undo_st:
-            self.redo_st.append(self._snap())
-            self.shots[:] = self.undo_st.pop()
-            self.sel.clear()
-            self._done()
-
-    def redo(self):
-        if self.redo_st:
-            self.undo_st.append(self._snap())
-            self.shots[:] = self.redo_st.pop()
-            self.sel.clear()
-            self._done()
-
-    def remove(self):
-        if not self.sel:
-            return
-        self._push()
-        self.shots[:] = [x for i, x in enumerate(self.shots) if i not in self.sel]
-        self.sel.clear()
-        self._done()
-
-    def swap(self):
-        if len(self.sel) != 2:
-            notify(i18n.T("Select exactly two shots to swap them (Shift / Cmd + click)."), error=True)
-            return
-        self._push()
-        a, b = sorted(self.sel)
-        pa, pb = self.shots[a]["part"], self.shots[b]["part"]
-        self.shots[a], self.shots[b] = self.shots[b], self.shots[a]
-        self.shots[a]["part"], self.shots[b]["part"] = pa, pb
-        self._done()
-
-    def move_to(self, part):
-        if not self.sel:
-            return
-        self._push()
-        moving = [x for i, x in enumerate(self.shots) if i in self.sel]
-        rest = [x for i, x in enumerate(self.shots) if i not in self.sel]
-        for x in moving:
-            x["part"] = part
-        last = max([i for i, x in enumerate(rest) if x["part"] == part] or
-                   [max([i for i, x in enumerate(rest) if self.parts.index(x["part"]) < self.parts.index(part)] or [-1])])
-        self.shots[:] = rest[:last + 1] + moving + rest[last + 1:]
-        self.sel = {self.shots.index(x) for x in moving}
-        self._done()
-
-    def _done(self):
-        self._size()
-        self.update()
-        self.changed.emit()
-
-    # ---- geometry
-    def _xs(self):
-        xs, x = [], 0.0
-        for sh in self.shots:
-            w = max(4.0, sh["dur"] * self.pps)
-            xs.append((x, w))
-            x += w
-        return xs, x
-
-    def _size(self):
-        _xs, total = self._xs()
-        self.setMinimumSize(int(total) + 80, self.H_RULER + self.H_BAND + self.H_CLIP + 16)
-
-    def zoom(self, f):
-        self.pps = min(80.0, max(0.5, self.pps * f))
-        self._size()
-        self.update()
-
-    def _at(self, x):
-        for i, (x0, w) in enumerate(self._xs()[0]):
-            if x0 <= x < x0 + w:
-                return i
-        return None
-
-    def _gap(self, x):                   # insertion index for a drop at x
-        for i, (x0, w) in enumerate(self._xs()[0]):
-            if x < x0 + w / 2:
-                return i
-        return len(self.shots)
-
-    # ---- painting
-    def paintEvent(self, _e):
-        g = QPainter(self)
-        g.fillRect(self.rect(), QColor("#1b1b1b"))
-        xs, total = self._xs()
-        y0 = self.H_RULER
-        # ruler
-        g.setPen(QColor("#777"))
-        step = next(s for s in (1, 2, 5, 10, 15, 30, 60, 120, 300, 600) if s * self.pps >= 70)
-        t, tot_s = 0.0, sum(x["dur"] for x in self.shots)
-        f = g.font()
-        f.setPointSizeF(8.5)
-        g.setFont(f)
-        acc = 0.0
-        while t <= tot_s + step:
-            # find x of time t
-            px = t * 0.0
-            acc = 0.0
-            for (x0, w), sh in zip(xs, self.shots):
-                if acc + sh["dur"] >= t:
-                    px = x0 + (t - acc) / max(1e-6, sh["dur"]) * w
-                    break
-                acc += sh["dur"]
-            else:
-                px = total
-            g.drawLine(int(px), 14, int(px), y0)
-            g.drawText(int(px) + 3, 12, fmt_hms(t))
-            t += step
-        # part bands
-        i = 0
-        while i < len(self.shots):
-            k = self.shots[i]["part"]
-            j = i
-            while j < len(self.shots) and self.shots[j]["part"] == k:
-                j += 1
-            bx, bw = xs[i][0], xs[j - 1][0] + xs[j - 1][1] - xs[i][0]
-            g.fillRect(QRectF(bx, y0, bw, self.H_BAND - 3), QColor(PART_COL.get(k, "#666")).darker(130))
-            g.setPen(QColor("white"))
-            g.drawText(QRectF(bx + 6, y0, max(0.0, bw - 8), self.H_BAND - 3), Qt.AlignVCenter | Qt.AlignLeft,
-                       g.fontMetrics().elidedText(i18n.T(self.part_names.get(k, k)), Qt.ElideRight, int(max(0, bw - 10))))
-            i = j
-        # clips
-        cy = y0 + self.H_BAND
-        for idx, ((x0, w), sh) in enumerate(zip(xs, self.shots)):
-            r = QRectF(x0 + 0.5, cy, w - 1, self.H_CLIP)
-            col = QColor(PR_LABEL.get(sh.get("label") or "", "#5b6f8f"))
-            g.fillRect(r, col.darker(160))
-            pm = sh.get("pix")
-            if pm is not None and w > 18:
-                inner = QRectF(r.x() + 1, r.y() + 14, r.width() - 2, r.height() - 15)
-                tw = inner.height() * pm.width() / max(1, pm.height())     # the picture repeated, like Premiere
-                g.save()
-                g.setClipRect(inner)
-                xx = inner.x()
-                while xx < inner.right():
-                    g.drawPixmap(QRectF(xx, inner.y(), tw, inner.height()), pm, QRectF(pm.rect()))
-                    xx += tw
-                g.restore()
-            g.fillRect(QRectF(r.x(), r.y(), r.width(), 13), col)
-            if w > 30:
-                g.setPen(QColor("#111"))
-                g.drawText(QRectF(r.x() + 3, r.y(), r.width() - 5, 13), Qt.AlignVCenter | Qt.AlignLeft,
-                           g.fontMetrics().elidedText(sh["name"], Qt.ElideRight, int(r.width() - 6)))
-            g.setPen(QPen(QColor("#ffffff") if idx in self.sel else QColor("#000"), 2 if idx in self.sel else 1))
-            g.drawRect(r)
-        # drop line
-        if self.drag and self.drag.get("gap") is not None:
-            gi = self.drag["gap"]
-            gx = xs[gi][0] if gi < len(xs) else total
-            g.setPen(QPen(QColor("#2d8ceb"), 3))
-            g.drawLine(int(gx), y0, int(gx), cy + self.H_CLIP)
-        g.end()
-
-    # ---- mouse / keys
-    def mousePressEvent(self, e):
-        self.setFocus()
-        i = self._at(e.position().x())
-        mods = e.modifiers()
-        if e.button() == Qt.RightButton:
-            if i is not None and i not in self.sel:
-                self.sel = {i}
-            self.update()
-            return self.parent_menu(e)
-        if i is None:
-            self.sel.clear()
-        elif mods & (Qt.ShiftModifier | Qt.ControlModifier | Qt.MetaModifier):
-            self.sel ^= {i}
-        elif i not in self.sel:
-            self.sel = {i}
-        self.drag = dict(x=e.position().x(), on=i is not None, gap=None)
-        self.update()
-
-    def mouseMoveEvent(self, e):
-        i = self._at(e.position().x())
-        if i is not None:
-            sh = self.shots[i]
-            self.setToolTip(f"{sh['name']}  ·  {sh['dur']:.1f} s")
-        if self.drag and self.drag["on"] and abs(e.position().x() - self.drag["x"]) > 6:
-            self.drag["gap"] = self._gap(e.position().x())
-            self.update()
-
-    def mouseReleaseEvent(self, e):
-        d, self.drag = self.drag, None
-        if d and d.get("gap") is not None and self.sel:
-            gi = d["gap"]
-            moving = [x for k, x in enumerate(self.shots) if k in self.sel]
-            before = [x for k, x in enumerate(self.shots[:gi]) if k not in self.sel]
-            after = [x for k, x in enumerate(self.shots) if k >= gi and k not in self.sel]
-            # the part of the place it lands in: the shot before it, else the shot after it
-            part = before[-1]["part"] if before else (after[0]["part"] if after else moving[0]["part"])
-            if after and before and before[-1]["part"] != after[0]["part"] and d["x"] > e.position().x():
-                part = after[0]["part"]           # dragged left onto the start of a part: it joins that part
-            self._push()
-            for x in moving:
-                x["part"] = part
-            self.shots[:] = before + moving + after
-            self._order()
-            self.sel = {self.shots.index(x) for x in moving}
-            self._done()
-        self.update()
-
-    def wheelEvent(self, e):
-        if e.modifiers() & (Qt.ControlModifier | Qt.MetaModifier):
-            self.zoom(1.15 if e.angleDelta().y() > 0 else 1 / 1.15)
-            e.accept()
-        else:
-            e.ignore()
-
-    def keyPressEvent(self, e):
-        k, m = e.key(), e.modifiers()
-        cmd = m & (Qt.ControlModifier | Qt.MetaModifier)
-        if k in (Qt.Key_Delete, Qt.Key_Backspace):
-            self.remove()
-        elif cmd and k == Qt.Key_Z and m & Qt.ShiftModifier:
-            self.redo()
-        elif cmd and k == Qt.Key_Z:
-            self.undo()
-        elif k in (Qt.Key_Plus, Qt.Key_Equal):
-            self.zoom(1.25)
-        elif k == Qt.Key_Minus:
-            self.zoom(0.8)
-        else:
-            super().keyPressEvent(e)
-
-    def parent_menu(self, e):
-        from PySide6.QtWidgets import QMenu
-        if not self.sel:
-            return
-        m = QMenu(self)
-        m.addAction(i18n.T("Remove from the film"), self.remove)
-        if len(self.sel) == 2:
-            m.addAction(i18n.T("Swap these two shots"), self.swap)
-        sub = m.addMenu(i18n.T("Move to"))
-        for k in self.parts:
-            sub.addAction(i18n.T(self.part_names.get(k, k)), lambda k=k: self.move_to(k))
-        m.exec(e.globalPosition().toPoint())
-
-
-class FilmEditor(QDialog):
-    """The integrated editor of Long Film v2, laid out like Premiere's timeline (see Timeline)."""
-
-    def __init__(self, parent, parts, keys, folder, edits=None):
-        super().__init__(parent)
-        self.setWindowTitle("Edit the long film")
-        self.resize(1280, 420)
-        v = QVBoxLayout(self)
-        v.setContentsMargins(18, 16, 18, 16)
-        v.addWidget(lbl("Like Premiere: drag a shot to move it (it lands on the blue line, in the part under it), "
-                        "Delete removes it, select two and press Swap to exchange them, right-click to move it into "
-                        "another part. Cmd+Z undoes, Shift+Cmd+Z redoes. Cmd + mouse wheel or the slider zooms. The first "
-                        "look, the vornic and the party are built from the synced cameras and are edited in Premiere.",
-                        "muted", True))
-        shots, names, order, todo = [], {}, [], []
-        for (name, ln, its, _rec), k in zip(parts, keys):
-            if k not in longfilm2.SELECT:
-                continue
-            names[k] = name
-            order.append(k)
-            for it in its:
-                p, a, b = it[2], it[3], it[4]
-                key = longfilm2.shot_key(p["path"], a, b)
-                shots.append(dict(key=key, part=k, dur=b - a, label=p.get("label") or "", name=Path(p["path"]).name,
-                                  pix=None))
-                todo.append((key, p["path"], (a + b) / 2))
-        self.tl = Timeline(shots, order)
-        self.tl.part_names = names
-        self.tl.changed.connect(self._status)
-        sc = QScrollArea()
-        sc.setWidget(self.tl)
-        sc.setWidgetResizable(False)
-        sc.setStyleSheet("QScrollArea{background:#1b1b1b;border:1px solid #333;border-radius:8px}")
-        v.addWidget(sc, 1)
-        bar = QHBoxLayout()
-        for text, slot in (("Undo", self.tl.undo), ("Redo", self.tl.redo), ("Swap", self.tl.swap),
-                           ("Remove", self.tl.remove)):
-            bar.addWidget(btn(text, slot=slot))
-        bar.addSpacing(16)
-        bar.addWidget(lbl("Zoom", "muted"))
-        self.zs = QSlider(Qt.Horizontal)
-        self.zs.setRange(0, 100)
-        self.zs.setValue(40)
-        self.zs.setFixedWidth(180)
-        self.zs.valueChanged.connect(lambda x: (setattr(self.tl, "pps", 0.5 * (160 ** (x / 100))), self.tl._size(),
-                                                self.tl.update()))
-        bar.addWidget(self.zs)
-        bar.addStretch()
-        self.total = lbl("", "muted")
-        bar.addWidget(self.total)
-        v.addLayout(bar)
-        row = QHBoxLayout()
-        row.addWidget(btn("Back to the automatic film", "link", self._reset))
-        row.addStretch()
-        row.addWidget(btn("Cancel", slot=self.reject))
-        row.addWidget(btn("Save", "primary", self.accept))
-        v.addLayout(row)
-        self.reset = False
-        self._status()
-        self.tw = _ThumbWorker(todo, folder)
-        self.tw.one.connect(self._thumb)
-        self.tw.start()
-
-    def _thumb(self, key, img):
-        pm = QPixmap(img)
-        for sh in self.tl.shots:
-            if sh["key"] == key:
-                sh["pix"] = pm
-        self.tl.update()
-
-    def _status(self):
-        n = len(self.tl.shots)
-        tot = sum(x["dur"] for x in self.tl.shots)
-        self.total.setText(i18n.T("{} shots · {}").format(n, fmt_hms(tot)))
-
-    def _reset(self):
-        self.reset = True
-        self.accept()
-
-    def edits(self):
-        out = {k: [] for k in self.tl.parts}
-        for sh in self.tl.shots:
-            out[sh["part"]].append(sh["key"])
-        return out
-
-    def done(self, r):
-        self.tw._stop = True
-        self.tw.wait(3000)
-        super().done(r)
 
 
 class StudioCard(QFrame):
