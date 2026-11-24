@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.15.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.15.1), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -894,6 +894,20 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   (PyInstaller --add-data assets; colour._ASSETS uses sys._MEIPASS).
 - Analysis material of Alex & Andreea kept in /home/claude/day (probe.json, th/ th640/ thumbnails, faces.json, score.py)
   and on his Mac in Documents/_mmm_analiza/day.
+
+## v3.15.1 (his test of v3.15.0 on Alex & Andreea, labelled XML, Build ~1.5 h: "getting ready good, venue not quite")
+- He first ran v3.12.1 from the mounted DMG (never copied to Applications): always check the version first.
+- BUG: assemble() reused the name `edits` for the director's party edits, so the editor's changes were NEVER applied
+  (user_edits now). The editor is a Premiere-like Timeline (app.Timeline in FilmEditor): one track, clip width =
+  duration, repeated thumbnails, label colour, part bands + ruler, drag to a blue insertion line (joins the part under
+  it), Delete, Swap (2 selected), right-click Move to, Undo / Redo stack (Cmd+Z / Shift+Cmd+Z), zoom slider + Cmd+wheel.
+- Party (his export: 467 min long, 228 min of cuts, empty 121 / 65 / 23 min): party_layout drops stretches where no
+  camera filmed longer than PARTY_GAP 30 s -> PARTY_PAUSE 2 s; audio (cameras, recorder, extras) split per stretch.
+- Alternative angle in v2: director's e["alt"] (handheld shots only) on the track above the cameras, clips switched off.
+- Venue: his short labelled clips (63257-61, 3-5 s) were dropped by the Auto selection -> labelled clips <= SHORT_WHOLE
+  6 s are kept whole (labelled mode only; not in automatic mode).
+- Not done yet: the drone part at Alex & Andreea is the fireworks (mavic doar artificii, at night) but goes before the
+  party; Lumetri effect name is empty in his template (<name></name>) - check that the look shows in Premiere.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

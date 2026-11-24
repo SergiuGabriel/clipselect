@@ -463,6 +463,20 @@ TEMPLATES.update({
 })
 
 
+EXACT.update({
+    'Like Premiere: drag a shot to move it (it lands on the blue line, in the part under it), Delete removes it, select two and press Swap to exchange them, right-click to move it into another part. Cmd+Z undoes, Shift+Cmd+Z redoes. Cmd + mouse wheel or the slider zooms. The first look, the vornic and the party are built from the synced cameras and are edited in Premiere.': 'Ca în Premiere: tragi un cadru ca să-l muți (ajunge pe linia albastră, în partea de sub ea), Delete îl scoate, selectezi două și apeși Schimbă ca să le inversezi, click dreapta ca să-l muți în altă parte. Cmd+Z anulează, Shift+Cmd+Z refăce. Cmd + rotița mouse-ului sau cursorul face zoom. First look, vornicul și petrecerea sunt făcute din camerele sincronizate și se editează în Premiere.',
+    'Undo': 'Anulează',
+    'Redo': 'Refă',
+    'Swap': 'Schimbă',
+    'Zoom': 'Zoom',
+    'Swap these two shots': 'Schimbă între ele aceste două cadre',
+    'Select exactly two shots to swap them (Shift / Cmd + click).': 'Selectează exact două cadre ca să le schimbi între ele (Shift / Cmd + click).',
+})
+TEMPLATES.update({
+    '{} shots · {}': '{} cadre · {}',
+})
+
+
 def set_lang(lang):
     global LANG, _PATS
     LANG = lang if lang in ("en", "ro") else "en"

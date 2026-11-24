@@ -520,6 +520,8 @@ Oprit = nu există vornic, Forest nu e folosit.</li>
 pe loc (fără mișcări mai lungi de 1 s), aceeași față tot timpul (recunoaștere facială locală, 5 cadre; dacă modelul nu se poate
 descărca, ajung camera nemișcată și vorbirea) și se vorbește cel puțin jumătate din timp. Clipul preotului rămâne întreg.</li>
 <li><b>Yellow (sala), Purple (cadre cu mirii), Violet (drona)</b>: selecție Auto.</li>
+<li>Un clip etichetat de tine care are cel mult 6 s (un detaliu din sală, de exemplu) e păstrat <b>întreg</b>: la Alex și Andreea
+selecția le arunca pe toate detaliile de 3–5 s din sală.</li>
 <li><b>Iris sau Cerulean (petrecerea)</b>: multicam ca la pagina Multicam: toate camerele etichetate + fișierele de recorder din
 secvență, sincronizate după sunet (fără recorder: pe cel mai lung clip de petrecere), apoi Auto Director pe intervalele tale
 etichetate. Ca la Multicam, recorderul principal e folderul de fișiere doar-sunet cu cele mai multe ore (de exemplu tascam);
@@ -537,7 +539,10 @@ timecode poziția din timeline, la una cronologică ora de filmare din fișiere.
 ca să umple cadrul (4K = 50 %). Fiecare cameră își are pistele ei de sunet, legate de imagine, ca la Creează proiectul (FX6 = A1 și
 A2 stereo, FX3 / A7 = o pistă stereo). La petrecere e ca exportul Multicam: fiecare cameră pe pista ei video doar cu tăieturile ei,
 iar sunetul fiecărei camere e <b>întreg</b> (fiecare interval etichetat, netăiat) pe pistele ei; recorderul și celelalte surse de
-sunet sunt întregi sub toată petrecerea. Build citește filmările (o dată: analizele rămân salvate);
+sunet sunt întregi sub toată petrecerea. Bucățile din petrecere în care nu filmează nicio cameră mai mult de 30 s (cina, o
+pauză) sunt scoase și înlocuite cu o pauză de 2 s (la Alex și Andreea erau 2 ore, 65 și 23 de minute goale). Deasupra camerelor e
+pista <b>unghiul alternativ</b> (oprită): pentru fiecare cadru de pe o cameră din mână, a doua cea mai bună cameră care a filmat tot
+acel moment, ca la Multicam. Build citește filmările (o dată: analizele rămân salvate);
 schimbarea setărilor de petrecere și a zonelor se vede imediat, fără alt Build.</p>
 
 <h2>Cum trebuie să arate selecția</h2>
@@ -588,10 +593,12 @@ multe = cuplu (ședința de la apus). Drona = folderele / fișierele de dronă (
 clipuri de la luarea miresei pe care tu le-ai pus Iris (aplicația le pune la mireasă) și cele 3 interviuri Tan (ajung la petrecere).
 Restul îl corectezi în editor.</p>
 <h3>Editează filmul</h3>
-<p>După Build, butonul <b>Editează filmul</b> deschide editorul: fiecare parte făcută din selecție (mirii, biserica, sala, cuplul,
-drona) e un rând de imagini, una din mijlocul fiecărui cadru. Tragi un cadru ca să-i schimbi locul sau ca să-l muți în altă parte
-(un cadru al mirelui ajuns la mireasă, un cadru care e de fapt de la biserică); selectezi cadre și apeși Delete (sau click dreapta)
-ca să le scoți; click dreapta &gt; Mută la. Chenar albastru = mirele, roz = mireasa. „Înapoi la filmul automat” șterge modificările.
+<p>După Build, butonul <b>Editează filmul</b> deschide editorul, făcut ca timeline-ul din Premiere: o pistă cu toate cadrele
+părților din selecție (mirii, biserica, sala, cuplul, drona), fiecare cadru atât de lat cât de lung e, cu imaginea lui și culoarea
+etichetei, părțile ca benzi colorate deasupra și o riglă de timp. Tragi un cadru și îl lași pe linia albastră (intră în partea de sub
+ea); Delete îl scoate; selectezi două (Shift / Cmd + click) și apeși <b>Schimbă</b> ca să le inversezi; click dreapta &gt; Mută la.
+<b>Anulează</b> / <b>Refă</b> (Cmd+Z, Shift+Cmd+Z) pentru fiecare schimbare. Zoom din cursor sau Cmd + rotița. „Înapoi la filmul
+automat” șterge modificările.
 First look, vornicul și petrecerea sunt făcute din camerele sincronizate și le tai în Premiere. Un Build nou pornește de la filmul
 automat (modificările vechi nu se mai potrivesc pe cadrele noi).</p>
 <p><b>Pregătirile mirilor</b> nu mai sunt unul după altul: sunt alternate ca la tine (măsurat pe Mada și Radu, Alexandra și Vlad):
@@ -1277,6 +1284,8 @@ vornic, Forest is not used.</li>
 stays still (no move longer than 1 s), the same face all the time (local face recognition, 5 frames; if the model cannot be
 downloaded, the still camera and the speech are enough) and someone speaks at least half of the time. The priest's clip stays whole.</li>
 <li><b>Yellow (venue), Purple (couple shots), Violet (drone)</b>: Auto selection.</li>
+<li>A clip you labelled that is at most 6 s long (a venue detail, for example) is kept <b>whole</b>: at Alex & Andreea the selection
+dropped every 3-5 s venue detail.</li>
 <li><b>Iris or Cerulean (party)</b>: multicam like the Multicam page: every labelled camera + the recorder files of the sequence,
 synced by the sound (no recorder: on the longest party clip), then the Auto Director on your labelled ranges. Like Multicam, the main
 recorder is the folder of sound-only files with the most hours (e.g. tascam); the other sound folders (a second recorder, the
@@ -1293,7 +1302,10 @@ a timecode sequence the timeline position, in a chronological one the recording 
 <p><b>The export</b>: one 25 fps 1920x1080 sequence with a marker on every part. Clips of another size are scaled to fill the frame
 (4K = 50 %). Every camera has its own sound tracks, linked to the picture, like Create Project (FX6 = A1 and A2 stereo, FX3 / A7 = one
 stereo track). The party is like the Multicam export: every camera on its own video track with only its cuts, and every camera's
-sound <b>whole</b> (each labelled range, uncut) on its own tracks; the recorder and the other sound sources are whole under the party. Build reads the footage (once: the analyses are kept); changing the party
+sound <b>whole</b> (each labelled range, uncut) on its own tracks; the recorder and the other sound sources are whole under the party. Stretches of the party where no camera filmed for more than
+30 s (dinner, a break) are taken out and replaced by a 2 s pause (at Alex & Andreea there were 2 hours, 65 and 23 minutes of
+nothing). Above the cameras is the <b>alternative angle</b> track (switched off): for every shot on a handheld camera, the second best
+camera that filmed the whole moment, like Multicam. Build reads the footage (once: the analyses are kept); changing the party
 settings and the zones shows at once, without another Build.</p>
 
 <h2>What your selects need</h2>
@@ -1343,10 +1355,11 @@ couple (the sunset session). Drone = drone folders / files (DJI, mavic, drona).<
 of fetching the bride you labelled Iris (the app puts them with the bride) and the 3 Tan interviews (they end up in the party). You
 correct the rest in the editor.</p>
 <h3>Edit the film</h3>
-<p>After Build, <b>Edit the film</b> opens the editor: every part made by the selection (groom and bride, church, venue, couple, drone)
-is a row of pictures, one from the middle of every shot. Drag a shot to change its place or to move it into another part (a groom
-shot that landed with the bride, a shot that is really from the church); select shots and press Delete (or right-click) to take them
-out; right-click &gt; Move to. Blue frame = groom, pink = bride. "Back to the automatic film" drops your changes. The first look, the
+<p>After Build, <b>Edit the film</b> opens the editor, laid out like Premiere's timeline: one track with every shot of the selection
+parts (groom and bride, church, venue, couple, drone), each as wide as it is long with its picture and its label colour, the parts as
+coloured bands above and a time ruler. Drag a shot and drop it on the blue line (it joins the part under it); Delete removes it;
+select two (Shift / Cmd + click) and press <b>Swap</b> to exchange them; right-click &gt; Move to. <b>Undo</b> / <b>Redo</b> (Cmd+Z,
+Shift+Cmd+Z) for every change. Zoom with the slider or Cmd + wheel. "Back to the automatic film" drops your changes. The first look, the
 vornic and the party are built from the synced cameras: you cut them in Premiere. A new Build starts from the automatic film again
 (old changes do not fit the new shots).</p>
 <p><b>The getting ready</b> is no longer one side after the other: groom and bride alternate the way you cut it (measured on Mada &

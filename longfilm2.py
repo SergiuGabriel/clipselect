@@ -39,6 +39,10 @@ PART_NAMES = {"ready": "Groom and bride", "firstlook": "First look", "vornic": "
 DEFAULT_ORDER = ["ready", "firstlook", "vornic", "church", "couple", "venue", "drone", "party"]
 SELECT = ("ready", "church", "couple", "venue", "drone")       # parts made with the Auto selection
 SEL_THR, SEL_MIN = 60, 2.0          # owner: Auto, minimum cut length 2 s, selection threshold 60
+SHORT_WHOLE = 6.0                   # a clip HE labelled that is this short is a deliberate detail: kept whole
+                                    # (his Alex & Andreea venue: 63257-63261, 3-5 s each, were all dropped by the selection)
+PARTY_GAP = 30.0                    # a stretch of the party where no camera filmed, longer than this, is taken out
+PARTY_PAUSE = 2.0                   # ... and replaced by this little pause (his v3.15 test: 121 + 65 + 23 min of nothing)
 PRIEST_MIN = 60.0                   # the priest: at least 60 s on him, the camera still
 PARTY = dict(minshot=3, maxshot=120, pace=50, energy=65, beat=True, drop_beats=4, buildup="accelerate",
              energy_cuts=True)      # owner's party settings (editable on the page)
@@ -338,14 +342,42 @@ def party_layout(edits, by_key, masters, rec_paths=None, results=None, extras=()
             cuts.append((g + s0, g + s0 + (cout - cin), p, p["a"] + cin, p["a"] + cout))
     if not cuts:
         return 0.0, [], []
-    G0, G1 = min(c[0] for c in cuts), max(c[1] for c in cuts)
-    items = [(p["cam"] + 1, t0 - G0, p, a, b) for t0, _t1, p, a, b in sorted(cuts, key=lambda c: c[0])]
+    # the stretches where the cameras filmed; empty ones longer than PARTY_GAP are taken out (dinner, a break)
+    segs = []
+    for t0, t1, *_ in sorted(cuts, key=lambda c: c[0]):
+        if segs and t0 - segs[-1][1] <= PARTY_GAP:
+            segs[-1][1] = max(segs[-1][1], t1)
+        else:
+            segs.append([t0, t1])
+    pos = 0.0
+    for sg in segs:
+        sg.append(pos)
+        pos += sg[1] - sg[0] + PARTY_PAUSE
+    length = pos - PARTY_PAUSE
+
+    def where(t):
+        for lo, hi, new in segs:
+            if lo - 1e-6 <= t <= hi + 1e-6:
+                return new + t - lo
+        return None
+    items = [(p["cam"] + 1, where(t0), p, a, b) for t0, _t1, p, a, b in sorted(cuts, key=lambda c: c[0])]
+    ncam = max(p["cam"] for p in by_key.values()) + 1 if by_key else 1
+    for e in edits or []:                   # the alternative angle: the second best camera, ABOVE, switched off
+        if not e or not e.get("alt"):
+            continue
+        g = starts[e["master"]]
+        for _ci, k, cin, cout, s0 in e["alt"]:
+            p = by_key.get(k)
+            w = where(g + s0)
+            if p is not None and w is not None:
+                items.append((ncam + 1, w, p, p["a"] + cin, p["a"] + cout, {"off"}))
     rec = []
 
     def put(g0, path, a, b, key, label=None):
-        lo, hi = max(G0, g0), min(G1, g0 + (b - a))
-        if hi - lo > 0.1:
-            rec.append((lo - G0, path, a + lo - g0, a + hi - g0, key, label))
+        for lo, hi, new in segs:            # every stretch it covers, each one in its new place
+            lo2, hi2 = max(lo, g0), min(hi, g0 + (b - a))
+            if hi2 - lo2 > 0.1:
+                rec.append((new + lo2 - lo, path, a + lo2 - g0, a + hi2 - g0, key, label))
     results = results or {}
     for p in sorted(by_key.values(), key=lambda p: (p["cam"], p["a"])):   # the cameras' sound, whole
         r = results.get(p["path"])
@@ -360,7 +392,7 @@ def party_layout(edits, by_key, masters, rec_paths=None, results=None, extras=()
         if r and r.get("conf") in ("high", "medium") and r.get("master", 0) < len(starts):
             put(starts[r.get("master", 0)] + r["offset"], f, 0.0, r.get("dur") or 0.0,
                 ("rec", 1 + sorted({Path(x).parent.name for x in extras}).index(Path(f).parent.name)))
-    return G1 - G0, items, rec
+    return length, items, rec
 
 
 # ---------------------------------------------------------------- 4. the XML
@@ -715,7 +747,10 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
     sel = {}
     for p in pieces:
         if part_of(p["kind"]) in SELECT and key_of(p) in analyses and key_of(p) not in priests:
-            sel[key_of(p)] = selection(analyses[key_of(p)], p["a"])
+            if not L.get("auto") and p["b"] - p["a"] <= SHORT_WHOLE:
+                sel[key_of(p)] = [(p["a"], p["b"])]
+            else:
+                sel[key_of(p)] = selection(analyses[key_of(p)], p["a"])
     # first look: synced only
     fl = chrono([p for p in pieces if p["kind"] == "firstlook"], L["layout"], infos)
     for p in fl:
@@ -854,6 +889,7 @@ def assemble(r, analyses, st, zones, marker=lambda s: s, vornic_on=True, edits=N
     by_key = {key_of(p): p for p in r["pieces"]}
     parts, info = [], {}
     stat = {}
+    user_edits = edits                      # (the party branch below has its own "edits": the director's)
     for part in r["order"]:
         name = marker(PART_NAMES[part])
         if part in SELECT:
@@ -889,12 +925,12 @@ def assemble(r, analyses, st, zones, marker=lambda s: s, vornic_on=True, edits=N
                                           {**director.DEFAULTS, **st, "zones": zones})
             ln, items, rec = party_layout(edits, bk, ps["masters"], {x["path"] for x in r["recorder"]},
                                           ps["results"], ps.get("extras") or ())
-            parts.append((name, ln, [(*it, set()) for it in items], rec))
+            parts.append((name, ln, [it if len(it) > 5 else (*it, set()) for it in items], rec))
             info.update(edits=edits, dcams=dcams, roles=roles)
             stat[part] = (len(items), ln)
     keys = [k for k in r["order"] if k in stat]
-    if edits:
-        parts = apply_edits(parts, keys, edits)
+    if user_edits:
+        parts = apply_edits(parts, keys, user_edits)
         for (name, ln, items, rec), k in zip(parts, keys):
             stat[k] = (len(items), ln)
     info["stat"] = stat
