@@ -50,7 +50,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.16.0"
+APP, VER = "MoneyMakingMachine", "v3.16.1"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -7337,6 +7337,10 @@ class LongFilm2Page(QWidget):
         self.b_build.setEnabled(bool(p.get("footage")) and not busy)
         self.b_exp.setEnabled(bool(self.parts) and not busy)
         self.b_edit.setEnabled(bool(self.parts) and not busy)
+        _p = self._cur() or {}
+        self.b_edit.setText(i18n.T("Continue editing") if _p.get("timeline") else i18n.T("Edit the film"))
+        self.b_edit.setToolTip(i18n.T("Opens the editor on the built film. No new Build is needed: your saved edit is "
+                                      "kept in the project, even after closing the app."))
 
     # ---- build
     def build(self):
@@ -7475,15 +7479,17 @@ class LongFilm2Page(QWidget):
             return
         import editor
         tl = p.get("timeline") or longfilm2.timeline(self.parts, marker=i18n.T)
+        def keep(dlg):
+            self._remember(timeline=dlg.timeline(), hidden=sorted(dlg.m.hidden), muted=dlg.m.muted)
+            notify(i18n.T("Your changes are saved."))
+
         dlg = editor.Editor(self, tl, self.r["infos"], PR_LABEL, self._lane_name, str(self.store.dir / "thumbs"),
-                            p.get("hidden", []), p.get("muted", []))
-        if dlg.exec():
-            if dlg.reset:
-                self._remember(timeline=None, hidden=[], muted=[], edits={})
-            else:
-                self._remember(timeline=dlg.timeline(), hidden=sorted(dlg.m.hidden), muted=dlg.m.muted)
-            self.recompute()
-            notify(i18n.T("The automatic film is back.") if dlg.reset else i18n.T("Your changes are saved."))
+                            p.get("hidden", []), p.get("muted", []), on_save=keep)
+        dlg.exec()
+        if dlg.reset:
+            self._remember(timeline=None, hidden=[], muted=[], edits={})
+            notify(i18n.T("The automatic film is back."))
+        self.recompute()
 
     def export(self):
         p = self._cur()

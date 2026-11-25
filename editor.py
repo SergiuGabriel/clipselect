@@ -24,8 +24,8 @@ from pathlib import Path
 
 from PySide6.QtCore import QPointF, QRectF, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPen, QPixmap
-from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QPushButton, QScrollBar, QSizePolicy, QSlider,
-                               QStackedLayout, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QScrollBar, QSizePolicy,
+                               QSlider, QStackedLayout, QVBoxLayout, QWidget)
 
 import core
 import i18n
@@ -669,13 +669,15 @@ def tc(t):
 class Editor(QDialog):
     """Program monitor on top, timeline below, tools in between. exec() -> True when saved; .timeline() then."""
 
-    def __init__(self, parent, tl, infos, colours, lane_name, thumbs_dir, hidden=(), muted=()):
+    def __init__(self, parent, tl, infos, colours, lane_name, thumbs_dir, hidden=(), muted=(), on_save=None):
         super().__init__(parent)
+        self.on_save = on_save                       # on_save(editor): keeps the edit in the project (window stays open)
         self.setWindowTitle("Edit the long film")
         self.resize(1400, 900)
         durs = {p: (i or {}).get("dur") for p, i in infos.items()}
         self.m = Model(tl, durs)
         self.m.hidden, self.m.muted = set(hidden), [list(x) for x in muted]
+        self.saved_state = self.m.snap()
         self.view = TimelineView(self.m, colours, lane_name)
         v = QVBoxLayout(self)
         v.setContentsMargins(12, 10, 12, 10)
@@ -770,13 +772,19 @@ class Editor(QDialog):
         rb.clicked.connect(self._reset)
         bot.addWidget(rb)
         bot.addStretch()
-        cb = QPushButton("Cancel")
+        self.saved_lbl = QLabel("")
+        self.saved_lbl.setStyleSheet("color:#8a8a8a")
+        bot.addWidget(self.saved_lbl)
+        cb = QPushButton("Close")
         cb.clicked.connect(self.reject)
-        sb = QPushButton("Save")
-        sb.setObjectName("primary")
-        sb.clicked.connect(self.accept)
+        sb = QPushButton("Save (Cmd+S)")
+        sb.clicked.connect(self.save)
+        scb = QPushButton("Save and close")
+        scb.setObjectName("primary")
+        scb.clicked.connect(self.save_close)
         bot.addWidget(cb)
         bot.addWidget(sb)
+        bot.addWidget(scb)
         v.addLayout(bot)
         # readers
         self.frames = FrameReader(960)
@@ -953,6 +961,8 @@ class Editor(QDialog):
             self._edit(1)
         elif k in (Qt.Key_Delete, Qt.Key_Backspace):
             self._delete(bool(mods & Qt.ShiftModifier))
+        elif cmd and k == Qt.Key_S:
+            self.save()
         elif cmd and k == Qt.Key_Z:
             self.redo() if mods & Qt.ShiftModifier else self.undo()
         elif k == Qt.Key_V and not cmd:
@@ -980,8 +990,51 @@ class Editor(QDialog):
         else:
             super().keyPressEvent(e)
 
+    # ---- saving: the edit lives in the project, the editor can be opened again any time (no new Build)
+    def dirty(self):
+        return self.m.snap() != self.saved_state
+
+    def save(self):
+        if self.on_save is not None:
+            self.on_save(self)
+        self.saved_state = self.m.snap()
+        self.saved_lbl.setText(i18n.T("Saved at {}").format(time.strftime("%H:%M")))
+        return True
+
+    def save_close(self):
+        self.save()
+        self.accept()
+
+    def reject(self):
+        """Close / the window's X: never lose changes without asking."""
+        if self.dirty():
+            mb = QMessageBox(QMessageBox.Question, i18n.T("Unsaved changes"), i18n.T("Save your changes before closing?"),
+                             parent=self)
+            bs = mb.addButton(i18n.T("Save"), QMessageBox.AcceptRole)
+            bd = mb.addButton(i18n.T("Don't save"), QMessageBox.DestructiveRole)
+            mb.addButton(i18n.T("Cancel"), QMessageBox.RejectRole)
+            mb.setDefaultButton(bs)
+            mb.exec()
+            if mb.clickedButton() is bs:
+                self.save()
+                self.accept()
+                return
+            if mb.clickedButton() is not bd:
+                return
+        super().reject()
+
+    def closeEvent(self, e):
+        e.ignore()
+        self.reject()
+
     def _reset(self):
+        b = QMessageBox.question(self, "Back to the automatic film",
+                                 "Throw away every change made in the editor and go back to the automatic film?",
+                                 QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if b != QMessageBox.Yes:
+            return
         self.reset = True
+        self.saved_state = self.m.snap()
         self.accept()
 
     def timeline(self):

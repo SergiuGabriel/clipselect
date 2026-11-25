@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.16.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.16.1), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -930,6 +930,12 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   the UI (apply_edits stays in assemble for old projects).
 - Build: Qt Multimedia is no longer excluded (PyInstaller --hidden-import PySide6.QtMultimediaWidgets). In the sandbox
   QAudioOutput hangs on PipeWire: tests set MMM_NO_PLAYER=1. Real playback NOT testable here (no screen / audio).
+
+## v3.16.1
+- Owner: "you cannot go back into the editor after Save / Cancel, do I have to Build again?" No: the build result is in the
+  project blob and the edit in p["timeline"], so "Edit the film" (now "Continue editing" when an edit is saved) reopens it,
+  also after a restart. The editor now saves WITHOUT closing (Save (Cmd+S), on_save callback -> _remember), "Save and close",
+  "Close" / window X asks Save / Don't save / Cancel when dirty (snapshot compare), "Back to the automatic film" asks first.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

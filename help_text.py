@@ -608,8 +608,11 @@ Shift+Cmd+Z anulează / refac fiecare pas. S pornește / oprește alinierea la m
 Cmd + rotița, + / −, iar tasta &#92; arată tot filmul. Click sau trage pe riglă ca să muți playhead-ul.</li>
 <li>Ochiul unei piste video o ascunde (clipurile ei sunt exportate oprite), M pe o pistă audio îi oprește sunetul.</li>
 </ul>
-<p>Salvează păstrează varianta ta în proiect; <b>Export XML</b> scrie exact ce ai în editor. „Înapoi la filmul automat” o șterge.
-Un Build nou pornește iar de la filmul automat.</p>
+<p><b>Salvează (Cmd+S)</b> păstrează varianta ta în proiect și editorul rămâne deschis; <b>Salvează și închide</b> o păstrează și
+închide; <b>Închide</b> te întreabă dacă ai modificări nesalvate. <b>Te poți întoarce oricând în editor fără alt Build</b>: butonul
+devine <b>Continuă editarea</b> și deschide exact varianta salvată, și după ce închizi aplicația sau calculatorul (Build-ul și editarea
+sunt salvate în proiect). <b>Export XML</b> scrie exact ce ai în editor. „Înapoi la filmul automat” (cere confirmare) o șterge.
+Doar un Build nou pornește iar de la filmul automat.</p>
 <p><b>Pregătirile mirilor</b> nu mai sunt unul după altul: sunt alternate ca la tine (măsurat pe Mada și Radu, Alexandra și Vlad):
 un bloc mare din partea filmată prima (cam un sfert, 4–20 cadre), un bloc mare din cealaltă (cam o cincime, 4–14), apoi rânduri de
 2–7 cadre (de obicei 3–4), ca să se termine amândouă odată.</p>
@@ -1379,8 +1382,11 @@ Shift+Cmd+Z undo / redo every step. S switches snapping to clip edges, the playh
 and the &#92; key shows the whole film. Click or drag on the ruler to move the playhead.</li>
 <li>The eye of a video track hides it (its clips are exported switched off), M on an audio track mutes it.</li>
 </ul>
-<p>Save keeps your version in the project; <b>Export XML</b> writes exactly what is in the editor. "Back to the automatic film" drops
-it. A new Build starts from the automatic film again.</p>
+<p><b>Save (Cmd+S)</b> keeps your version in the project and the editor stays open; <b>Save and close</b> keeps it and closes;
+<b>Close</b> asks when there are unsaved changes. <b>You can go back into the editor any time without a new Build</b>: the button
+becomes <b>Continue editing</b> and opens exactly the saved version, also after closing the app or the computer (the Build and the
+edit are saved in the project). <b>Export XML</b> writes exactly what is in the editor. "Back to the automatic film" (asks first)
+drops it. Only a new Build starts from the automatic film again.</p>
 <p><b>The getting ready</b> is no longer one side after the other: groom and bride alternate the way you cut it (measured on Mada &
 Radu, Alexandra & Vlad): a big block of the side filmed first (about a quarter, 4-20 shots), a big block of the other (about a fifth,
 4-14), then turns of 2-7 shots (mostly 3-4) so both end together.</p>

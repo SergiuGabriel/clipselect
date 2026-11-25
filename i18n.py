@@ -641,3 +641,17 @@ def sweep(root):
 
 
 set_lang(LANG)
+EXACT.update({
+    "Continue editing": "Continuă editarea",
+    "Opens the editor on the built film. No new Build is needed: your saved edit is kept in the project, even after closing the app.":
+        "Deschide editorul pe filmul construit. Nu trebuie alt Build: editarea salvată rămâne în proiect, chiar și după ce închizi aplicația.",
+    "Save (Cmd+S)": "Salvează (Cmd+S)",
+    "Save and close": "Salvează și închide",
+    "Unsaved changes": "Modificări nesalvate",
+    "Save your changes before closing?": "Salvezi modificările înainte să închizi?",
+    "Throw away every change made in the editor and go back to the automatic film?":
+        "Renunți la toate modificările din editor și revii la filmul automat?",
+})
+EXACT.setdefault("Close", "Închide")
+TEMPLATES.update({"Saved at {}": "Salvat la {}"})
+EXACT.update({"Don't save": "Nu salva"})
