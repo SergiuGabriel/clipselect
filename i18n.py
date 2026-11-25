@@ -660,3 +660,21 @@ EXACT.update({
     "Everything in one go (good overnight): Sync, then Auto Edit right after it. The Mac is kept awake until it ends.":
         "Totul dintr-o apăsare (bun peste noapte): Sync, apoi Auto Edit imediat după. Mac-ul e ținut treaz până se termină.",
 })
+EXACT.update({
+    "Export → Premiere": "Export → Premiere",
+    "Export → DaVinci": "Export → DaVinci",
+    "XML for Premiere Pro (File > Import).": "XML pentru Premiere Pro (File > Import).",
+    "XML made for DaVinci Resolve (File > Import > Timeline): clips fitted by Resolve itself, no Premiere-only effects. Apply your LUT in Resolve's Color page.":
+        "XML făcut pentru DaVinci Resolve (File > Import > Timeline): cadrele le încadrează Resolve singur, fără efecte doar de Premiere. LUT-ul îl pui în pagina Color din Resolve.",
+    "Auto Edit in Multicam  →": "Auto Edit în Multicam  →",
+    "Moves this project to Multicam, where Auto Edit builds the edit (the sync is kept).":
+        "Mută proiectul în Multicam, unde Auto Edit face montajul (sincronizarea rămâne).",
+    "Moved to Multicam: press Auto Edit to build the edit.": "Mutat în Multicam: apasă Auto Edit ca să faci montajul.",
+    "Only the sync: every camera and the recorder on one timeline, ready for Premiere or DaVinci Resolve.":
+        "Doar sincronizarea: toate camerele și recorderul pe un singur timeline, gata pentru Premiere sau DaVinci Resolve.",
+})
+TEMPLATES.update({
+    "DaVinci Resolve: {} (File > Import > Timeline)": "DaVinci Resolve: {} (File > Import > Timeline)",
+    "Saved {} clips ({} video, {} audio tracks) to {}. DaVinci Resolve: File > Import > Timeline. The LUT is not in this file: put it in Resolve's Color page.":
+        "Am salvat {} clipuri ({} piste video, {} piste audio) în {}. DaVinci Resolve: File > Import > Timeline. LUT-ul nu e în acest fișier: pune-l în pagina Color din Resolve.",
+})

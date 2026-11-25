@@ -43,6 +43,7 @@ import longfilm2
 import blueprint
 import offload
 import updater
+import resolve
 import transcribe
 import ai
 import xmlimport
@@ -50,7 +51,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.17.0"
+APP, VER = "MoneyMakingMachine", "v3.18.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -185,6 +186,28 @@ def btn(text, obj="", slot=None):
     return b
 
 
+class ExportPair(QWidget):
+    """Two buttons: the XML for Premiere Pro and the XML for DaVinci Resolve (resolve.py). slot(target)."""
+    def __init__(self, slot, primary=False):
+        super().__init__()
+        h = QHBoxLayout(self)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(6)
+        self.pr = btn("Export → Premiere", "primary" if primary else "", lambda: slot("premiere"))
+        self.dv = btn("Export → DaVinci", slot=lambda: slot("davinci"))
+        self.pr.setToolTip("XML for Premiere Pro (File > Import).")
+        self.dv.setToolTip("XML made for DaVinci Resolve (File > Import > Timeline): clips fitted by Resolve itself, no "
+                           "Premiere-only effects. Apply your LUT in Resolve's Color page.")
+        h.addWidget(self.pr)
+        h.addWidget(self.dv)
+
+
+def for_target(out, target):
+    """After an export: the DaVinci Resolve version of the file when that was asked (same file)."""
+    if target == "davinci":
+        resolve.convert(out)
+
+
 def repolish(w):
     w.style().unpolish(w)
     w.style().polish(w)
@@ -316,10 +339,12 @@ class Store:
     def new(self, name, kind="footage"):
         p = dict(id=uuid.uuid4().hex, name=name, created=datetime.now().isoformat(timespec="seconds"),
                  videos=[], settings=norm_settings({}), history=[], out_dir="", out_name="", out_sw="Premiere Pro", seq=dict(SEQ_DEFAULT))
-        if kind == "multicam":
+        if kind in ("multicam", "sync"):
             mine = self.app.get("style", {}).get("settings", {})          # this computer's learned style
             p.update(type="multicam", files=[], sync=None, cams=[], infos={},
                      dir={**director.DEFAULTS, **{k: v for k, v in mine.items() if k in ("minshot", "maxshot", "pace", "energy")}})
+            if kind == "sync":                         # the Sync page: a multicam project without the auto edit
+                p["sync_only"] = True
         self.projects.append(p)
         self.save()
         return p
@@ -892,7 +917,8 @@ class Worker(QThread):
 
 class NewProjectDialog(QDialog):
     DESC = {"footage": "Grade your clips Good / Fair / Poor and export a colour-labelled timeline.",
-            "multicam": "Sync several cameras to a master audio recorder, then build the multicam edit."}
+            "multicam": "Sync several cameras to a master audio recorder, then build the multicam edit.",
+            "sync": "Only the sync: every camera and the recorder on one timeline, ready for Premiere or DaVinci Resolve."}
 
     def __init__(self, parent=None, kind=None):
         super().__init__(parent)
@@ -965,7 +991,7 @@ class ProjectCard(QFrame):
         v.setSpacing(3)
         top = QHBoxLayout()
         multi = p.get("type") == "multicam"
-        badge = QLabel("MULTICAM" if multi else "FOOTAGE")
+        badge = QLabel(("SYNC" if p.get("sync_only") else "MULTICAM") if multi else "FOOTAGE")
         col = "#7c5cff" if multi else C["BLUE"]
         badge.setStyleSheet(f"background:{col};color:white;font-size:9px;font-weight:700;border-radius:3px;padding:1px 6px")
         top.addWidget(badge)
@@ -1008,11 +1034,11 @@ class Dashboard(QWidget):
 
     def __init__(self, kind="footage"):
         super().__init__()
-        self.kind = kind                  # "footage" (Selection) or "multicam": each has its own page in the menu
+        self.kind = kind                  # "footage" (Selection), "sync" or "multicam": each has its own page in the menu
         v = QVBoxLayout(self)
         v.setContentsMargins(28, 22, 28, 22)
         head = QHBoxLayout()
-        head.addWidget(lbl("Multicam" if kind == "multicam" else "Selection", "h1"))
+        head.addWidget(lbl({"multicam": "Multicam", "sync": "Sync"}.get(kind, "Selection"), "h1"))
         head.addStretch()
         head.addWidget(btn("+  New Project", "primary", self.new_project.emit))
         v.addLayout(head)
@@ -1043,7 +1069,10 @@ class Dashboard(QWidget):
         self.stack.addWidget(self.scroll)
 
     def refresh(self, projects):
-        projects = [p for p in projects if (p.get("type") == "multicam") == (self.kind == "multicam")]
+        if self.kind == "footage":
+            projects = [p for p in projects if p.get("type") != "multicam"]
+        else:
+            projects = [p for p in projects if p.get("type") == "multicam" and bool(p.get("sync_only")) == (self.kind == "sync")]
         if not projects:
             self.stack.setCurrentIndex(0)
             return
@@ -1842,7 +1871,11 @@ class ResultsPage(QWidget):
                 seq["width"], seq["height"] = (int(x) for x in self.c_size.currentText().split(" x "))
             if self.c_rate.currentIndex() > 0:
                 seq["fps"] = float(self.c_rate.currentText())
+            dv = getattr(self, "sw", "Premiere Pro") == "DaVinci Resolve"
+            if dv:
+                out = Path(resolve.name_for(str(out), "davinci"))
             n = core.export_xmeml(self.items, str(out), name, seq, single=self.p["settings"].get("mode", "auto") == "auto")
+            for_target(str(out), "davinci" if dv else "premiere")
         except Exception as e:
             self.msg.setStyleSheet(f"color:{C['POOR']}")
             self.msg.setText(f"Error: {e}")
@@ -1963,6 +1996,7 @@ class SyncMap(QWidget):
         super().__init__()
         self.mdur, self.rows, self.edit, self.tmin, self.tmax = 0.0, [], [], 0.0, 1.0
         self.zones, self.drag, self.sel = [], None, None
+        self.show_edit, self.music = True, None   # show_edit False on the Sync page: no auto edit row, no zones
         self.setMinimumHeight(140)
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.ClickFocus)
@@ -1993,7 +2027,7 @@ class SyncMap(QWidget):
 
     def mousePressEvent(self, e):
         x = e.position().x()
-        if x < self.LEFT or self.tmax <= self.tmin:
+        if not self.show_edit or x < self.LEFT or self.tmax <= self.tmin:
             return
         i, edge = self._hit(x)
         if e.button() == Qt.RightButton:
@@ -2128,11 +2162,14 @@ class SyncMap(QWidget):
                                    f"{bpm:.0f} BPM")
                         p.setPen(Qt.NoPen)
             y += 26
-        row(y, "Auto edit")
-        for t0, t1, col in self.edit:
-            p.setBrush(QColor(col))
-            p.drawRect(QRectF(X(t0), y + 1, max(1.5, X(t1) - X(t0)), 18))
-        y += 34
+        if self.show_edit:
+            row(y, "Auto edit")
+            for t0, t1, col in self.edit:
+                p.setBrush(QColor(col))
+                p.drawRect(QRectF(X(t0), y + 1, max(1.5, X(t1) - X(t0)), 18))
+            y += 34
+        else:
+            y += 8
         for label, color, blocks in self.rows:
             row(y, label, color)
             for t0, t1, conf in blocks:
@@ -2295,11 +2332,12 @@ class MulticamPage(QWidget):
         head.setObjectName("head")
         hh = QHBoxLayout(head)
         hh.setContentsMargins(20, 10, 20, 10)
-        hh.addWidget(btn("←  Multicam", "link", self.back.emit))
+        self.b_back = btn("←  Multicam", "link", self.back.emit)
+        hh.addWidget(self.b_back)
         self.title = lbl("", "h2")
         hh.addWidget(self.title)
         hh.addStretch()
-        self.b_exp = btn("Export XML", slot=self.export)
+        self.b_exp = ExportPair(self.export)
         self.b_xml = btn("Import XML", slot=lambda: self.import_xml())
         self.b_xml.setToolTip("Use a timeline that is already synced in Syncaila, Premiere Pro or DaVinci Resolve (FCP7 XML).")
         self.b_auto = btn("Auto Edit", slot=self.run_auto)
@@ -2308,8 +2346,11 @@ class MulticamPage(QWidget):
         self.b_all.setToolTip("Everything in one go (good overnight): Sync, then Auto Edit right after it. "
                               "The Mac is kept awake until it ends.")
         self._chain, self._awake = None, Awake()
+        self.b_tomc = btn("Auto Edit in Multicam  →", slot=self.to_multicam)
+        self.b_tomc.setToolTip("Moves this project to Multicam, where Auto Edit builds the edit (the sync is kept).")
         hh.addWidget(self.b_xml)
         hh.addWidget(self.b_exp)
+        hh.addWidget(self.b_tomc)
         hh.addWidget(self.b_run)
         hh.addWidget(self.b_auto)
         hh.addWidget(self.b_all)
@@ -2388,6 +2429,7 @@ class MulticamPage(QWidget):
         zl.addLayout(self.zrows)
         hv_.addSpacing(6)
         hv_.addWidget(zf)
+        self.zf = zf
         sc.setWidget(holder)
         t1v.addWidget(sc, 1)
         dot = lambda c: f'<span style="color:{c}">●</span>'
@@ -2511,9 +2553,10 @@ class MulticamPage(QWidget):
         rv.addStretch()
         eb = QHBoxLayout()
         eb.setContentsMargins(16, 6, 16, 12)
-        eb.addWidget(btn("Export XML", "primary", self.export))
+        eb.addWidget(ExportPair(self.export, True))
         ro.addLayout(eb)
         body.addWidget(right)
+        self.right = right
 
     # ---- learn my editing style
     def _drop(self, paths):
@@ -2704,6 +2747,7 @@ class MulticamPage(QWidget):
             p["dir"]["energy"] = max(p["dir"].get("energy", 60), 85)
             p["dir"]["static_backup"] = False
         self.title.setText(p["name"])
+        self._mode_ui()
         QTimer.singleShot(0, self._music_enabled)
         self.map.set_zones(p.get("zones", []))
         self._fill_zone_rows()
@@ -2767,6 +2811,27 @@ class MulticamPage(QWidget):
             self.refresh_files()
         else:
             QListWidget.keyPressEvent(self.list, e)
+
+    # ---- Sync page (sync only) or Multicam
+    def _mode_ui(self):
+        so = bool(self.p.get("sync_only"))
+        self.b_back.setText("←  Sync" if so else "←  Multicam")
+        for w_ in (self.b_auto, self.b_all, self.right):
+            w_.setVisible(not so)
+        self.b_tomc.setVisible(so)
+        self.zf.setVisible(not so)
+        self.map.show_edit = not so
+        self.map.update()
+        self.b_run.setObjectName("primary" if so else "")
+        repolish(self.b_run)
+
+    def to_multicam(self):
+        if self._busy():
+            return
+        self.p["sync_only"] = False
+        self.store.save()
+        self._mode_ui()
+        notify(i18n.T("Moved to Multicam: press Auto Edit to build the edit."))
 
     # ---- run
     def _busy(self):
@@ -3102,17 +3167,18 @@ class MulticamPage(QWidget):
         self.store.save()
         self.recompute()
 
-    def export(self):
+    def export(self, target="premiere"):
         s = self.p.get("sync")
         if not s:
             return
         first = next((m["path"] for m in s["masters"] if m.get("path")), None) or self.p["files"][0]["path"]
-        d = str(Path(first).parent / f"{self.p['name']}.xml")
-        out, _ = QFileDialog.getSaveFileName(self, "Save XML for Premiere", d, "XML (*.xml)")
+        d = resolve.name_for(str(Path(first).parent / f"{self.p['name']}.xml"), target)
+        out, _ = QFileDialog.getSaveFileName(self, "Save XML", d, "XML (*.xml)")
         if not out:
             return
         try:
             r = director.export_xml(s["masters"], self.p["cams"], s["clips"], self.an, self.edits, out, self.p["name"])
+            for_target(out, target)
             self.status.setText(f"Saved one sequence ({r['video_tracks']} video, {r['audio_tracks']} audio tracks"
                                 f"{', each camera track holds only its cuts' if r['edit'] else ', full clips (no auto edit yet)'}) to {out}. "
                                 f"Premiere: File > Import · DaVinci Resolve: File > Import > Timeline.")
@@ -3925,7 +3991,7 @@ class TeaserPage(QWidget):
         top.addStretch()
         self.b_shuffle = btn("Shuffle shots", slot=self.shuffle)
         self.b_gen = btn("Generate", "primary", self.generate)
-        self.b_exp = btn("Export XML", slot=self.export)
+        self.b_exp = ExportPair(self.export)
         for b in (self.b_shuffle, self.b_exp, self.b_gen):
             top.addWidget(b)
         sv.addLayout(top)
@@ -4496,16 +4562,17 @@ class TeaserPage(QWidget):
         self.seed += 1
         self.generate()
 
-    def export(self):
+    def export(self, target="premiere"):
         if not self.edit:
             return
-        start = str(Path(getattr(self, "_foot_path", "") or ".").parent / "Shortmovie (auto).xml")
+        start = resolve.name_for(str(Path(getattr(self, "_foot_path", "") or ".").parent / "Shortmovie (auto).xml"), target)
         out, _ = QFileDialog.getSaveFileName(self, "Save XML", start, "XML (*.xml)")
         if out:
             try:
                 b = next((x for x in self.store.app.get("blueprints", []) if x["id"] == self.edit.get("blueprint")), None)
                 n = (blueprint.export_xml(self.edit, b, out, Path(out).stem) if b else
                      teaser.export_xml(self.edit, self.music, out, Path(out).stem))
+                for_target(out, target)
                 if b:
                     gone = sorted({x["name"] for x in b["audio"] if not Path(x["path"]).exists()})
                     if gone:
@@ -4671,7 +4738,7 @@ class LongFilmPage(QWidget):
         top.addWidget(badge)
         top.addStretch()
         self.b_build = btn("Build", "primary", self.build)
-        self.b_exp = btn("Export XML", slot=self.export)
+        self.b_exp = ExportPair(self.export)
         top.addWidget(self.b_exp)
         top.addWidget(self.b_build)
         v.addLayout(top)
@@ -5068,10 +5135,10 @@ class LongFilmPage(QWidget):
         notify("Long film ready")
         logging.info("long film blueprint %s: %d shots, %d holes", b["name"], len(e["shots"]), len(holes))
 
-    def export(self):
+    def export(self, target="premiere"):
         if self.layout_ is None:
             return
-        start = str(Path(self._cur().get("footage") or ".").parent / f"{self._cur()['name']} - long film.xml")
+        start = resolve.name_for(str(Path(self._cur().get("footage") or ".").parent / f"{self._cur()['name']} - long film.xml"), target)
         out, _ = QFileDialog.getSaveFileName(self, "Save XML", start, "XML (*.xml)")
         if not out:
             return
@@ -5084,6 +5151,7 @@ class LongFilmPage(QWidget):
                     notify(f"{len(gone)} sounds of the blueprint were not found on this computer, e.g. {gone[0]}", error=True)
             else:
                 n, marks = longfilm.export_xml(self.layout_, out, Path(out).stem, self.tz)
+            for_target(out, target)
             self.parts_lbl.setText(self.parts_lbl.text() + "<br>" + i18n.T("Saved {} clips to {}. Premiere: File > Import · DaVinci: File > Import > Timeline.").format(n, out))
             notify(f"XML saved: {Path(out).name}")
             logging.info("long film exported: %s (%d clips)", out, n)
@@ -5455,6 +5523,7 @@ class CreateProjectPage(QWidget):
         if bad:
             txt += f'<br><span style="color:{C["POOR"]}">' + i18n.T("{} files could not be read and were left out: {}").format(
                 len(bad), escape(", ".join(Path(b).name for b in bad[:6]) + (" …" if len(bad) > 6 else ""))) + "</span>"
+        txt += self._davinci_copy(out)
         self.result.setText(txt)
         self.b_show.show()
         self.b_open.setVisible(bool(_premiere_app()))
@@ -5497,12 +5566,23 @@ class CreateProjectPage(QWidget):
         if bad:
             txt += f'<br><span style="color:{C["POOR"]}">' + i18n.T("{} files could not be read and were left out: {}").format(
                 len(bad), escape(", ".join(Path(b).name for b in bad[:6]) + (" …" if len(bad) > 6 else ""))) + "</span>"
+        txt += self._davinci_copy(out)
         self.result.setText(txt)
         self.b_show.show()
         self.b_open.setVisible(bool(_premiere_app()))
         notify(i18n.T("Project ready: {} clips in {} bins and the sequence \"{}\", synced by timecode. Open it in Premiere Pro.")
                .format(r["clips"], nb, name))
         logging.info("create project timecode %s: %s clips", out, r["clips"])
+
+    def _davinci_copy(self, out):
+        """The same project for DaVinci Resolve, next to it ("<name> (DaVinci).xml", File > Import > Timeline)."""
+        try:
+            dv = projectsetup.free_path(Path(resolve.name_for(str(out), "davinci")))
+            resolve.convert(str(out), str(dv))
+            return "<br>" + i18n.T("DaVinci Resolve: {} (File > Import > Timeline)").format(escape(Path(dv).name))
+        except Exception:
+            logging.exception("create project: DaVinci copy")
+            return ""
 
     def open_premiere(self):
         app = _premiere_app()
@@ -6708,6 +6788,10 @@ class TranscribePage(QWidget):
             self._report(x_err, warnings, written=None)
             return
         os.replace(tmp, out)
+        try:                                   # the same story for DaVinci Resolve, next to it
+            resolve.convert(str(out), resolve.name_for(str(out), "davinci"))
+        except Exception:
+            logging.exception("story: DaVinci copy")
         n_in = good = 0
         speech = []
         for j, (fi, t0, t1, _t) in enumerate(cuts, 1):   # measured: does every cut fall into a real pause?
@@ -7043,7 +7127,7 @@ class LongFilm2Page(QWidget):
         top.addWidget(badge)
         top.addStretch()
         self.b_edit = btn("Edit the film", slot=self.edit_film)
-        self.b_exp = btn("Export XML", slot=self.export)
+        self.b_exp = ExportPair(self.export)
         self.b_build = btn("Build", "primary", self.build)
         top.addWidget(self.b_edit)
         top.addWidget(self.b_exp)
@@ -7557,13 +7641,14 @@ class LongFilm2Page(QWidget):
             notify(i18n.T("The automatic film is back."))
         self.recompute()
 
-    def export(self):
+    def export(self, target="premiere"):
         p = self._cur()
         if not p or not self.parts:
             return
         d = Path(p["footage"]) if p.get("footage") and Path(p["footage"]).is_dir() else \
             (Path(p["footage"]).parent if p.get("footage") else Path.home())
-        f, _ = QFileDialog.getSaveFileName(self, "Export XML", str(d / f"{p['name']} - Long Film v2.xml"), "XML (*.xml)")
+        f, _ = QFileDialog.getSaveFileName(self, "Export XML", resolve.name_for(str(d / f"{p['name']} - Long Film v2.xml"), target),
+                                           "XML (*.xml)")
         if not f:
             return
         try:
@@ -7574,11 +7659,15 @@ class LongFilm2Page(QWidget):
             else:
                 n, nv, na = longfilm2.export_xml(self.parts, self.r["infos"], [c["name"] for c in self.r["cams"]], f,
                                                  f"{p['name']} - Long Film v2", marker=lambda s: s, look=self._look_s())
+            for_target(f, target)
         except Exception as e:
             logging.exception("long film v2 export failed")
             notify(i18n.T("Export failed: {}").format(str(e)), error=True)
             return
-        self.status.setText(i18n.T("Saved {} clips ({} video, {} audio tracks) to {}. Premiere: File > Import.").format(n, nv, na, f))
+        self.status.setText(i18n.T("Saved {} clips ({} video, {} audio tracks) to {}. Premiere: File > Import.").format(n, nv, na, f)
+                            if target != "davinci" else
+                            i18n.T("Saved {} clips ({} video, {} audio tracks) to {}. DaVinci Resolve: File > Import > Timeline. "
+                                   "The LUT is not in this file: put it in Resolve's Color page.").format(n, nv, na, f))
         notify(i18n.T("XML saved: {}").format(Path(f).name))
 
 
@@ -7754,6 +7843,7 @@ class Main(QMainWindow):
         self.nav = {"offload": btn("Card Offload", "nav", lambda: self.go("offload")),
                     "project": btn("Create Project", "nav", lambda: self.go("project")),
                     "dash": btn("Selection", "nav", lambda: self.go("dash")),
+                    "syncdash": btn("Sync", "nav", lambda: self.go("syncdash")),
                     "mcdash": btn("Multicam", "nav", lambda: self.go("mcdash")),
                     "long": btn("Long Film", "nav", lambda: self.go("long")),
                     "long2": btn("Long Film v2", "nav", lambda: self.go("long2")),
@@ -7783,6 +7873,7 @@ class Main(QMainWindow):
 
         self.dash, self.proj = Dashboard("footage"), ProjectPage(self.store)
         self.mcdash = Dashboard("multicam")
+        self.syncdash = Dashboard("sync")
         self.anl, self.res, self.queue = AnalyzingPage(), ResultsPage(self.store), QueuePage()
         self.mc = MulticamPage(self.store)
         self.settings = SettingsPage(self.store)
@@ -7813,14 +7904,14 @@ class Main(QMainWindow):
         self._drops.append(dd)
         self.res.export_done = lambda name: (self.toast.show_msg(f"XML saved: {name}"), logging.info("footage export %s", name))
         self.teaser.notify.connect(self.toast.show_msg)
-        for w in (self.dash, self.mcdash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser_hub, self.long_hub, self.long2_hub, self.offload, self.transcribe, self.cproject):
+        for w in (self.dash, self.mcdash, self.syncdash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser_hub, self.long_hub, self.long2_hub, self.offload, self.transcribe, self.cproject):
             self.stack.addWidget(w)
-        for d_ in (self.dash, self.mcdash):
+        for d_ in (self.dash, self.mcdash, self.syncdash):
             d_.new_project.connect(lambda k=d_.kind: self.new_project(k))
             d_.open_project.connect(self.open_project)
             d_.delete_project.connect(self.delete_project)
         self.proj.back.connect(lambda: self.go("dash"))
-        self.mc.back.connect(lambda: self.go("mcdash"))
+        self.mc.back.connect(lambda: self.go("syncdash" if (self.mc.p or {}).get("sync_only") else "mcdash"))
         self.proj.analyze.connect(self.start_analysis)
         self.proj.open_history.connect(self.show_history)
         self.anl.back.connect(lambda: self.show_page(self.proj))
@@ -7911,7 +8002,8 @@ class Main(QMainWindow):
         self.stack.setCurrentWidget(w)
         for k, b in self.nav.items():
             b.setProperty("active", (k == "dash" and w in (self.dash, self.proj, self.res)) or
-                          (k == "mcdash" and w in (self.mcdash, self.mc)) or (k == "long2" and w is getattr(self, "long2_hub", None)) or (k == "queue" and w in (self.queue, self.anl))
+                          (k == "mcdash" and (w is self.mcdash or (w is self.mc and not (self.mc.p or {}).get("sync_only")))) or
+                          (k == "syncdash" and (w is self.syncdash or (w is self.mc and bool((self.mc.p or {}).get("sync_only"))))) or (k == "long2" and w is getattr(self, "long2_hub", None)) or (k == "queue" and w in (self.queue, self.anl))
                           or (k == "settings" and w is self.settings) or (k == "info" and w is self.info) or (k == "teaser" and w is self.teaser_hub) or (k == "long" and w is self.long_hub)
                           or (k == "offload" and w is self.offload) or (k == "transcribe" and w is self.transcribe)
                           or (k == "project" and w is self.cproject))
@@ -7936,6 +8028,9 @@ class Main(QMainWindow):
         elif where == "mcdash":
             self.mcdash.refresh(self.store.projects)
             self.show_page(self.mcdash)
+        elif where == "syncdash":
+            self.syncdash.refresh(self.store.projects)
+            self.show_page(self.syncdash)
         elif where == "long2":
             self.long2_hub.show_grid()
             self.show_page(self.long2_hub)
@@ -7978,6 +8073,7 @@ class Main(QMainWindow):
         self.store.delete(pid)
         self.dash.refresh(self.store.projects)
         self.mcdash.refresh(self.store.projects)
+        self.syncdash.refresh(self.store.projects)
 
     # analysis
     def start_analysis(self):

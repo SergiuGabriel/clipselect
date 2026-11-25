@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.17.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.18.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -63,6 +63,7 @@ linking to https://www.instagram.com/sergiugabrielcg/.
 - `longfilm2.py` — Long Film v2 (BETA): the long film from the labelled Create Project sequence (load, selection,
   priest, first look, vornic, party multicam, 1920x1080 25 fps export) or from the wedding folder (automatic).
 - `daymap.py` — the moments of the day without labels (scenes, church, faces of groom / bride, venue / couple, party).
+- `resolve.py` — the DaVinci Resolve version of any exported xmeml (no Basic Motion, no Lumetri, project -> sequence).
 - `editor.py` — the Premiere-like editor of Long Film v2 (monitor, V / A tracks, overwrite, razor, trim, undo).
 - `colour.py` — his LUT(s) as Lumetri + 10 % crop on every clip (assets/ = his Lumetri template).
 - `teaser.py` — Teaser Studio engine (labels, music parts, beats, drop, edit, XML export).
@@ -949,6 +950,21 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   (_chain = project) without waiting; Sync / Auto Edit stay as separate outlined buttons. class Awake = caffeinate -i -w
   (always terminated and waited) during the chain and during the Long Film v2 Build (overnight). Tested headless:
   sync -> analyze -> edit, buttons Cancel while chained, awake released.
+
+## v3.18.0 (owner: "a separate Sync in the menu"; "everything perfect in DaVinci Resolve too: Export for DaVinci / Premiere")
+- Sidebar "Sync" (after Selection): Dashboard("sync") lists multicam projects with p["sync_only"] (Store.new(name, "sync"),
+  badge SYNC); Multicam lists the others. The same MulticamPage: _mode_ui() in sync-only hides Auto Edit, Sync + Auto Edit,
+  the Auto Director panel, the zones card and the map's Auto edit row (SyncMap.show_edit, no zone drawing), Sync is the
+  primary button, back link "← Sync"; "Auto Edit in Multicam →" (to_multicam) clears sync_only (sync kept).
+- resolve.py convert(src, out): removes Basic Motion (effectid basic: Resolve fits clips itself with "Scale entire image to
+  fit"; Premiere's 50 % on 4K came out a quarter size) and Lumetri; a <project> (Create Project bins) is unwrapped to its
+  sequence, every <file> complete at first use, masterclipid dropped. Names / times / tracks / links / markers / labels
+  untouched. NOT verified in a real Resolve (none in the sandbox; the owner's Mac was not reachable): checked with
+  story.check_xml on every converted export (Long Film v2, Create Project chronological + timecode, multicam).
+- ExportPair (Export → Premiere | Export → DaVinci) replaces Export XML on Multicam (header + right panel), Teaser Studio,
+  Long Film, Long Film v2; export(target) -> for_target(out, target), default file name "<name> (DaVinci).xml"
+  (resolve.name_for). Footage results: the existing Premiere Pro / DaVinci Resolve choice now converts too. Create
+  Project and the Transcribe story XML write the "(DaVinci)" copy next to the Premiere one automatically.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

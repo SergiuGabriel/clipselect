@@ -263,6 +263,17 @@ canale, ca MXF-ul de FX6, folosesc canalul 1). Culorile clipurilor: roșu / galb
 <h2>Multicam: Sync</h2>
 <p>Multicam sincronizează toate camerele cu recorderul de la mixer, apoi (opțional) face montajul. Sunt doi pași separați:
 <b>Sync</b> (rapid, doar sunet) și <b>Auto Edit</b> (lent, analiză video). Auto Edit nu se poate apăsa până nu există o sincronizare.</p>
+<p><b>Pagina Sync din meniu</b> e doar pentru sincronizare: același motor, fără Auto Edit. Faci proiect nou, tragi tot (carduri,
+recorder, lavaliere), apeși <b>Sync</b> și exporți: toate camerele și recorderul pe un singur timeline, clipurile întregi. Dacă vrei
+apoi și montajul, <b>Auto Edit în Multicam →</b> mută proiectul în Multicam cu sincronizarea păstrată.</p>
+<p><b>Export → Premiere</b> și <b>Export → DaVinci</b> (la fel la Multicam, Teaser Studio, Long Film și Long Film v2): același montaj, două
+fișiere făcute pentru fiecare program. Pentru DaVinci Resolve (File &gt; Import &gt; Timeline): scalarea Premiere „umple cadrul” e scoasă,
+pentru că Resolve încadrează singur fiecare clip (Project Settings &gt; Image Scaling, implicit „Scale entire image to fit”; cu
+scalarea Premiere în plus un clip 4K ieșea de 4 ori mai mic); efectul Lumetri (culoarea din Premiere) e scos, Resolve nu-l poate citi:
+LUT-ul îl pui în pagina Color; un proiect Premiere cu bin-uri (Create Project) devine doar secvența lui. Numele clipurilor rămân exact
+numele fișierelor (Resolve leagă media după nume), la fel timpii, pistele, legăturile sunet-imagine, markerele și culorile.
+<b>Create Project</b> și povestea din <b>Transcriere</b> scriu automat ambele fișiere: „nume.xml” pentru Premiere și „nume (DaVinci).xml”.
+La Footage Selection alegi Premiere Pro / DaVinci Resolve înainte de Generează.</p>
 <p><b>Sync + Auto Edit</b> (butonul albastru) face totul dintr-o apăsare: Sync, iar imediat ce se termină pornește singur Auto Edit.
 Bun pentru peste noapte: apeși, pleci, dimineață montajul e gata. Mac-ul e ținut treaz până la final (nu intră în sleep).
 La fel și <b>Build</b> din Long Film v2. Sync și Auto Edit separate rămân, pentru când vrei doar unul din ele.</p>
@@ -1052,6 +1063,17 @@ clips' colours: red / yellow / green by level.</li>
 <h2>Multicam: Sync</h2>
 <p>Multicam syncs every camera to the mixer recorder, then (optionally) edits. Two separate steps: <b>Sync</b> (fast, sound only) and
 <b>Auto Edit</b> (slow, video analysis). Auto Edit cannot be pressed until a sync exists.</p>
+<p><b>The Sync page in the menu</b> is for syncing only: the same engine, without Auto Edit. Make a new project, drop everything
+(cards, recorder, lavaliers), press <b>Sync</b> and export: every camera and the recorder on one timeline, whole clips. If you then
+want the edit too, <b>Auto Edit in Multicam →</b> moves the project to Multicam with the sync kept.</p>
+<p><b>Export → Premiere</b> and <b>Export → DaVinci</b> (the same on Multicam, Teaser Studio, Long Film and Long Film v2): the same edit,
+two files made for each program. For DaVinci Resolve (File &gt; Import &gt; Timeline): Premiere's "fill the frame" scaling is removed,
+because Resolve fits every clip itself (Project Settings &gt; Image Scaling, default "Scale entire image to fit"; with the Premiere
+scale on top a 4K clip came out 4 times smaller); the Lumetri effect (Premiere's colour) is removed, Resolve cannot read it: put the
+LUT on the Color page; a Premiere project with bins (Create Project) becomes its sequence alone. Clip names stay exactly the file
+names (Resolve links media by name), and so do the times, tracks, sound-picture links, markers and colours.
+<b>Create Project</b> and the story of <b>Transcribe</b> write both files by themselves: "name.xml" for Premiere and "name (DaVinci).xml".
+In Footage Selection choose Premiere Pro / DaVinci Resolve before Generate.</p>
 <p><b>Sync + Auto Edit</b> (the blue button) does everything in one press: Sync, and as soon as it ends Auto Edit starts by
 itself. Good overnight: press it, leave, the edit is ready in the morning. The Mac is kept awake until the end (no sleep).
 The same for <b>Build</b> in Long Film v2. Separate Sync and Auto Edit stay, for when you want only one of them.</p>
