@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.0.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.1.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -1015,6 +1015,29 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 - Menu "Sync" -> "Synchronize" (RO "Sincronizare"), badge SYNCHRONIZE.
 - i18n scan (/home/claude/i18nscan/scan.py ro|en: every page, project pages, editor, shortcuts, DaVinci check): RO and
   EN clean (only loan words / file names left).
+
+## v4.1.0 (his list after v4.0.0: editor like Premiere, a friend's Syncaila XML, couple / first look in the automatic mode)
+- Editor (editor.py): Ripple delete (X) = Premiere: Model._cut_range(a, b) takes the selected span out of EVERY track
+  (later clips move left, clips crossing it are split / trimmed, recorder lanes cut at the same place, markers moved);
+  a click on an empty gap selects it (blue box, TimelineView.gap via _gap_at) and X / Delete closes it (Model.ripple_gap).
+  The playhead line can be grabbed in the timeline (4 px); dragging the playhead / a clip / the box near the left / right
+  edge scrolls the timeline (edge QTimer 30 ms, 4-34 px per tick). Zoom (buttons, slider, keys) anchors on the playhead,
+  centred when it is off screen; Cmd+wheel on the mouse. Playback: the PLAYER is the clock while the top clip plays (no
+  more loop of the same 2 s after a click far into the film); waits while a file loads, wall clock after a 4 s load /
+  1 s stall / end / invalid media, a player that jumps back > 3 times is dropped (still frames). MMM_NO_AUDIO=1 in tests.
+- Synced XML (Syncaila etc., layout "timecode") without a recorder: the party used the longest party clip as master ->
+  only clips overlapping it (the friend's XML: one camera, 30 min of 4 h). Now longfilm2.timeline_sync = the timeline is
+  the reference (virtual master path None, like Multicam Import XML, no music map); with a recorder, timeline_fill gives
+  clips the sound could not place their timeline place. Automatic mode: use_timeline (timecode layout and >= 3 h span,
+  or no recorder) -> timeline places are the common clock (no clock shifts). static_cams ignored when EVERY camera has
+  long clips. Not tested on the friend's real XML (not received yet).
+- daymap: after the church a clip with faces is Purple only when the groom or the bride is seen (other faces = guests ->
+  Iris); without a known groom / bride the old rule. tools/daymap_check has guest clips now (71/71).
+- First look (automatic mode): join_firstlook replaces the clock overlap: other cameras' groom / bride / Teal clips within
+  FL_WINDOW 30 min of the first look (by the clock) are synced by SOUND to the main first-look files (sync.sync_clip on
+  MasterIndex of the whole files); joined only with conf high and an overlap >= min(5 s, half the clip). Stage
+  "auto_fl". Synthetic test: the right clip 8 min off by the clock joined, a clip 10 s away by the clock with other
+  sound rejected.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

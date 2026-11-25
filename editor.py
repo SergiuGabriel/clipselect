@@ -21,8 +21,8 @@ import subprocess
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QPointF, QRectF, Qt, QThread, QTimer, QUrl, Signal
-from PySide6.QtGui import QColor, QFont, QImage, QKeySequence, QPainter, QPen, QPixmap
+from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, QThread, QTimer, QUrl, Signal
+from PySide6.QtGui import QColor, QFont, QImage, QKeySequence, QMouseEvent, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QScrollBar, QSizePolicy,
                                QSlider, QStackedLayout, QVBoxLayout, QWidget)
 
@@ -285,6 +285,10 @@ class Model:
         self._overwrite([it])
 
     def delete(self, ids, ripple=False):
+        """Delete = lift (a gap stays). Ripple delete = the time of the deleted clips is taken out of the WHOLE film:
+        everything after them moves left on every track, so they join the clip before (Premiere with sync lock on);
+        a long clip crossing that time on another track (the recorder, a camera's sound, a clip switched off) loses
+        exactly that piece, so everything stays in sync."""
         sel = [it for it in self.items if it["id"] in ids]
         if not sel:
             return
@@ -292,16 +296,50 @@ class Model:
         for it in sel:
             self.items.remove(it)
         if ripple:
-            a = min(it["start"] for it in sel)
-            b = max(it["start"] + it["dur"] for it in sel)
-            busy = any(o["start"] < b and o["start"] + o["dur"] > a for o in self.items)
-            if not busy:                      # nothing else there: everything after it moves left
-                for o in self.items:
-                    if o["start"] >= b - 1e-6:
-                        o["start"] -= b - a
-                for m in self.markers:
-                    if m[1] >= b - 1e-6:
-                        m[1] -= b - a
+            spans = sorted((it["start"], it["start"] + it["dur"]) for it in sel)
+            merged = []
+            for a, b in spans:
+                if merged and a <= merged[-1][1] + 1e-6:
+                    merged[-1][1] = max(merged[-1][1], b)
+                else:
+                    merged.append([a, b])
+            for a, b in reversed(merged):
+                self._cut_range(a, b)
+
+    def ripple_gap(self, a, b):
+        """The empty space between two clips taken out (select the gap, Delete / X): everything after it moves left."""
+        if b - a < 1e-3:
+            return
+        self.push()
+        self._cut_range(a, b)
+
+    def _cut_range(self, a, b):
+        L, eps = b - a, 1e-6
+        for it in list(self.items):
+            s0, e0 = it["start"], it["start"] + it["dur"]
+            if e0 <= a + eps:
+                continue
+            if s0 >= b - eps:
+                it["start"] = s0 - L
+                continue
+            left, right = s0 < a - eps, e0 > b + eps
+            if left and right:
+                tail = dict(it, id=self.next_id, start=a, src=it["src"] + (b - s0), dur=e0 - b)
+                self.next_id += 1
+                it["dur"] = a - s0
+                self.items.append(tail)
+            elif left:
+                it["dur"] = a - s0
+            elif right:
+                it["src"] += b - s0
+                it["start"], it["dur"] = a, e0 - b
+            else:
+                self.items.remove(it)
+        for m in self.markers:
+            if m[1] >= b - eps:
+                m[1] -= L
+            elif m[1] > a:
+                m[1] = a
 
     def timeline(self):
         return dict(items=[{k: v for k, v in it.items() if k != "id"} for it in self.items], markers=self.markers)
@@ -320,6 +358,11 @@ class TimelineView(QWidget):
         self.sel = set()
         self.tool, self.snapping = "select", True
         self.drag = None
+        self.gap = None                        # (row kind, row key, a, b): the selected empty space
+        self._last = None                      # the mouse during a drag (the timeline scrolls at the edges)
+        self.edge = QTimer(self)
+        self.edge.setInterval(30)
+        self.edge.timeout.connect(self._edge_tick)
         self.thumbs = {}
         self.scaled = {}                       # (key, w, h) -> QPixmap already at the size it is drawn
         self._cols, self._green = {}, QColor("#2f6e4f")
@@ -411,8 +454,15 @@ class TimelineView(QWidget):
         super().resizeEvent(e)
 
     def zoom(self, f, at=None):
-        at = self.ph if at is None else at
-        sx = self.x_of(at)
+        """Like Premiere: the playhead stays where it is on screen (or comes to the middle when it was not on screen);
+        with Cmd + wheel the point under the mouse stays."""
+        if at is None:
+            at = self.ph
+            sx = self.x_of(at)
+            if not (HDR <= sx <= self.width()):
+                sx = HDR + (self.width() - HDR) / 2
+        else:
+            sx = self.x_of(at)
         self.pps = min(200.0, max(0.02, self.pps * f))
         self.x0 = max(0.0, at - (sx - HDR) / self.pps)
         self._range()
@@ -433,6 +483,20 @@ class TimelineView(QWidget):
             if self.ph < self.x0 or self.ph > self.x0 + vis * 0.95:
                 self.hbar.setValue(int(max(0.0, self.ph - vis * 0.1) * 10))
         self.update()
+
+    def _gap_at(self, p):
+        """(row key, a, b) of the empty space between two clips under the mouse on a track, else None."""
+        t = self.t_of(p.x())
+        for kind, key, y, h in self.rows():
+            if not (y <= p.y() < y + h):
+                continue
+            same = [it for it in self.m.items if (kind == "v" and it.get("v") == key) or
+                    (kind == "a" and (it.get("ak") and list(it["ak"]) == list(key)))]
+            before = [it["start"] + it["dur"] for it in same if it["start"] + it["dur"] <= t]
+            after = [it["start"] for it in same if it["start"] >= t]
+            if after and any(it["start"] < t < it["start"] + it["dur"] for it in same) is False:
+                return (kind, key, max(before) if before else 0.0, min(after))
+        return None
 
     # ---- snapping
     def _snap(self, t, skip=()):
@@ -500,7 +564,14 @@ class TimelineView(QWidget):
                 g.setPen(QColor("#e3cf3e"))
                 g.drawLine(int(x), 14, int(x), RULER)
                 g.drawText(int(x) + 3, RULER - 2, name)
-        # selection box / drop preview / playhead
+        # selected gap / selection box / drop preview / playhead
+        if self.gap:
+            for kind, key, y, h in self.rows():
+                if kind == self.gap[0] and key == self.gap[1]:
+                    gx0, gx1 = self.x_of(self.gap[2]), self.x_of(self.gap[3])
+                    g.fillRect(QRectF(gx0, y + 1, max(2.0, gx1 - gx0), h - 2), QColor(45, 140, 235, 70))
+                    g.setPen(QPen(QColor("#2d8ceb"), 1))
+                    g.drawRect(QRectF(gx0, y + 1, max(2.0, gx1 - gx0), h - 2))
         if self.drag and self.drag.get("band") is not None:
             g.setPen(QPen(QColor("#2d8ceb"), 1))
             g.setBrush(QColor(45, 140, 235, 40))
@@ -608,7 +679,9 @@ class TimelineView(QWidget):
         p = e.position()
         if self._header_click(p):
             return
-        if p.y() < RULER:                      # click / drag on the ruler moves the playhead
+        self.gap = None
+        near_ph = abs(p.x() - self.x_of(self.ph)) <= 4 and p.x() > HDR
+        if p.y() < RULER or (near_ph and self.tool == "select"):   # the ruler, or the blue line itself, moves it
             self.drag = dict(kind="ph")
             self.set_playhead(self.t_of(p.x()), follow=False)
             self.playhead_moved.emit(self.ph)
@@ -623,6 +696,7 @@ class TimelineView(QWidget):
         mods = e.modifiers()
         if it is None:
             add = bool(mods & (Qt.ShiftModifier | Qt.ControlModifier | Qt.MetaModifier))
+            self.gap = None
             if not add:
                 self.sel.clear()
             # empty space: a click moves the playhead, a drag draws the selection box (like Premiere / Finder)
@@ -638,9 +712,13 @@ class TimelineView(QWidget):
                          x=p.x(), y=p.y(), started=False)
         self.update()
 
-    def mouseMoveEvent(self, e):
+    def mouseMoveEvent(self, e, from_edge=False):
         p = e.position()
         d = self.drag
+        if d is not None:                      # at the left / right edge the timeline scrolls by itself
+            self._last = QPointF(p)
+            if self._edge_speed(p.x()) and not self.edge.isActive():
+                self.edge.start()
         if d is None:
             it, r = self.hit(p)
             if it is not None:
@@ -649,6 +727,8 @@ class TimelineView(QWidget):
                                (Qt.CrossCursor if self.tool == "razor" else Qt.ArrowCursor))
                 self.setToolTip(f"{Path(it['path']).name}  ·  {tc(it['dur'])}  ·  "
                                 f"{i18n.T('source')} {tc(it['src'])}")
+            elif abs(p.x() - self.x_of(self.ph)) <= 4 and p.x() > HDR:
+                self.setCursor(Qt.SizeHorCursor)
             else:
                 self.setCursor(Qt.ArrowCursor)
             return
@@ -712,12 +792,40 @@ class TimelineView(QWidget):
             d["ghost"] = [r]
         self.update()
 
+    def _edge_speed(self, x):
+        """Seconds to scroll per tick when a drag reaches the left / right edge (faster the further out)."""
+        w = 40.0
+        if x > self.width() - w:
+            return (4.0 + 20.0 * min(1.5, (x - (self.width() - w)) / w)) / self.pps
+        if x < HDR + w and self.x0 > 0:
+            return -(4.0 + 20.0 * min(1.5, ((HDR + w) - x) / w)) / self.pps
+        return 0.0
+
+    def _edge_tick(self):
+        if not self.drag or self._last is None:
+            self.edge.stop()
+            return
+        v = self._edge_speed(self._last.x())
+        if not v:
+            self.edge.stop()
+            return
+        self.hbar.setValue(int(max(0.0, self.x0 + v) * 10))
+        ev = QMouseEvent(QEvent.MouseMove, self._last, self.mapToGlobal(self._last), Qt.NoButton, Qt.LeftButton,
+                         Qt.NoModifier)
+        self.mouseMoveEvent(ev, from_edge=True)
+
     def mouseReleaseEvent(self, e):
+        self.edge.stop()
+        self._last = None
         d, self.drag = self.drag, None
         if d and d["kind"] == "band":
-            if not d.get("started"):            # a plain click on empty space: the playhead goes there
-                self.set_playhead(self.t_of(d["x"]), follow=False)
-                self.playhead_moved.emit(self.ph)
+            if not d.get("started"):            # a plain click on empty space: the gap between two clips is
+                g = self._gap_at(QPointF(d["x"], d["y"]))          # selected (Premiere), else the playhead goes there
+                if g:
+                    self.gap = g
+                else:
+                    self.set_playhead(self.t_of(d["x"]), follow=False)
+                    self.playhead_moved.emit(self.ph)
             self.update()
             return
         if d and d.get("started"):
@@ -858,8 +966,10 @@ class Editor(QDialog):
             from PySide6.QtMultimediaWidgets import QVideoWidget
             self.video = QVideoWidget()
             self.player = QMediaPlayer(self)
-            self.audio = QAudioOutput(self)
-            self.player.setAudioOutput(self.audio)
+            self.audio = None
+            if not os.environ.get("MMM_NO_AUDIO"):
+                self.audio = QAudioOutput(self)
+                self.player.setAudioOutput(self.audio)
             self.player.setVideoOutput(self.video)
             self.stack.addWidget(self.video)
             self._pending = None
@@ -963,6 +1073,7 @@ class Editor(QDialog):
         self.view.playhead_moved.connect(self._seek)
         self.view.changed.connect(self._changed)
         self.playing, self.cur, self.t_start, self.ph_start = False, None, 0.0, 0.0
+        self.loading, self.use_wall, self.last_pos, self.back, self.load_t, self.moved_t = False, True, 0.0, 0, 0.0, 0.0
         self.timer = QTimer(self)
         self.timer.setInterval(40)
         self.timer.timeout.connect(self._tick)
@@ -1005,13 +1116,17 @@ class Editor(QDialog):
     def play(self):
         if self.view.ph >= self.m.end():
             self.view.set_playhead(0.0)
-        self.playing, self.cur = True, None
-        self.t_start, self.ph_start = time.monotonic(), self.view.ph
+        self.playing, self.cur, self.loading, self.back = True, None, False, 0
+        self._wall(self.view.ph)
         self.b_play.setText("❚❚")
         if self.player is not None:
             self.stack.setCurrentWidget(self.video)
         self.timer.start()
         self._tick()
+
+    def _wall(self, t):
+        """From here the playhead follows the wall clock (gaps, a clip the player cannot open)."""
+        self.ph_start, self.t_start, self.use_wall = t, time.monotonic(), True
 
     def pause(self):
         self.playing = False
@@ -1023,13 +1138,43 @@ class Editor(QDialog):
         self._show_frame_at(self.view.ph)
 
     def _tick(self):
-        t = self.ph_start + (time.monotonic() - self.t_start)
+        """The PLAYER is the clock while it plays a clip (no drift, nothing repeated); while a file loads the playhead
+        waits; in gaps the wall clock runs. A player that jumps back again and again is given up (still pictures)."""
+        now = time.monotonic()
+        t = self.ph_start + (now - self.t_start)
+        if self.player is not None and self.cur is not None and not self.use_wall:
+            if self.loading:
+                t = self.view.ph
+                if now - self.load_t > 4.0:                     # the file never loaded: go on with pictures
+                    self.loading = False
+                    self._wall(t)
+            else:
+                pos = self.player.position() / 1000.0
+                if pos + 0.3 < self.last_pos:                   # went back by itself (a loop): put it right
+                    self.back += 1
+                    if self.back > 3:
+                        self.player.stop()
+                        self.player = None
+                        self.stack.setCurrentWidget(self.screen)
+                    else:
+                        self.player.setPosition(int((self.cur["src"] + self.view.ph - self.cur["start"]) * 1000))
+                    t = self.view.ph
+                else:
+                    if pos > self.last_pos + 0.001:
+                        self.moved_t = now
+                    self.last_pos = pos
+                    t = self.cur["start"] + (pos - self.cur["src"])
+                    if t < self.view.ph - 0.2 or t > self.view.ph + 1.0:   # not started yet / a jump: hold
+                        t = self.view.ph + 0.04
+                    if now - self.moved_t > 1.0:                # stuck (end of the file, a slow disk): keep going
+                        self._wall(self.view.ph)
+                        t = self.view.ph
         if t >= self.m.end():
             self.pause()
             return
         self.view.set_playhead(t)
         self.tc.setText(tc(t))
-        it = self.m.top_at(t)
+        it = self.m.top_at(t + 0.001)
         if self.player is None:                # no Qt Multimedia: still pictures, a few per second
             if int(t * 4) != int((t - 0.04) * 4):
                 self.frames.ask("mon", it["path"], it["src"] + t - it["start"]) if it else None
@@ -1038,29 +1183,43 @@ class Editor(QDialog):
             if self.cur is not None:
                 self.player.pause()
                 self.cur = None
+                self._wall(t)
             return
         if self.cur is None or self.cur["id"] != it["id"]:
-            self.cur = it
+            self.cur, self.use_wall, self.moved_t = it, False, time.monotonic() + 1.0
             pos = int((it["src"] + t - it["start"]) * 1000)
+            self.last_pos = pos / 1000.0
             if self.player.source() != QUrl.fromLocalFile(it["path"]):
-                self._pending = pos                # applied when the file is loaded (_media_status)
+                self._pending, self.loading, self.load_t = pos, True, time.monotonic()  # applied in _media_status
                 self.player.setSource(QUrl.fromLocalFile(it["path"]))
             else:
+                self.loading = False
                 self.player.setPosition(pos)
             muted = (not it.get("ak")) or list(it["ak"]) in self.m.muted or not it.get("aon", True)
-            self.audio.setMuted(bool(muted))
+            if self.audio is not None:
+                self.audio.setMuted(bool(muted))
             self.player.play()
 
     def _media_status(self, st):
         try:
             from PySide6.QtMultimedia import QMediaPlayer
+            if st == QMediaPlayer.EndOfMedia and self.playing:
+                self._wall(self.view.ph)
+                return
+            if st == QMediaPlayer.InvalidMedia:            # this file does not play here: keep time, show pictures
+                self.loading, self._pending = False, None
+                self._wall(self.view.ph)
+                return
             if self._pending is not None and st in (QMediaPlayer.LoadedMedia, QMediaPlayer.BufferedMedia):
                 pos, self._pending = self._pending, None
-                if self.playing and self.cur is not None:      # the time it took to load is caught up
+                if self.playing and self.cur is not None:
                     pos = int((self.cur["src"] + self.view.ph - self.cur["start"]) * 1000)
                 self.player.setPosition(pos)
+                self.last_pos = pos / 1000.0
+                self.loading = False
+                self.moved_t = time.monotonic() + 1.0
         except Exception:
-            pass
+            self.loading = False
 
     def _step(self, n):
         self._seek(max(0.0, round(self.view.ph * FPS + n) / FPS))
@@ -1079,7 +1238,11 @@ class Editor(QDialog):
         self.b_raz.setChecked(name == "razor")
 
     def _delete(self, ripple):
-        self.m.delete(set(self.view.sel), ripple)
+        if self.view.gap and not self.view.sel:           # a selected gap: Delete or X closes it
+            self.m.ripple_gap(self.view.gap[2], self.view.gap[3])
+            self.view.gap = None
+        else:
+            self.m.delete(set(self.view.sel), ripple)
         self.view.sel.clear()
         self._changed()
 

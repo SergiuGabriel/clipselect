@@ -747,3 +747,8 @@ EXACT.update({
     "Reset all": "Resetează tot", "Press shortcut": "Apasă scurtătura",
     "Selection": "Selecție", "Razor": "Razor", "Snap": "Snap", "Fit": "Tot filmul",
 })
+
+# v4.1.0
+TEMPLATES.update({
+    "Checking the first look on the other cameras: {} of {}": "Verific first look-ul pe celelalte camere: {} din {}",
+})

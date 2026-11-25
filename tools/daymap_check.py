@@ -37,6 +37,8 @@ for i in range(6):                        # 13:40 venue (no faces) + couple
     add(820 + i, 5, "Yellow")
 for i in range(8):
     add(830 + i, 10, "Purple", ("g", "b") if i % 2 else ("b",))
+for i in range(4):                        # guests congratulating at the venue: faces, but not the couple -> party
+    add(838.5 + i * 0.3, 6, "Iris", ("o", "o"), cam="fx3")
 for i in range(6):                        # 15:30 party, after a 50 min break
     add(930 + i * 10, 400, "Iris", ("o", "o"))
 for i in range(6):                        # 19:00 sunset couple session in the party

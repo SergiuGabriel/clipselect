@@ -576,7 +576,9 @@ mireasă, first look, vornic, biserică, sală, cuplu, dronă, petrecere), din e
 Export → DaVinci.</p>
 <p><b>First look-ul e sincronizat</b>: camera cu cel mai mult first look pe V1, celelalte deasupra, la același moment, după
 sunetul fișierelor întregi (cel mai clar canal, niciodată un amestec), iar în modul automat și după ceasul comun găsit cu
-recorderul; în modul automat orice clip al altei camere filmat în același timp cu first look-ul intră lângă el.
+recorderul. În modul automat clipurile celorlalte camere filmate până la 30 de minute înainte / după first look (după ceas) sunt
+verificate după <b>sunet</b>: intră la first look doar cele al căror sunet e chiar același moment (un clip cu mireasa și
+prietenele ei, filmat cu câteva minute înainte, nu mai intră).
 O cameră pe trepied (clipuri foarte lungi, de peste 10 minute de obicei: a74 la Alex și Andreea) nu e niciodată aleasă pentru
 mire, mireasă, cuplu sau sală: doar biserica și petrecerea.</p>
 
@@ -620,10 +622,15 @@ altul), plus clipurile scurte până la 5 minute înainte și 10 minute după.</
 <li><b>Înainte de biserică</b>: mirele (fața lui, altfel prima scenă), mireasa (fața ei, altfel scenele următoare), amândoi în cadru =
 first look, clipurile lungi de dimineață (150 s+) = vornicul.</li>
 <li><b>După biserică</b> (prima scenă, apoi până la o pauză de 40+ minute): clipurile fără nicio față = <b>sala</b> (la Alex și
-Andreea 14 din 14), cele cu fețe = <b>cuplul</b>.</li>
+Andreea 14 din 14), cele în care se vede mirele sau mireasa = <b>cuplul</b>; cele doar cu invitați (felicitări, sosirea la sală)
+merg la petrecere.</li>
 <li><b>Restul = petrecerea</b>; o scenă din petrecere cu mirii în cel puțin 40 % din clipuri, clipuri scurte (sub 40 s), 4 sau mai
 multe = cuplu (ședința de la apus). Drona = folderele / fișierele de dronă (DJI, mavic, drona).</li>
 </ul>
+<p><b>Un XML deja sincronizat</b> (Syncaila, sincronizare Premiere / DaVinci, Create Project pe timecode): locurile din timeline
+sunt ceasul comun. Fără recorder, petrecerea folosește <b>toate camerele</b> pe locurile lor din timeline (înainte se folosea doar
+cel mai lung clip ca referință și doar ce se suprapunea cu el); cu recorder, un clip pe care sunetul nu-l poate pune își păstrează
+locul din timeline.</p>
 <p>Măsurat pe Alex și Andreea (fx6, comparat cu etichetele tale): 130 din 146 clipuri în momentul corect (89 %). Greșelile: cele 8
 clipuri de la luarea miresei pe care tu le-ai pus Iris (aplicația le pune la mireasă) și cele 3 interviuri Tan (ajung la petrecere).
 Restul îl corectezi în editor.</p>
@@ -639,12 +646,17 @@ Shift / Cmd + click selectează mai multe și le muți împreună.</li>
 <li><b>Tăiere (C)</b>: click pe un clip îl taie în două în acel punct.</li>
 <li>Selecție cu chenar: apasă pe un loc gol al timeline-ului și trage, ca în Finder; Shift / Cmd adaugă la selecție, un
 click simplu pe gol mută playhead-ul. Cmd+A selectează tot.</li>
-<li>Delete scoate clipul (rămâne gol), <b>X</b> (Ripple delete) îl scoate și închide golul (doar dacă nimic altceva nu e acolo).
+<li>Delete scoate clipul (rămâne gol), <b>X</b> (Ripple delete) îl scoate și <b>tot ce e în dreapta</b> vine lângă clipul din
+stânga, pe toate pistele, ca în Premiere (sunetul recorderului se taie în același loc). Click pe <b>golul</b> dintre două clipuri îl
+selectează (chenar albastru) și X / Delete îl închide.
 <b>Scurtături…</b> îți arată toate tastele și le poți schimba: dai click pe un câmp și apeși tasta pe care o vrei (o tastă luată
 de la altă acțiune se mută); Resetează tot pune înapoi tastele implicite. Tastele tale rămân pentru toate proiectele. Cmd+Z /
 Shift+Cmd+Z anulează / refac fiecare pas. S pornește / oprește alinierea la marginile clipurilor, playhead și markere.</li>
 <li>Space redă / oprește, Stânga / Dreapta un cadru, Sus / Jos tăietura anterioară / următoare, Home / End. Zoom din cursor,
-Cmd + rotița, + / −, iar tasta &#92; arată tot filmul. Click sau trage pe riglă ca să muți playhead-ul.</li>
+Cmd + rotița, + / −, iar tasta &#92; arată tot filmul. Zoom-ul rămâne pe playhead (îl aduce în mijloc dacă nu se vede). Click
+sau trage pe riglă ca să muți playhead-ul; poți apuca și linia albastră direct din timeline. Când tragi playhead-ul, un clip sau
+chenarul spre marginea din stânga / dreapta, timeline-ul se derulează singur. Redarea pornește de unde e playhead-ul și merge
+mai departe prin toate clipurile.</li>
 <li>Ochiul unei piste video o ascunde (clipurile ei sunt exportate oprite), M pe o pistă audio îi oprește sunetul.</li>
 </ul>
 <p>Editorul e făcut să fie fluid și pe filme mari (mii de cadre, petrecerea inclusă): cadrele din monitor sunt citite cu
@@ -1396,7 +1408,9 @@ Premiere Pro / DaVinci Resolve buttons). The Premiere colours are also the ones 
 is Mango, choose Mango) and they go on the clips of Export → Premiere; the DaVinci colours go on the clips of Export → DaVinci.</p>
 <p><b>The first look is synced</b>: the camera with the most first look on V1, the others above it at the same moment, by the
 sound of the whole files (the clearest channel, never a mix) and, in the automatic mode, by the common clock found with the
-recorder too; in the automatic mode any other camera's clip filmed at the same time as the first look joins it.
+recorder too. In the automatic mode the other cameras' clips filmed up to 30 minutes before / after the first look (by the clock)
+are checked by <b>sound</b>: only those whose sound is the very same moment join the first look (a clip of the bride with her
+friends filmed a few minutes earlier no longer does).
 A camera on a tripod (very long clips, usually over 10 minutes: the a74 at Alex & Andreea) is never chosen for the groom, the
 bride, the couple or the venue: only the church and the party.</p>
 
@@ -1439,10 +1453,15 @@ the short clips up to 5 minutes before and 10 minutes after.</li>
 <li><b>Before the church</b>: the groom (his face, else the first scene), the bride (her face, else the following scenes), both in the
 frame = first look, long morning clips (150 s+) = the vornic.</li>
 <li><b>After the church</b> (its first scene, then until a break of 40+ minutes): clips without any face = <b>the venue</b> (14 of 14
-at Alex & Andreea), clips with faces = <b>the couple</b>.</li>
+at Alex & Andreea), clips where the groom or the bride is seen = <b>the couple</b>; clips with guests only (congratulations,
+arriving at the venue) go to the party.</li>
 <li><b>The rest = the party</b>; a party scene with the couple in at least 40 % of the clips, short clips (under 40 s), 4 or more =
 couple (the sunset session). Drone = drone folders / files (DJI, mavic, drona).</li>
 </ul>
+<p><b>An already synced XML</b> (Syncaila, Premiere / DaVinci sync, Create Project on timecode): the places on the timeline are the
+common clock. Without a recorder the party uses <b>every camera</b> at its place on the timeline (before, only the longest clip was
+the reference and only what overlapped it was used); with a recorder, a clip the sound cannot place keeps its place on the
+timeline.</p>
 <p>Measured on Alex & Andreea (fx6, compared with your labels): 130 of 146 clips in the right moment (89 %). The misses: the 8 clips
 of fetching the bride you labelled Iris (the app puts them with the bride) and the 3 Tan interviews (they end up in the party). You
 correct the rest in the editor.</p>
@@ -1458,12 +1477,17 @@ selects more and moves them together.</li>
 <li><b>Razor (C)</b>: a click cuts a clip in two at that point.</li>
 <li>Box selection: press on an empty place of the timeline and drag, like in Finder; Shift / Cmd add to the selection, a
 plain click on empty space moves the playhead. Cmd+A selects everything.</li>
-<li>Delete lifts the clip (a gap stays), <b>X</b> (Ripple delete) removes it and closes the gap (only when nothing else is there).
+<li>Delete lifts the clip (a gap stays), <b>X</b> (Ripple delete) removes it and <b>everything on the right</b> moves next to the
+clip on the left, on every track, like Premiere (the recorder's sound is cut at the same place). A click on the <b>gap</b> between two
+clips selects it (blue box) and X / Delete closes it.
 <b>Shortcuts…</b> shows every key and lets you change it: click a field and press the key you want (a key taken from another
 action moves); Reset all puts the default keys back. Your keys stay for every project. Cmd+Z /
 Shift+Cmd+Z undo / redo every step. S switches snapping to clip edges, the playhead and markers.</li>
 <li>Space plays / stops, Left / Right one frame, Up / Down previous / next edit, Home / End. Zoom with the slider, Cmd + wheel, + / -,
-and the &#92; key shows the whole film. Click or drag on the ruler to move the playhead.</li>
+and the &#92; key shows the whole film. Zoom stays on the playhead (it is brought to the middle when it is not visible). Click or
+drag on the ruler to move the playhead; you can also grab the blue line in the timeline itself. When you drag the playhead, a clip or
+the box to the left / right edge, the timeline scrolls by itself. Playback starts where the playhead is and runs on through every
+clip.</li>
 <li>The eye of a video track hides it (its clips are exported switched off), M on an audio track mutes it.</li>
 </ul>
 <p>The editor is made to stay smooth on big films (thousands of shots, the party included): monitor frames are read with the

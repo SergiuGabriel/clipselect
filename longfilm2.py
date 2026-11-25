@@ -354,6 +354,45 @@ def party_inputs(pieces, recorder, infos):
     return party, files, masters, extras
 
 
+def _zero(p):
+    """Where the file's first frame sits on his timeline (s)."""
+    return p["st"] - p["a"]
+
+
+def timeline_sync(party, infos):
+    """A timeline already synced (Syncaila, DaVinci / Premiere sync, timecode) with NO recorder: the timeline itself is
+    the reference, every clip keeps its place (like Multicam > Import XML). Before, the longest party clip was the
+    master and only the clips overlapping it were used (a friend's Syncaila XML: one camera, 30 min of 4 h)."""
+    zs = {}
+    for p in party:
+        zs.setdefault(p["path"], _zero(p))
+    t0 = min(zs.values()) if zs else 0.0
+    end = max((z - t0 + ((infos.get(f) or {}).get("dur") or 0.0) for f, z in zs.items()), default=0.0)
+    info = [dict(path=None, duration=end, onsets=[], clock=None, start=0.0)]
+    res = {f: dict(conf="high", z=0.0, n=0, k=0, offset=z - t0, drift_ppm=0.0, master=0,
+                   dur=(infos.get(f) or {}).get("dur") or 0.0, manual=False, source="xml") for f, z in zs.items()}
+    return info, res
+
+
+def timeline_fill(party, recorder, info, res, infos):
+    """Synced timeline WITH a recorder: a clip the sound could not place (silent gimbal, mic off) keeps the place it has
+    on his timeline relative to the recorder file under it."""
+    rst = {r["path"]: r["st"] for r in recorder}
+    ms = [(i, rst.get(m.get("path"))) for i, m in enumerate(info)]
+    ms = [(i, s) for i, s in ms if s is not None]
+    if not ms:
+        return
+    for p in party:
+        r = res.get(p["path"])
+        if r and r.get("conf") in ("high", "medium"):
+            continue
+        z = _zero(p)
+        i, s = min(ms, key=lambda x: 0 if x[1] <= z < x[1] + (info[x[0]].get("duration") or 0)
+                   else min(abs(z - x[1]), abs(z - x[1] - (info[x[0]].get("duration") or 0))))
+        res[p["path"]] = dict(conf="high", z=0.0, n=0, k=0, offset=z - s, drift_ppm=0.0, master=i,
+                              dur=(infos.get(p["path"]) or {}).get("dur") or 0.0, manual=False, source="xml")
+
+
 def party_edit(party, results, masters, analyses, cams_n, roles, st):
     """director.build on the labelled party ranges (each one a clip of its own). Returns (edits, cams for the director,
     {key: piece})."""
@@ -686,8 +725,12 @@ def auto_moments(L, pieces, recorder, infos, prog, cancel, jobs, model_dir):
     import daymap
     cams = sorted({p["cam"] for p in pieces})
     own = {}
-    for c in cams:
-        own.update(own_clock(sorted({p["path"] for p in pieces if p["cam"] == c}), infos))
+    if use_timeline(L, pieces, recorder):   # a synced timeline of the whole day: its places ARE the common clock
+        for p in pieces:
+            own.setdefault(p["path"], _zero(p))
+    else:
+        for c in cams:
+            own.update(own_clock(sorted({p["path"] for p in pieces if p["cam"] == c}), infos))
     # 1. the recorder sync gives every camera's clock error
     shift, synced = {c: 0.0 for c in cams}, None
     tmp = [dict(p, kind="party") for p in pieces]
@@ -714,7 +757,7 @@ def auto_moments(L, pieces, recorder, infos, prog, cancel, jobs, model_dir):
                     d.setdefault(p["cam"], []).append(starts[r.get("master", 0)] + r["offset"] - own[p["path"]])
             med = {c: float(np.median(v)) for c, v in d.items()}
             ref = 0 if 0 in med else (min(med) if med else None)
-            if ref is not None:
+            if ref is not None and not use_timeline(L, pieces, recorder):
                 shift = {c: med.get(c, med[ref]) - med[ref] for c in cams}
         except InterruptedError:
             raise
@@ -750,6 +793,8 @@ def auto_moments(L, pieces, recorder, infos, prog, cancel, jobs, model_dir):
              for p in pieces}
     lab, info = daymap.classify(clips, fz)
     still = static_cams(pieces, infos)
+    if still >= set(cams):                  # every camera films long takes: none of them is "the tripod one"
+        still = set()
     for p in pieces:
         k = key_of(p)
         p["t"] = clips[k]["t0"]
@@ -763,16 +808,75 @@ def auto_moments(L, pieces, recorder, infos, prog, cancel, jobs, model_dir):
     info["faces"] = model is not None
     info["shift"] = {str(c): round(v) for c, v in shift.items()}
     info["static"] = sorted(still)
-    # the first look: every other camera's clip filmed at the same moment joins it (it is synced on top of it)
-    fl = [p for p in pieces if p["kind"] == "firstlook"]
-    for p in pieces:
-        if p["kind"] in ("firstlook", "party", "drone") or p["cam"] in still:
-            continue
-        for q in fl:
-            if q["cam"] != p["cam"] and p["t"] < q["t"] + (q["b"] - q["a"]) and q["t"] < p["t"] + (p["b"] - p["a"]):
-                p["kind"], p["label"] = "firstlook", q["label"]
-                break
+    # the first look: another camera's clip joins it only when its SOUND is the same moment (the clock alone took a
+    # clip of the bride with her friends on the fx3, filmed a few minutes earlier)
+    info["firstlook_joined"] = join_firstlook(pieces, still, prog("auto_fl"), cancel)
     return info, synced
+
+
+def use_timeline(L, pieces, recorder):
+    """Automatic mode: the places on a SYNCED timeline (Syncaila, Premiere / DaVinci sync, Create Project timecode) are
+    the common clock when the timeline holds the day (>= 3 h) or there is no recorder to measure the cameras' clocks."""
+    if L.get("layout") != "timecode" or not pieces:
+        return False
+    span = max(p["en"] for p in pieces) - min(p["st"] for p in pieces)
+    return span >= 3 * 3600 or not any(Path(r["path"]).exists() for r in recorder)
+
+
+FL_WINDOW = 30 * 60     # other cameras' clips up to 30 min (by the clock) around the first look are checked by sound
+
+
+def join_firstlook(pieces, still, progress=None, cancel=None):
+    """Automatic mode: the first look found by the faces (groom + bride together) is mostly on one camera. Every
+    other camera's clip of the morning near it by the clock is synced by SOUND to it; a sure match (conf high,
+    overlapping the first look by >= min(5 s, half the clip)) joins the first look. Returns the number joined."""
+    fl = [p for p in pieces if p["kind"] == "firstlook" and p.get("t") is not None]
+    if not fl:
+        return 0
+    foot = {}
+    for p in fl:
+        foot[p["cam"]] = foot.get(p["cam"], 0.0) + p["b"] - p["a"]
+    main = max(foot, key=lambda c: (foot[c], -c))
+    med = [p for p in fl if p["cam"] == main]
+    lo = min(p["t"] for p in med) - FL_WINDOW
+    hi = max(p["t"] + p["b"] - p["a"] for p in med) + FL_WINDOW
+    cands = [p for p in pieces if p["cam"] != main and p["cam"] not in still and p.get("t") is not None
+             and p["kind"] in ("groom", "bride", "firstlook") and p["t"] < hi and p["t"] + p["b"] - p["a"] > lo]
+    if not cands:
+        return 0
+    pcm, idx = {}, []
+
+    def audio(path):
+        if path not in pcm:
+            try:
+                pcm[path] = sync.audio_pcm(path)
+            except Exception:
+                pcm[path] = np.zeros(sync.SR, np.float32)
+        return pcm[path]
+    for m in med:
+        x = audio(m["path"])
+        idx.append(sync.MasterIndex(x if len(x) > sync.SR else np.zeros(sync.SR, np.float32)))
+    n = 0
+    for k, p in enumerate(cands):
+        if cancel and cancel():
+            raise InterruptedError("Cancelled")
+        if progress:
+            progress(f"Checking the first look on the other cameras: {k + 1} of {len(cands)}", (k + 1) / len(cands))
+        x = audio(p["path"])[int(p["a"] * sync.SR):int(p["b"] * sync.SR)]
+        try:
+            r = sync.sync_clip(idx, x) if len(x) > 2 * sync.SR else dict(conf="fail")
+        except Exception:
+            r = dict(conf="fail")
+        ok = False
+        if r.get("conf") == "high":
+            m = med[r["master"]]
+            g0 = r["offset"]                              # where this selection starts in the first-look file
+            ov = min(g0 + (p["b"] - p["a"]), m["b"]) - max(g0, m["a"])
+            ok = ov >= min(5.0, 0.5 * (p["b"] - p["a"]))
+        if ok:
+            p["kind"], p["label"] = "firstlook", "Teal"
+            n += 1
+    return n
 
 
 def static_cams(pieces, infos):
@@ -888,7 +992,8 @@ def _weights(pieces, recorder, infos, auto, jobs, todo_sec=None, kinds=True):
     party = dur([p for p in pieces if p["kind"] == "party"]) if kinds else dur(pieces)
     w = []
     if auto:
-        w += [("auto_sync", dur(pieces) / 60.0 / jobs + rec_h * 20), ("auto_faces", 2.0 * len(pieces))]
+        w += [("auto_sync", dur(pieces) / 60.0 / jobs + rec_h * 20), ("auto_faces", 2.0 * len(pieces)),
+              ("auto_fl", 30.0)]
     w += [("analyse", todo_sec / 15.0 / jobs),
           ("priest", 2.0 * sum(1 for p in pieces if p["kind"] == "church" and p["b"] - p["a"] >= PRIEST_MIN) if kinds else 5),
           ("firstlook", 4.0 * max(1, sum(1 for p in pieces if p["kind"] == "firstlook")) if kinds else 8),
@@ -1025,16 +1130,25 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
                 clocks[f] = None
         camk = {p["path"]: str(p["cam"]) for p in party}
         camk.update({f: "rec:" + Path(f).parent.name for f in extras})
-        if psync_res and all(f in psync_res[1] for f in clips):
+        no_rec = not any(Path(r["path"]).exists() for r in recorder)
+        if no_rec and L["layout"] == "timecode":
+            info, res = timeline_sync(party, infos)     # a synced timeline (Syncaila, timecode) without a recorder
+            masters = []
+        elif psync_res and all(f in psync_res[1] for f in clips):
             info, res = psync_res                   # already synced by the automatic day map
         else:
             info, res = sync.run_sync(masters, clips, st("party"), cancel,
                                       clocks=clocks, groups=camk, jobs=jobs)
+        if L["layout"] == "timecode" and not no_rec:
+            timeline_fill(party, recorder, info, res, infos)   # clips the sound could not place keep their timeline place
         for f in pfiles:
             if f in masters:                # the longest party clip itself is the master
                 res[f] = dict(conf="high", master=masters.index(f), offset=0.0, dur=infos[f]["dur"], drift_ppm=0.0)
         for i, m in enumerate(info):
             chk()
+            if not m.get("path"):
+                m["music"] = None
+                continue
             st("music")(f"Reading the music (beats, bars, drops): {i + 1} of {len(info)}", i / max(1, len(info)))
             try:
                 import music

@@ -8,7 +8,7 @@ Measured on Alex & Andreea (fx6 clock coherent, his labels as the answer):
   - the church = the first scene with long clips (>= 150 s, at least 900 s of them: the ceremony runs whole);
   - long morning clips (>= 150 s) = the vornic;
   - after the church (its first scene, then until a break of 40+ minutes): the VENUE has no faces at all (14 of 14 Yellow clips) and
-    the COUPLE shots do;
+    the COUPLE shots show the groom or the bride (other faces = guests -> party; v4.1.0);
   - the rest is the party; a party scene that is mostly the couple in short shots (the sunset session) = couple;
   - drone = folders / files of a drone (DJI, mavic, drona).
 Clock: every camera's own clock (creation time, else file date minus duration), shifted by the camera's clock error
@@ -156,7 +156,15 @@ def classify(clips, faces):
         cv_seen = True
         if in_cv:
             for k in s:
-                lab[k] = "Purple" if faces.get(k) else "Yellow"
+                fs = faces.get(k)
+                if not fs:
+                    lab[k] = "Yellow"
+                elif groom is None and bride is None:       # no one known (no faces in the morning): any face
+                    lab[k] = "Purple"
+                elif has(groom, fs) or has(bride, fs):      # the couple only when the groom or the bride is seen
+                    lab[k] = "Purple"
+                else:                                       # guests (congratulations, arriving at the venue)
+                    lab[k] = "Iris"
         else:
             couple = sum(has(groom, faces.get(k, [])) or has(bride, faces.get(k, [])) for k in s)
             short = float(np.median([clips[k]["dur"] for k in s])) < 40
