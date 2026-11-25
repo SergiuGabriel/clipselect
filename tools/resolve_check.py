@@ -22,8 +22,10 @@ src, out = os.path.join(d, "a.xml"), os.path.join(d, "a (DaVinci).xml")
 open(src, "w").write(X)
 r = resolve.convert(src, out)
 y = open(out).read()
-ok = (r["project_unwrapped"] and r["filters_removed"] == 2 and "<bin>" not in y and "masterclipid" not in y and
-      "Lumetri" not in y and "<effectid>basic" not in y and "<effectid>crop" in y and "<pathurl>" in y and
+ok = (r["project_unwrapped"] and r["filters_removed"] == 3 and "<bin>" not in y and "masterclipid" not in y and
+      "Lumetri" not in y and "<effectid>basic" not in y and "<effectid>crop" not in y and "<pathurl>" in y and
       y.count("<clipitem") == 1 and "<start>0</start><end>100</end>" in y and resolve.name_for(src, "davinci") == out)
-print("resolve conversion", "OK" if ok else "FAILED", r)
+v = resolve.verify(out)
+ok = ok and not v["errors"] and v["clips"] == 1 and v["missing"] == ["C0001.MP4"]
+print("resolve conversion + check", "OK" if ok else "FAILED", r, v)
 sys.exit(0 if ok else 1)

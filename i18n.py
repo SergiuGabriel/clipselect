@@ -678,3 +678,46 @@ TEMPLATES.update({
     "Saved {} clips ({} video, {} audio tracks) to {}. DaVinci Resolve: File > Import > Timeline. The LUT is not in this file: put it in Resolve's Color page.":
         "Am salvat {} clipuri ({} piste video, {} piste audio) în {}. DaVinci Resolve: File > Import > Timeline. LUT-ul nu e în acest fișier: pune-l în pagina Color din Resolve.",
 })
+EXACT.update({
+    "Export for DaVinci Resolve": "Export pentru DaVinci Resolve",
+    "The XML is made for Resolve and checked from end to end before you import it.":
+        "XML-ul e făcut pentru Resolve și verificat cap-coadă înainte să-l imporți.",
+    "Making the DaVinci Resolve version…": "Fac varianta pentru DaVinci Resolve…",
+    "Reading the XML…": "Citesc XML-ul…",
+    "Checking links and clips…": "Verific legăturile și clipurile…",
+    "Done": "Gata",
+    "Bins are Premiere only: Resolve gets the sequence and puts the clips in its Media Pool.":
+        "Bin-urile sunt doar pentru Premiere: Resolve primește secvența și pune singur clipurile în Media Pool.",
+    "Ready for DaVinci Resolve: File > Import > Timeline.": "Gata pentru DaVinci Resolve: File > Import > Timeline.",
+    "Send this file to Claude (Settings > Save error report) so it can be fixed.":
+        "Trimite fișierul lui Claude (Setări > Salvează raportul de erori) ca să fie reparat.",
+    "The sequence has no frame rate.": "Secvența nu are frame rate.",
+    "Also for DaVinci Resolve (a second XML, checked from end to end: takes a little longer)":
+        "Și pentru DaVinci Resolve (un al doilea XML, verificat cap-coadă: durează puțin mai mult)",
+    "Bins and Open in Premiere Pro: Premiere Pro only. DaVinci Resolve gets the sequence and puts the clips in its Media Pool by itself.":
+        "Bin-urile și Deschide în Premiere Pro: doar pentru Premiere Pro. DaVinci Resolve primește secvența și pune singur clipurile în Media Pool.",
+    "Premiere Pro only (Lumetri). For DaVinci Resolve the XML has no look and no crop: put your LUT on Resolve's Color page.":
+        "Doar pentru Premiere Pro (Lumetri). Pentru DaVinci Resolve XML-ul nu are look și nici crop: pui LUT-ul în pagina Color din Resolve.",
+})
+TEMPLATES.update({
+    "{} clips, {} files checked.": "{} clipuri, {} fișiere verificate.",
+    "{} Premiere scale settings left out: Resolve fits every clip to the timeline itself.":
+        "{} setări de scalare din Premiere scoase: Resolve încadrează singur fiecare clip pe timeline.",
+    "{} colour effects (LUT / crop) left out: put your LUT on Resolve's Color page.":
+        "{} efecte de culoare (LUT / crop) scoase: pune LUT-ul în pagina Color din Resolve.",
+    "{} clip names set to their file name (Resolve links media by name).":
+        "{} nume de clipuri puse ca numele fișierului (Resolve leagă media după nume).",
+    "DaVinci check found problems: {}": "Verificarea pentru DaVinci a găsit probleme: {}",
+    "Ready for DaVinci Resolve: {}": "Gata pentru DaVinci Resolve: {}",
+    "The DaVinci version could not be made: {}": "Varianta pentru DaVinci nu a putut fi făcută: {}",
+    "Checking clips: {} of {}": "Verific clipurile: {} din {}",
+    "Looking for the files on this computer: {} of {}": "Caut fișierele pe acest calculator: {} din {}",
+    "{} files are not on this computer right now (connect the disk before importing): {}":
+        "{} fișiere nu sunt acum pe acest calculator (conectează discul înainte de import): {}",
+    "{} clips are not named like their file (Resolve would show them offline).":
+        "{} clipuri nu au numele fișierului (Resolve le-ar arăta offline).",
+    "{} clips have a wrong in / out (outside the file or a length that does not match).":
+        "{} clipuri au in / out greșit (în afara fișierului sau o lungime care nu se potrivește).",
+    "{} Premiere-only effects are still in the file.": "{} efecte doar de Premiere sunt încă în fișier.",
+    "The file must hold exactly one sequence (it has {}).": "Fișierul trebuie să aibă exact o secvență (are {}).",
+})

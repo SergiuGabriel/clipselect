@@ -269,10 +269,15 @@ apoi și montajul, <b>Auto Edit în Multicam →</b> mută proiectul în Multica
 <p><b>Export → Premiere</b> și <b>Export → DaVinci</b> (la fel la Multicam, Teaser Studio, Long Film și Long Film v2): același montaj, două
 fișiere făcute pentru fiecare program. Pentru DaVinci Resolve (File &gt; Import &gt; Timeline): scalarea Premiere „umple cadrul” e scoasă,
 pentru că Resolve încadrează singur fiecare clip (Project Settings &gt; Image Scaling, implicit „Scale entire image to fit”; cu
-scalarea Premiere în plus un clip 4K ieșea de 4 ori mai mic); efectul Lumetri (culoarea din Premiere) e scos, Resolve nu-l poate citi:
+scalarea Premiere în plus un clip 4K ieșea de 4 ori mai mic); culoarea din Premiere (Lumetri + crop) e scoasă, Resolve nu o poate citi:
 LUT-ul îl pui în pagina Color; un proiect Premiere cu bin-uri (Create Project) devine doar secvența lui. Numele clipurilor rămân exact
 numele fișierelor (Resolve leagă media după nume), la fel timpii, pistele, legăturile sunet-imagine, markerele și culorile.
-<b>Create Project</b> și povestea din <b>Transcriere</b> scriu automat ambele fișiere: „nume.xml” pentru Premiere și „nume (DaVinci).xml”.
+La DaVinci, după export pornește automat o <b>verificare cap-coadă</b> (are bara ei de progres): legăturile sunet-imagine, fiecare
+clip numit exact ca fișierul lui (altfel Resolve îl arată offline; dacă nu e, îl repară singur), in / out în interiorul fișierului,
+efectele doar de Premiere scoase și fiecare fișier găsit pe calculator. La final vezi „Gata pentru DaVinci Resolve” sau exact ce
+nu e în regulă. Exportul pentru Premiere rămâne cum era, fără timp în plus. La <b>Create Project</b> și la povestea din
+<b>Transcriere</b> bifezi „Și pentru DaVinci Resolve” doar dacă vrei și al doilea fișier („nume (DaVinci).xml”). Lângă opțiunile care
+merg doar într-un program scrie cu albastru, de exemplu la Culoare (Long Film v2) și la bin-urile din Create Project: doar pentru Premiere Pro.
 La Footage Selection alegi Premiere Pro / DaVinci Resolve înainte de Generează.</p>
 <p><b>Sync + Auto Edit</b> (butonul albastru) face totul dintr-o apăsare: Sync, iar imediat ce se termină pornește singur Auto Edit.
 Bun pentru peste noapte: apeși, pleci, dimineață montajul e gata. Mac-ul e ținut treaz până la final (nu intră în sleep).
@@ -1069,10 +1074,15 @@ want the edit too, <b>Auto Edit in Multicam →</b> moves the project to Multica
 <p><b>Export → Premiere</b> and <b>Export → DaVinci</b> (the same on Multicam, Teaser Studio, Long Film and Long Film v2): the same edit,
 two files made for each program. For DaVinci Resolve (File &gt; Import &gt; Timeline): Premiere's "fill the frame" scaling is removed,
 because Resolve fits every clip itself (Project Settings &gt; Image Scaling, default "Scale entire image to fit"; with the Premiere
-scale on top a 4K clip came out 4 times smaller); the Lumetri effect (Premiere's colour) is removed, Resolve cannot read it: put the
+scale on top a 4K clip came out 4 times smaller); Premiere's colour (Lumetri + crop) is removed, Resolve cannot read it: put the
 LUT on the Color page; a Premiere project with bins (Create Project) becomes its sequence alone. Clip names stay exactly the file
 names (Resolve links media by name), and so do the times, tracks, sound-picture links, markers and colours.
-<b>Create Project</b> and the story of <b>Transcribe</b> write both files by themselves: "name.xml" for Premiere and "name (DaVinci).xml".
+For DaVinci an <b>end-to-end check</b> starts by itself after the export (with its own progress bar): the sound-picture links,
+every clip named exactly like its file (otherwise Resolve shows it offline; if not, it is fixed by itself), in / out inside the
+file, the Premiere-only effects gone and every file found on this computer. At the end you see "Ready for DaVinci Resolve" or
+exactly what is wrong. The Premiere export stays as it was, with no extra time. In <b>Create Project</b> and the story of
+<b>Transcribe</b> tick "Also for DaVinci Resolve" only when you want the second file ("name (DaVinci).xml"). Next to the options that
+work in one program only it says so in blue, e.g. Colour (Long Film v2) and the bins of Create Project: Premiere Pro only.
 In Footage Selection choose Premiere Pro / DaVinci Resolve before Generate.</p>
 <p><b>Sync + Auto Edit</b> (the blue button) does everything in one press: Sync, and as soon as it ends Auto Edit starts by
 itself. Good overnight: press it, leave, the edit is ready in the morning. The Mac is kept awake until the end (no sleep).

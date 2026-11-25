@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.18.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.18.1), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -965,6 +965,17 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   Long Film, Long Film v2; export(target) -> for_target(out, target), default file name "<name> (DaVinci).xml"
   (resolve.name_for). Footage results: the existing Premiere Pro / DaVinci Resolve choice now converts too. Create
   Project and the Transcribe story XML write the "(DaVinci)" copy next to the Premiere one automatically.
+
+## v3.18.1 (owner: "DaVinci only when asked, with its own check and timer; Premiere untouched; info points")
+- Premiere exports do nothing extra. Export → DaVinci = DaVinciCheck dialog (_DvJob thread, ProgressPanel, Cancel):
+  resolve.make = convert (Basic Motion -> counted as scale, Lumetri + Crop -> colour, project unwrapped, every clipitem
+  renamed to its file name incl. ALT clips) + verify (one sequence, frame rate, story.check_xml links / complete files,
+  no Premiere-only effect left, names = file names, in < out, end-start = out-in, out inside the file, every file on
+  disk -> warning). Report + notify ("Ready for DaVinci Resolve" / problems). tools/resolve_check.py checks both in CI.
+- Create Project and the Transcribe story no longer write the DaVinci copy automatically: davinci_tick ("Also for
+  DaVinci Resolve", cfg["davinci"], default off) -> for_target(dv, "davinci", src=premiere file).
+- only_note(text) = blue "ⓘ" line under options that work in one program: Long Film v2 Colour card (Premiere only),
+  Create Project bins / Open in Premiere Pro (Premiere only).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

@@ -51,7 +51,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.18.0"
+APP, VER = "MoneyMakingMachine", "v3.18.1"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -202,10 +202,27 @@ class ExportPair(QWidget):
         h.addWidget(self.dv)
 
 
-def for_target(out, target):
-    """After an export: the DaVinci Resolve version of the file when that was asked (same file)."""
+def only_note(text):
+    """A fixed info point under an option that works only in one program ("Premiere Pro only…")."""
+    w = QLabel("ⓘ  " + i18n.T(text))
+    w.setWordWrap(True)
+    w.setStyleSheet(f"color:{C['HOT']};font-size:11px")
+    return w
+
+
+def davinci_tick(store, cfg):
+    """'Also for DaVinci Resolve' (off by default: Premiere stays as fast as before)."""
+    cb = QCheckBox("Also for DaVinci Resolve (a second XML, checked from end to end: takes a little longer)")
+    cb.setChecked(bool(cfg.get("davinci")))
+    cb.toggled.connect(lambda on: (cfg.__setitem__("davinci", on), store.save_app()))
+    return cb
+
+
+def for_target(out, target, src=None):
+    """After an export: for DaVinci Resolve the file is converted AND checked (DaVinciCheck, its own progress bar);
+    for Premiere nothing more happens (no extra time). src = the Premiere file when the DaVinci one is a copy."""
     if target == "davinci":
-        resolve.convert(out)
+        DaVinciCheck(QApplication.activeWindow(), src or out, out).exec()
 
 
 def repolish(w):
@@ -822,6 +839,95 @@ class ProgressPanel(QFrame):
         self.bar.setValue(int(f * 1000))
         self.clock.feed(f)
         self.detail.setText(self.clock.text())
+
+
+class _DvJob(QThread):
+    progress = Signal(str, float)
+    done = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, src, out):
+        super().__init__()
+        self.src, self.out, self._stop = src, out, False
+
+    def run(self):
+        try:
+            self.done.emit(resolve.make(self.src, self.out, lambda t, f: self.progress.emit(t, f), lambda: self._stop))
+        except Exception as e:
+            logging.exception("DaVinci export")
+            self.failed.emit(str(e))
+
+
+class DaVinciCheck(QDialog):
+    """Export for DaVinci Resolve: the XML is made for Resolve, then checked from end to end (links, every clip named
+    like its file, in / out inside the file, Premiere-only effects gone, every file found on this computer)."""
+
+    def __init__(self, parent, src, out):
+        super().__init__(parent)
+        self.setWindowTitle("Export for DaVinci Resolve")
+        self.setModal(True)
+        self.setMinimumWidth(560)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(20, 18, 20, 18)
+        v.setSpacing(10)
+        v.addWidget(lbl("Export for DaVinci Resolve", "h2"))
+        v.addWidget(lbl("The XML is made for Resolve and checked from end to end before you import it.", "muted", True))
+        self.pp = ProgressPanel()
+        v.addWidget(self.pp)
+        self.rep = lbl("", "", True)
+        self.rep.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        v.addWidget(self.rep)
+        row = QHBoxLayout()
+        row.addStretch()
+        self.b_close = btn("Close", "primary", self.accept)
+        self.b_close.setEnabled(False)
+        row.addWidget(self.b_close)
+        v.addLayout(row)
+        self.result, self.out = None, out
+        self.job = _DvJob(src, out)
+        self.job.progress.connect(lambda t, f: self.pp.set(i18n.T(t), f))
+        self.job.done.connect(self._done)
+        self.job.failed.connect(self._failed)
+        self.job.finished.connect(lambda: self.b_close.setEnabled(True))
+        self.pp.start("Making the DaVinci Resolve version…")
+        self.pp.allow_cancel(lambda: setattr(self.job, "_stop", True))
+        self.job.start()
+
+    def _done(self, r):
+        self.result = r
+        self.pp.hide()
+        name = escape(Path(self.out).name)
+        lines = [f"<b>{name}</b>", i18n.T("{} clips, {} files checked.").format(r["clips"], r["files"])]
+        if r.get("project_unwrapped"):
+            lines.append(i18n.T("Bins are Premiere only: Resolve gets the sequence and puts the clips in its Media Pool."))
+        if r.get("scale_removed"):
+            lines.append(i18n.T("{} Premiere scale settings left out: Resolve fits every clip to the timeline itself.").format(r["scale_removed"]))
+        if r.get("colour_removed"):
+            lines.append(i18n.T("{} colour effects (LUT / crop) left out: put your LUT on Resolve's Color page.").format(r["colour_removed"]))
+        if r.get("renamed"):
+            lines.append(i18n.T("{} clip names set to their file name (Resolve links media by name).").format(r["renamed"]))
+        for w_ in r["warnings"]:
+            lines.append(f'<span style="color:{C["FAIR"]}">⚠ {escape(i18n.T(w_))}</span>')
+        if r["errors"]:
+            for e in r["errors"]:
+                lines.append(f'<span style="color:{C["POOR"]}">✕ {escape(i18n.T(e))}</span>')
+            lines.append(i18n.T("Send this file to Claude (Settings > Save error report) so it can be fixed."))
+            notify(i18n.T("DaVinci check found problems: {}").format(Path(self.out).name), error=True)
+        else:
+            lines.append(f'<span style="color:{C["GOOD"]}">✓ ' + i18n.T("Ready for DaVinci Resolve: File > Import > Timeline.") + "</span>")
+            notify(i18n.T("Ready for DaVinci Resolve: {}").format(Path(self.out).name))
+        self.rep.setText("<br>".join(lines))
+
+    def _failed(self, msg):
+        self.pp.hide()
+        self.rep.setText(f'<span style="color:{C["POOR"]}">' + escape(i18n.T("The DaVinci version could not be made: {}").format(i18n.T(msg))) + "</span>")
+        notify(i18n.T("The DaVinci version could not be made: {}").format(i18n.T(msg)), error=True)
+
+    def reject(self):
+        if self.job.isRunning():
+            self.job._stop = True
+            self.job.wait(5000)
+        super().reject()
 
 
 class JobCard(QFrame):
@@ -5324,6 +5430,9 @@ class CreateProjectPage(QWidget):
                     "<br><br><b>DaVinci Resolve:</b> File &gt; Import &gt; Timeline and choose the XML."
                     "<br><br>The XML is saved in the wedding folder; <b>Show in Finder</b> opens it there.")
         right.addWidget(how)
+        right.addWidget(only_note("Bins and Open in Premiere Pro: Premiere Pro only. DaVinci Resolve gets the sequence "
+                                  "and puts the clips in its Media Pool by itself."))
+        right.addWidget(davinci_tick(self.store, self.cfg))
         right.addSpacing(6)
         self.result = lbl("", "", True)
         self.result.setTextFormat(Qt.RichText)
@@ -5575,14 +5684,12 @@ class CreateProjectPage(QWidget):
         logging.info("create project timecode %s: %s clips", out, r["clips"])
 
     def _davinci_copy(self, out):
-        """The same project for DaVinci Resolve, next to it ("<name> (DaVinci).xml", File > Import > Timeline)."""
-        try:
-            dv = projectsetup.free_path(Path(resolve.name_for(str(out), "davinci")))
-            resolve.convert(str(out), str(dv))
-            return "<br>" + i18n.T("DaVinci Resolve: {} (File > Import > Timeline)").format(escape(Path(dv).name))
-        except Exception:
-            logging.exception("create project: DaVinci copy")
+        """Only when "Also for DaVinci Resolve" is ticked: the same project for Resolve next to it, made and checked."""
+        if not self.cfg.get("davinci"):
             return ""
+        dv = projectsetup.free_path(Path(resolve.name_for(str(out), "davinci")))
+        QTimer.singleShot(0, lambda: for_target(str(dv), "davinci", src=str(out)))
+        return "<br>" + i18n.T("DaVinci Resolve: {} (File > Import > Timeline)").format(escape(Path(dv).name))
 
     def open_premiere(self):
         app = _premiere_app()
@@ -6447,6 +6554,7 @@ class TranscribePage(QWidget):
         sb.addWidget(self.b_answer)
         sb.addStretch()
         right.addLayout(sb)
+        right.addWidget(davinci_tick(self.store, self.cfg))
         self.story_status = lbl("", "muted", True)
         right.addWidget(self.story_status)
         self.pp = ProgressPanel()
@@ -6788,10 +6896,8 @@ class TranscribePage(QWidget):
             self._report(x_err, warnings, written=None)
             return
         os.replace(tmp, out)
-        try:                                   # the same story for DaVinci Resolve, next to it
-            resolve.convert(str(out), resolve.name_for(str(out), "davinci"))
-        except Exception:
-            logging.exception("story: DaVinci copy")
+        if self.cfg.get("davinci"):            # only when asked: the same story for DaVinci Resolve, made and checked
+            QTimer.singleShot(0, lambda o=str(out): for_target(resolve.name_for(o, "davinci"), "davinci", src=o))
         n_in = good = 0
         speech = []
         for j, (fi, t0, t1, _t) in enumerate(cuts, 1):   # measured: does every cut fall into a real pause?
@@ -7210,6 +7316,8 @@ class LongFilm2Page(QWidget):
         self.sw_col.toggled.connect(lambda on: self._look("on", on))
         cr.addWidget(self.sw_col, 0, Qt.AlignTop)
         l4.addLayout(cr)
+        l4.addWidget(only_note("Premiere Pro only (Lumetri). For DaVinci Resolve the XML has no look and no crop: put "
+                               "your LUT on Resolve's Color page."))
         self.cb_crop = QCheckBox("Crop 10 % at the top and at the bottom")
         self.cb_crop.toggled.connect(lambda on: self._look("crop", on))
         l4.addWidget(self.cb_crop)
