@@ -4,6 +4,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -27,14 +28,41 @@ _NOWIN = {"creationflags": 0x08000000} if os.name == "nt" else {}
 
 HWACCEL = True          # set by the app (Settings > Performance)
 _HW = None
+_SLOTS = threading.BoundedSemaphore(4)
+_SLOT_N = 4
+_TL = threading.local()
 
 
-def decode_flags():
+def set_slots(n):
+    """How many videos may be decoded at the same time in the WHOLE app (every running job shares them: Selection,
+    Multicam, Long Film... at once used to start 2 x the decoders and the Mac's video decoder refused some)."""
+    global _SLOTS, _SLOT_N
+    n = max(1, int(n))
+    if n != _SLOT_N:
+        _SLOTS, _SLOT_N = threading.BoundedSemaphore(n), n
+
+
+class slot:
+    """with core.slot(): one decoding place (re-entrant in the same thread: nested calls never wait for themselves)."""
+    def __enter__(self):
+        d = getattr(_TL, "depth", 0)
+        if d == 0:
+            self.s = _SLOTS
+            self.s.acquire()
+        _TL.depth = d + 1
+
+    def __exit__(self, *a):
+        _TL.depth -= 1
+        if _TL.depth == 0:
+            self.s.release()
+
+
+def decode_flags(hw=True):
     """Speed-ups for the analysis decode: skip the in-loop deblocking filter (invisible at 320x180) and, on a Mac,
     use the hardware decoder when this FFmpeg build has it (FFmpeg falls back to software when a codec isn't supported)."""
     global _HW
     flags = ["-skip_loop_filter", "all"]
-    if HWACCEL and sys.platform == "darwin":
+    if hw and HWACCEL and sys.platform == "darwin":
         if _HW is None:
             try:
                 out = subprocess.run([ffmpeg_exe(), "-hide_banner", "-hwaccels"], capture_output=True, text=True).stdout
@@ -149,13 +177,31 @@ def _accel(sh, a, b):
 
 
 def analyze(path, progress=None, cancel=None, a=None, b=None):
-    """The whole file, or only a..b seconds of it (Long Film v2: one labelled selection); times are then from a."""
+    """The whole file, or only a..b seconds of it (Long Film v2: one labelled selection); times are then from a.
+    Waits for a free decoding place (slot) and, when the Mac's hardware decoder fails or stops early, decodes again
+    in software."""
+    with slot():
+        try:
+            an = _analyze(path, progress, cancel, a, b, True)
+            want = an.duration * SAMPLE_FPS
+            if "-hwaccel" in decode_flags() and want > 8 and len(an.fs["lap"]) < 0.8 * want:
+                raise ValueError("the hardware decoder stopped early")
+            return an
+        except InterruptedError:
+            raise
+        except Exception:
+            if "-hwaccel" not in decode_flags():
+                raise
+            return _analyze(path, progress, cancel, a, b, False)
+
+
+def _analyze(path, progress, cancel, a, b, hw):
     info = probe(path)
     rng = []
     if a is not None and b is not None:
         rng = ["-ss", f"{max(0.0, a):.3f}", "-t", f"{max(0.1, b - a):.3f}"]
         info.duration = max(0.1, min(b, info.duration or b) - max(0.0, a))
-    cmd = [ffmpeg_exe(), "-v", "error", "-nostdin", *decode_flags(), *rng, "-i", path, "-map", "0:v:0", "-an", "-sn", "-dn",
+    cmd = [ffmpeg_exe(), "-v", "error", "-nostdin", *decode_flags(hw), *rng, "-i", path, "-map", "0:v:0", "-an", "-sn", "-dn",
            "-vf", f"fps={SAMPLE_FPS},scale={AW}:{AH}:flags=fast_bilinear,format=gray",
            "-f", "rawvideo", "-"]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **_NOWIN)
@@ -664,13 +710,22 @@ def audio_layout(path):
 
 
 def analyze_range(path, a, b, fps=4):
+    """Shared decoding places + software fallback, like analyze()."""
+    with slot():
+        r = _analyze_range(path, a, b, fps, True)
+        if r is None and "-hwaccel" in decode_flags() and b - a >= 0.3:
+            r = _analyze_range(path, a, b, fps, False)
+        return r
+
+
+def _analyze_range(path, a, b, fps, hw):
     """Quick look at one selection only (from a to b seconds): per sample (fps per second) a quality score 0..1
     (sharpness, steadiness, exposure) and the amount of movement 0..1. Used by Teaser Studio to pick the best part of
     each selection. Returns (times relative to a, quality, motion) or None."""
     dur = max(0.0, b - a)
     if dur < 0.3:
         return None
-    cmd = [ffmpeg_exe(), "-v", "error", "-nostdin", *decode_flags(), "-ss", f"{a:.3f}", "-t", f"{dur:.3f}", "-i", path,
+    cmd = [ffmpeg_exe(), "-v", "error", "-nostdin", *decode_flags(hw), "-ss", f"{a:.3f}", "-t", f"{dur:.3f}", "-i", path,
            "-map", "0:v:0", "-an", "-sn", "-dn", "-vf", f"fps={fps},scale={AW}:{AH}:flags=fast_bilinear,format=gray",
            "-f", "rawvideo", "-"]
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **_NOWIN)

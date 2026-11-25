@@ -721,3 +721,29 @@ TEMPLATES.update({
     "{} Premiere-only effects are still in the file.": "{} efecte doar de Premiere sunt încă în fișier.",
     "The file must hold exactly one sequence (it has {}).": "Fișierul trebuie să aibă exact o secvență (are {}).",
 })
+EXACT.update({"Synchronize": "Sincronizare", "←  Synchronize": "←  Sincronizare", "SYNCHRONIZE": "SINCRONIZARE"})
+EXACT.update({"Click to type the value": "Click ca să scrii valoarea"})
+EXACT.update({"Build + Edit": "Construiește + Editează",
+              "Build, and the editor opens by itself as soon as the film is ready (good overnight).":
+                  "Construiește, iar editorul se deschide singur imediat ce filmul e gata (bun peste noapte)."})
+EXACT.update({"  ·  estimating the time left…": "  ·  estimez cât mai durează…"})
+EXACT.update({
+    "Choose my own colours": "Îmi aleg singur culorile",
+    "Off: the default colours (Blue groom, Rose bride, Teal first look, Forest vornic, Brown church, Yellow venue, Purple couple, Violet drone, Iris party). On: pick a colour for every moment.":
+        "Oprit: culorile implicite (Blue mire, Rose mireasă, Teal first look, Forest vornic, Brown biserică, Yellow sală, Purple cuplu, Violet dronă, Iris petrecere). Pornit: alegi o culoare pentru fiecare moment.",
+    "The Premiere colours read your labelled sequence and go on the clips of Export → Premiere; the DaVinci colours go on the clips of Export → DaVinci. Reading your labels changes at the next Build; the exported colours change at once.":
+        "Culorile Premiere citesc secvența ta etichetată și se pun pe clipurile din Export → Premiere; culorile DaVinci se pun pe clipurile din Export → DaVinci. Citirea etichetelor se schimbă la următorul Build; culorile exportate se schimbă imediat.",
+    "Clip colours": "Culorile clipurilor",
+    "Groom": "Mire", "Bride": "Mireasă", "Church": "Biserică", "Venue": "Sală", "Couple": "Cuplu", "Drone": "Dronă", "Party": "Petrecere",
+    "Keyboard shortcuts": "Scurtături de tastatură",
+    "Shortcuts…": "Scurtături…",
+    "Click a field and press the key you want. A key used by another action is taken from it.":
+        "Dă click pe un câmp și apasă tasta pe care o vrei. O tastă folosită de altă acțiune îi este luată.",
+    "Play / Stop": "Redă / Oprește", "One frame back": "Un cadru înapoi", "One frame forward": "Un cadru înainte",
+    "Previous edit": "Tăietura anterioară", "Next edit": "Tăietura următoare", "Ripple delete": "Ripple delete",
+    "Save": "Salvează", "Selection tool": "Unealta de selecție", "Razor tool": "Unealta de tăiere (Razor)",
+    "Snap on / off": "Lipire pornită / oprită (Snap)", "Select all": "Selectează tot", "Zoom in": "Mărește", "Zoom out": "Micșorează",
+    "Fit the whole film": "Tot filmul pe ecran", "Go to the start": "La început", "Go to the end": "La sfârșit",
+    "Reset all": "Resetează tot", "Press shortcut": "Apasă scurtătura",
+    "Selection": "Selecție", "Razor": "Razor", "Snap": "Snap", "Fit": "Tot filmul",
+})

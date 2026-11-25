@@ -22,7 +22,7 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import QPointF, QRectF, Qt, QThread, QTimer, QUrl, Signal
-from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPen, QPixmap
+from PySide6.QtGui import QColor, QFont, QImage, QKeySequence, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QScrollBar, QSizePolicy,
                                QSlider, QStackedLayout, QVBoxLayout, QWidget)
 
@@ -500,7 +500,12 @@ class TimelineView(QWidget):
                 g.setPen(QColor("#e3cf3e"))
                 g.drawLine(int(x), 14, int(x), RULER)
                 g.drawText(int(x) + 3, RULER - 2, name)
-        # drop preview / playhead
+        # selection box / drop preview / playhead
+        if self.drag and self.drag.get("band") is not None:
+            g.setPen(QPen(QColor("#2d8ceb"), 1))
+            g.setBrush(QColor(45, 140, 235, 40))
+            g.drawRect(self.drag["band"])
+            g.setBrush(Qt.NoBrush)
         if self.drag and self.drag.get("ghost"):
             g.setPen(QPen(QColor("#2d8ceb"), 2, Qt.DashLine))
             for r in self.drag["ghost"]:
@@ -617,11 +622,11 @@ class TimelineView(QWidget):
             return
         mods = e.modifiers()
         if it is None:
-            if not mods & (Qt.ShiftModifier | Qt.ControlModifier | Qt.MetaModifier):
+            add = bool(mods & (Qt.ShiftModifier | Qt.ControlModifier | Qt.MetaModifier))
+            if not add:
                 self.sel.clear()
-            self.drag = dict(kind="ph")
-            self.set_playhead(self.t_of(p.x()), follow=False)
-            self.playhead_moved.emit(self.ph)
+            # empty space: a click moves the playhead, a drag draws the selection box (like Premiere / Finder)
+            self.drag = dict(kind="band", x=p.x(), y=p.y(), started=False, base=set(self.sel) if add else set())
             self.update()
             return
         if mods & (Qt.ShiftModifier | Qt.ControlModifier | Qt.MetaModifier):
@@ -650,6 +655,24 @@ class TimelineView(QWidget):
         if d["kind"] == "ph":
             self.set_playhead(self.t_of(p.x()), follow=False)
             self.playhead_moved.emit(self.ph)
+            return
+        if d["kind"] == "band":
+            if abs(p.x() - d["x"]) < 4 and abs(p.y() - d["y"]) < 4 and not d["started"]:
+                return
+            d["started"] = True
+            band = QRectF(QPointF(d["x"], d["y"]), p).normalized()
+            d["band"] = band
+            hit = set()
+            t0, t1 = self.t_of(band.left()), self.t_of(band.right())
+            for it in self.m.items:
+                if it["start"] > t1 or it["start"] + it["dur"] < t0:
+                    continue
+                for r in (self.rect_of(it), self.audio_rect(it)):
+                    if r is not None and r.intersects(band):
+                        hit.add(it["id"])
+                        break
+            self.sel = d["base"] | hit
+            self.update()
             return
         if abs(p.x() - d["x"]) < 3 and abs(p.y() - d["y"]) < 3 and not d["started"]:
             return
@@ -691,6 +714,12 @@ class TimelineView(QWidget):
 
     def mouseReleaseEvent(self, e):
         d, self.drag = self.drag, None
+        if d and d["kind"] == "band":
+            if not d.get("started"):            # a plain click on empty space: the playhead goes there
+                self.set_playhead(self.t_of(d["x"]), follow=False)
+                self.playhead_moved.emit(self.ph)
+            self.update()
+            return
         if d and d.get("started"):
             if d["kind"] == "move":
                 self.m.move(set(self.sel), round(d.get("dt", 0.0) * FPS) / FPS, d.get("dv", 0))
@@ -720,12 +749,87 @@ def tc(t):
     return f"{h:02d}:{mi:02d}:{s:02d}:{f:02d}"
 
 
+# ---------------------------------------------------------------- keyboard shortcuts (his own keys)
+ACTIONS = [("play", "Play / Stop", "Space"), ("back", "One frame back", "Left"), ("fwd", "One frame forward", "Right"),
+           ("prev", "Previous edit", "Up"), ("next", "Next edit", "Down"), ("delete", "Delete", "Del"),
+           ("ripple", "Ripple delete", "X"), ("undo", "Undo", "Ctrl+Z"), ("redo", "Redo", "Ctrl+Shift+Z"),
+           ("save", "Save", "Ctrl+S"), ("select", "Selection tool", "V"), ("razor", "Razor tool", "C"),
+           ("snap", "Snap on / off", "S"), ("all", "Select all", "Ctrl+A"), ("zin", "Zoom in", "="),
+           ("zout", "Zoom out", "-"), ("fit", "Fit the whole film", "\\"), ("home", "Go to the start", "Home"),
+           ("end", "Go to the end", "End")]
+DEFAULT_KEYS = {a: k for a, _l, k in ACTIONS}
+
+
+def key_name(e):
+    """The pressed key as text ('X', 'Ctrl+Z' = Cmd+Z on a Mac), '' for a lone modifier."""
+    if e.key() in (Qt.Key_Shift, Qt.Key_Control, Qt.Key_Meta, Qt.Key_Alt, Qt.Key_unknown):
+        return ""
+    return QKeySequence(e.keyCombination()).toString(QKeySequence.PortableText)
+
+
+class ShortcutsDialog(QDialog):
+    """Every editor action with its key: click the field, press the new key. Reset puts the defaults back."""
+
+    def __init__(self, parent, keys):
+        from PySide6.QtWidgets import QGridLayout, QKeySequenceEdit, QScrollArea, QVBoxLayout, QWidget
+        super().__init__(parent)
+        self.setWindowTitle("Keyboard shortcuts")
+        self.setMinimumSize(460, 560)
+        self.keys = dict(keys)
+        v = QVBoxLayout(self)
+        v.addWidget(QLabel("Click a field and press the key you want. A key used by another action is taken from it."))
+        sa = QScrollArea()
+        sa.setWidgetResizable(True)
+        inner = QWidget()
+        g = QGridLayout(inner)
+        self.edits = {}
+        for r, (a, label, _d) in enumerate(ACTIONS):
+            g.addWidget(QLabel(label), r, 0)
+            ed = QKeySequenceEdit(QKeySequence(self.keys.get(a, "")))
+            ed.setMaximumSequenceLength(1) if hasattr(ed, "setMaximumSequenceLength") else None
+            ed.editingFinished.connect(lambda a=a, ed=ed: self._set(a, ed))
+            g.addWidget(ed, r, 1)
+            self.edits[a] = ed
+        sa.setWidget(inner)
+        v.addWidget(sa, 1)
+        row = QHBoxLayout()
+        rs = QPushButton("Reset all")
+        rs.clicked.connect(self._reset)
+        row.addWidget(rs)
+        row.addStretch()
+        ok = QPushButton("Save")
+        ok.setObjectName("primary")
+        ok.clicked.connect(self.accept)
+        row.addWidget(ok)
+        v.addLayout(row)
+
+    def _set(self, a, ed):
+        k = ed.keySequence().toString(QKeySequence.PortableText).split(",")[0].strip()
+        for b, other in self.edits.items():          # one key, one action
+            if b != a and k and self.keys.get(b) == k:
+                self.keys[b] = ""
+                other.blockSignals(True)
+                other.setKeySequence(QKeySequence(""))
+                other.blockSignals(False)
+        self.keys[a] = k
+
+    def _reset(self):
+        self.keys = dict(DEFAULT_KEYS)
+        for a, ed in self.edits.items():
+            ed.blockSignals(True)
+            ed.setKeySequence(QKeySequence(self.keys[a]))
+            ed.blockSignals(False)
+
+
 # ---------------------------------------------------------------- the window
 class Editor(QDialog):
     """Program monitor on top, timeline below, tools in between. exec() -> True when saved; .timeline() then."""
 
-    def __init__(self, parent, tl, infos, colours, lane_name, thumbs_dir, hidden=(), muted=(), on_save=None):
+    def __init__(self, parent, tl, infos, colours, lane_name, thumbs_dir, hidden=(), muted=(), on_save=None,
+                 keys=None, on_keys=None):
         super().__init__(parent)
+        self.keys = {**DEFAULT_KEYS, **(keys or {})}
+        self.on_keys = on_keys                       # on_keys(dict): his shortcuts are kept (all projects)
         self.on_save = on_save                       # on_save(editor): keeps the edit in the project (window stays open)
         self.setWindowTitle("Edit the long film")
         self.resize(1400, 900)
@@ -788,24 +892,30 @@ class Editor(QDialog):
         v.addLayout(tr)
         # tools
         tb = QHBoxLayout()
-        self.b_sel = QPushButton("Selection (V)")
-        self.b_raz = QPushButton("Razor (C)")
+        self.b_sel = QPushButton("Selection")
+        self.b_raz = QPushButton("Razor")
         for b in (self.b_sel, self.b_raz):
             b.setCheckable(True)
             tb.addWidget(b)
         self.b_sel.setChecked(True)
         self.b_sel.clicked.connect(lambda: self._tool("select"))
         self.b_raz.clicked.connect(lambda: self._tool("razor"))
-        self.b_snap = QPushButton("Snap (S)")
+        self.b_snap = QPushButton("Snap")
         self.b_snap.setCheckable(True)
         self.b_snap.setChecked(True)
         self.b_snap.clicked.connect(lambda on: setattr(self.view, "snapping", on))
         tb.addWidget(self.b_snap)
-        for text, slot in (("Undo", self.undo), ("Redo", self.redo), ("Delete", lambda: self._delete(False)),
-                           ("Ripple delete", lambda: self._delete(True))):
+        self.kbtn = {}
+        for a, text, slot in (("undo", "Undo", self.undo), ("redo", "Redo", self.redo),
+                              ("delete", "Delete", lambda: self._delete(False)), ("ripple", "Ripple delete", lambda: self._delete(True))):
             b = QPushButton(text)
             b.clicked.connect(slot)
             tb.addWidget(b)
+            self.kbtn[a] = (b, text)
+        self.kbtn.update(select=(self.b_sel, "Selection"), razor=(self.b_raz, "Razor"), snap=(self.b_snap, "Snap"))
+        kb = QPushButton("Shortcuts…")
+        kb.clicked.connect(self._shortcuts)
+        tb.addWidget(kb)
         tb.addStretch()
         tb.addWidget(QLabel("Zoom"))
         self.zs = QSlider(Qt.Horizontal)
@@ -813,9 +923,11 @@ class Editor(QDialog):
         self.zs.setFixedWidth(200)
         self.zs.valueChanged.connect(self._zoom_slider)
         tb.addWidget(self.zs)
-        fitb = QPushButton("Fit (\\)")
+        fitb = QPushButton("Fit")
         fitb.clicked.connect(self.view.fit)
         tb.addWidget(fitb)
+        self.kbtn["fit"] = (fitb, "Fit")
+        self._label_keys()
         v.addLayout(tb)
         v.addWidget(self.view, 6)
         v.addWidget(self.view.hbar)
@@ -1001,47 +1113,69 @@ class Editor(QDialog):
         if not self.playing:
             self._show_frame_at(self.view.ph)
 
-    def keyPressEvent(self, e):
-        k, mods = e.key(), e.modifiers()
-        cmd = mods & (Qt.ControlModifier | Qt.MetaModifier)
-        if k == Qt.Key_Space:
+    def _label_keys(self):
+        """The buttons show his current key, e.g. "Ripple delete (X)"."""
+        for a, (b, text) in self.kbtn.items():
+            k = self.keys.get(a)
+            b.setText(f"{i18n.T(text)} ({QKeySequence(k).toString(QKeySequence.NativeText)})" if k else i18n.T(text))
+
+    def _shortcuts(self):
+        d = ShortcutsDialog(self, self.keys)
+        if d.exec():
+            self.keys = {**DEFAULT_KEYS, **d.keys}
+            self._label_keys()
+            if self.on_keys:
+                self.on_keys(dict(self.keys))
+
+    def _act(self, a):
+        if a == "play":
             self.toggle()
-        elif k == Qt.Key_Left:
-            self._step(-1)
-        elif k == Qt.Key_Right:
-            self._step(1)
-        elif k == Qt.Key_Up:
-            self._edit(-1)
-        elif k == Qt.Key_Down:
-            self._edit(1)
-        elif k in (Qt.Key_Delete, Qt.Key_Backspace):
-            self._delete(bool(mods & Qt.ShiftModifier))
-        elif cmd and k == Qt.Key_S:
+        elif a in ("back", "fwd"):
+            self._step(-1 if a == "back" else 1)
+        elif a in ("prev", "next"):
+            self._edit(-1 if a == "prev" else 1)
+        elif a in ("delete", "ripple"):
+            self._delete(a == "ripple")
+        elif a == "undo":
+            self.undo()
+        elif a == "redo":
+            self.redo()
+        elif a == "save":
             self.save()
-        elif cmd and k == Qt.Key_Z:
-            self.redo() if mods & Qt.ShiftModifier else self.undo()
-        elif k == Qt.Key_V and not cmd:
-            self._tool("select")
-        elif k == Qt.Key_C and not cmd:
-            self._tool("razor")
-        elif k == Qt.Key_S and not cmd:
+        elif a in ("select", "razor"):
+            self._tool(a)
+        elif a == "snap":
             self.b_snap.toggle()
             self.view.snapping = self.b_snap.isChecked()
-        elif k in (Qt.Key_Plus, Qt.Key_Equal):
-            self.view.zoom(1.4)
+        elif a == "all":
+            self.view.sel = {it["id"] for it in self.m.items}
+            self.view.update()
+        elif a in ("zin", "zout"):
+            self.view.zoom(1.4 if a == "zin" else 1 / 1.4)
             self._sync_slider()
-        elif k == Qt.Key_Minus:
-            self.view.zoom(1 / 1.4)
-            self._sync_slider()
-        elif k == Qt.Key_Backslash:
+        elif a == "fit":
             self.view.fit()
             self._sync_slider()
-        elif k == Qt.Key_Home:
+        elif a == "home":
             self._seek(0.0)
-        elif k == Qt.Key_End:
+        elif a == "end":
             self._seek(self.m.end())
-        elif k == Qt.Key_Escape:
+
+    def keyPressEvent(self, e):
+        if e.key() == Qt.Key_Escape:
             return                                  # never close by accident
+        name = key_name(e)
+        if not name:
+            return
+        for a, k in self.keys.items():
+            if k and k == name:
+                self._act(a)
+                return
+        # always there too: Backspace deletes, Shift+Delete ripple-deletes, + zooms in
+        if e.key() in (Qt.Key_Delete, Qt.Key_Backspace):
+            self._delete(bool(e.modifiers() & Qt.ShiftModifier))
+        elif e.key() == Qt.Key_Plus:
+            self._act("zin")
         else:
             super().keyPressEvent(e)
 

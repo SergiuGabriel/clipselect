@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.18.1), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.0.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -976,6 +976,45 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   DaVinci Resolve", cfg["davinci"], default off) -> for_target(dv, "davinci", src=premiere file).
 - only_note(text) = blue "ⓘ" line under options that work in one program: Long Film v2 Colour card (Premiere only),
   Create Project bins / Open in Premiere Pro (Premiere only).
+
+## Versions (owner, v4.0.0): a feature release = next minor (v4.1.0 ...); after x.9 comes the next MAJOR (v4.9.0 -> v5.0.0),
+## never x.10+; small fixes only = patch (v4.0.1).
+
+## v4.0.0 (his list after v3.18.1, his test on Alex & Andreea in the automatic mode)
+- Sliders: SliderRow's blue value is a ValueBox (QLineEdit): click, type, Enter / click away (clamped lo..hi), Esc cancels.
+- Long Film v2 "Clip colours" card (ColourCard, card 4; Party is card 5): switch off = defaults; on = a colour per moment
+  (longfilm2.MOMENTS) from PR_COLOURS (Premiere labels) or DV_COLOURS (Resolve clip colours), p["colours"] = {on, show,
+  premiere: {}, davinci: {}} (+ store.app["colours"] = last used). kinds_for() = label -> moment used by load() (his
+  Premiere colours + DaVinci names + defaults not given away); labels_out(c, target) -> {moment: colour} written by
+  _ents / timeline / export_timeline (items keep "kind"; party sound via _relabel). DaVinci reading clip colours from an
+  xmeml is NOT verified.
+- "Build + Edit" (b_be, primary): build, then _after_build (QThread.finished) opens the editor if the Build ended well.
+  "· Long Film v2" label removed from the header so 5 buttons fit at 1280 px in Romanian.
+- Two jobs at once (owner: "errors"; not reproduced here, his app.log is not reachable): core.slot() = ONE app-wide pool of
+  decoding places (core.set_slots(max(2, jobs)), re-entrant per thread) around core.analyze / analyze_range /
+  sync.audio_pcm, and analyze / analyze_range decode again in SOFTWARE when the VideoToolbox decode fails or stops early
+  (< 80 % of the frames). Tested: Selection analysis + Multicam Sync + Auto Edit together, all pages visited, 0 errors.
+- Honest progress: longfilm2.Stages = every Build step gets a share of 0..1 from its expected work (_weights: probe, auto
+  sync, faces, analysis seconds / 15 / jobs, priest, first look, vornic, party sync, music), replan() when the automatic
+  mode knows the moments; the bar never goes back (auto_moments used to run to 46 % and the analyses started again at 5 %;
+  the folder step 0-5 % then the Build restarted at 0). _LF2Worker maps folder 0-4 %, Build 4-100 %. EtaClock: no reset on
+  small drops, f monotonic, time left = 0.6 x speed of the last 120 s + 0.4 x whole job, smoothed 0.75 / 0.25, "estimating
+  the time left…" until 2 % and 8 s. Multicam Auto Edit progress weighted by clip LENGTH (+ per-clip progress, music after);
+  footage analysis weighted by file size.
+- Editor: box selection (drag on empty space; click alone = playhead; Shift / Cmd adds), Cmd+A; shortcuts are actions
+  (editor.ACTIONS / DEFAULT_KEYS, Ripple delete = X by default), ShortcutsDialog (QKeySequenceEdit per action, a key moves
+  from the action that had it, Reset all), saved in store.app["editor_keys"]; buttons show the current key.
+- First look synced: longfilm2.firstlook_sync (v2 only; longfilm.firstlook_layout untouched for the v1 score): sound of the
+  WHOLE files via sync.audio_pcm (loudest single channel: longfilm._clip_audio downmixed with -ac 1, the FX6's first channel
+  can be empty), else the common clock p["t"] of the automatic mode; in the automatic mode every other camera's clip
+  overlapping a first-look clip in time joins the first look. His v3.18.1 export had 2 Teal clips one after the other.
+- No gaps: his v3.18.1 export had 442 one-frame gaps on V1 (ends rounded from durations): _ents / export_timeline now round
+  start AND end from absolute times. Party holes (49-503 frames) removed: PARTY_GAP 0.04 s, PARTY_PAUSE 0.
+- Tripod camera: static_cams() = median clip >= STATIC_CLIP 600 s (a74: 7 clips, median 24 min; fx6 11 s, fx3 91 s);
+  in the automatic mode its clips are only Brown or Iris (his a74 got 44 Purple selections).
+- Menu "Sync" -> "Synchronize" (RO "Sincronizare"), badge SYNCHRONIZE.
+- i18n scan (/home/claude/i18nscan/scan.py ro|en: every page, project pages, editor, shortcuts, DaVinci check): RO and
+  EN clean (only loan words / file names left).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

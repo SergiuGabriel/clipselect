@@ -33,6 +33,51 @@ import xmlimport
 
 KINDS = {"Blue": "groom", "Rose": "bride", "Teal": "firstlook", "Forest": "vornic", "Brown": "church", "Yellow": "venue",
          "Purple": "couple", "Violet": "drone", "Iris": "party", "Cerulean": "party"}
+# his own colours (card "Clip colours"): every moment -> a Premiere label / a DaVinci Resolve clip colour
+MOMENTS = ["groom", "bride", "firstlook", "vornic", "church", "venue", "couple", "drone", "party"]
+MOMENT_NAMES = {"groom": "Groom", "bride": "Bride", "firstlook": "First look", "vornic": "Vornic", "church": "Church",
+                "venue": "Venue", "couple": "Couple", "drone": "Drone", "party": "Party"}
+PR_COLOURS = ["Violet", "Iris", "Caribbean", "Lavender", "Cerulean", "Forest", "Rose", "Mango", "Purple", "Blue", "Teal",
+              "Magenta", "Tan", "Green", "Brown", "Yellow"]
+DV_COLOURS = ["Orange", "Apricot", "Yellow", "Lime", "Olive", "Green", "Teal", "Navy", "Blue", "Purple", "Violet", "Pink",
+              "Tan", "Beige", "Brown", "Chocolate"]
+DEFAULT_PR = {"groom": "Blue", "bride": "Rose", "firstlook": "Teal", "vornic": "Forest", "church": "Brown",
+              "venue": "Yellow", "couple": "Purple", "drone": "Violet", "party": "Iris"}
+DEFAULT_DV = {"groom": "Blue", "bride": "Pink", "firstlook": "Teal", "vornic": "Green", "church": "Brown",
+              "venue": "Yellow", "couple": "Purple", "drone": "Violet", "party": "Navy"}
+
+
+def colour_maps(c):
+    """(Premiere map, DaVinci map) {moment: colour}: his choice when the switch is on, else the defaults."""
+    c = c or {}
+    pr, dv = dict(DEFAULT_PR), dict(DEFAULT_DV)
+    if c.get("on"):
+        pr.update({k: v for k, v in (c.get("premiere") or {}).items() if v in PR_COLOURS})
+        dv.update({k: v for k, v in (c.get("davinci") or {}).items() if v in DV_COLOURS})
+    return pr, dv
+
+
+def kinds_for(c):
+    """Label -> moment used to READ his labelled sequence: the defaults, his own colours on top of them."""
+    if not (c or {}).get("on"):
+        return dict(KINDS)
+    pr, dv = colour_maps(c)
+    out = {}
+    for m in (dv, pr):                      # his Premiere colours win when a name is in both lists
+        out.update({v: k for k, v in m.items()})
+    for lab, k in KINDS.items():            # a default colour he did not give to another moment still works
+        out.setdefault(lab, k)
+    return out
+
+
+def labels_out(c, target):
+    """{moment: colour} written on the exported clips (None = keep the labels as they are: Premiere, no own colours)."""
+    pr, dv = colour_maps(c)
+    if target == "davinci":
+        return dv
+    return pr if (c or {}).get("on") else None
+
+
 PART_OF = {"groom": "ready", "bride": "ready"}
 PART_NAMES = {"ready": "Groom and bride", "firstlook": "First look", "vornic": "Vornic", "church": "Church",
               "couple": "Couple", "venue": "Venue", "drone": "Drone", "party": "Party"}
@@ -41,8 +86,9 @@ SELECT = ("ready", "church", "couple", "venue", "drone")       # parts made with
 SEL_THR, SEL_MIN = 60, 2.0          # owner: Auto, minimum cut length 2 s, selection threshold 60
 SHORT_WHOLE = 6.0                   # a clip HE labelled that is this short is a deliberate detail: kept whole
                                     # (his Alex & Andreea venue: 63257-63261, 3-5 s each, were all dropped by the selection)
-PARTY_GAP = 30.0                    # a stretch of the party where no camera filmed, longer than this, is taken out
-PARTY_PAUSE = 2.0                   # ... and replaced by this little pause (his v3.15 test: 121 + 65 + 23 min of nothing)
+STATIC_CLIP = 600.0                 # a camera whose clips are this long (median) stands on a tripod
+PARTY_GAP = 0.04                    # every stretch of the party where no camera filmed is taken out (owner: never black)
+PARTY_PAUSE = 0.0                   # ... with no pause: the next filmed moment follows at once
 PRIEST_MIN = 60.0                   # the priest: at least 60 s on him, the camera still
 PARTY = dict(minshot=3, maxshot=120, pace=50, energy=65, beat=True, drop_beats=4, buildup="accelerate",
              energy_cuts=True)      # owner's party settings (editable on the page)
@@ -57,7 +103,7 @@ def part_of(kind):
 
 
 # ---------------------------------------------------------------- 1. the labelled sequence
-def load(xml_path):
+def load(xml_path, kinds=None):
     """His labelled sequence -> dict(pieces, recorder, cams, cam_a, layout, order, skipped).
     pieces: every labelled video clip of a known colour: path, a / b (seconds in the file), st (timeline s), track,
     label, kind, w, h, fps, fdur, cam (camera index, camera A = 0). recorder: the sound-only files on the timeline."""
@@ -73,7 +119,8 @@ def load(xml_path):
     seqs = list(root.iter("sequence"))
     if not seqs:
         raise ValueError("No sequence in this XML.")
-    seq = max(seqs, key=lambda s: (sum(1 for c in s.iter("clipitem") if c.findtext("labels/label2") in KINDS),
+    kinds = kinds or KINDS
+    seq = max(seqs, key=lambda s: (sum(1 for c in s.iter("clipitem") if c.findtext("labels/label2") in kinds),
                                    sum(1 for _ in s.iter("clipitem"))))
     sfps = xmlimport._rate(seq, 25.0)
     clips, skipped = [], {}
@@ -96,7 +143,7 @@ def load(xml_path):
             if b - a < 0.2 or not tt:
                 continue
             lab = ci.findtext("labels/label2") or ""
-            clips.append(dict(path=info["path"], a=a, b=b, st=tt[0], en=tt[1], track=t, label=lab, kind=KINDS.get(lab),
+            clips.append(dict(path=info["path"], a=a, b=b, st=tt[0], en=tt[1], track=t, label=lab, kind=kinds.get(lab),
                               w=info["w"], h=info["h"], fps=info["fps"], fdur=real))
     if not clips:
         raise ValueError("No video clips found in this XML.")
@@ -412,17 +459,24 @@ def _motion(s):
             f'<value>{s}</value></parameter></effect></filter>')
 
 
-def export_xml(parts, infos, cam_names, out_path, name, marker=lambda s: s, look=None):
+def export_xml(parts, infos, cam_names, out_path, name, marker=lambda s: s, look=None, labels=None):
     """parts: [(part name, length s, items, recorder items)]; items = (video track, t0 in the part, piece, src in,
     src out, flags) with flags in {"sound", "off"} ("off" = the clip is switched off: the vornic's whole 2nd camera);
     recorder items = (t0 in the part, path, src in, src out). One 25 fps 1920x1080 sequence. Every camera has its own
     audio tracks (stereo pairs / mono like Premiere, projectsetup.groups), the recorder last; links = position in the
     track. Returns (clips written, video tracks, audio tracks)."""
-    ents, markers = _ents(parts)
+    ents, markers = _ents(parts, labels)
     return _write(ents, markers, infos, out_path, name, marker, look)
 
 
-def _ents(parts):
+def _relabel(lab, labels):
+    """A camera's sound under the party keeps the colour of its moment in the chosen colours."""
+    if not labels or not lab:
+        return lab
+    return labels.get(KINDS.get(lab), lab)
+
+
+def _ents(parts, labels=None):
     """The parts laid one after the other -> (entries in sequence frames, markers [(name, seconds)])."""
     _rate_xml, sf = core._rate(SEQ_FPS)
     ents, markers, g = [], [], 0.0
@@ -433,15 +487,17 @@ def _ents(parts):
         for it in items:
             track, t0, p, a, b = it[:5]
             flags = it[5] if len(it) > 5 else {"sound"}
-            st = round((g + t0) * sf)
-            en = st + max(1, round((b - a) * sf))
-            ents.append(dict(path=p["path"], v=track, st=st, en=en, fin=max(0, round(a * sf)), label=p.get("label"),
+            st = round((g + t0) * sf)          # start AND end from absolute times: touching shots share the frame
+            en = max(st + 1, round((g + t0 + b - a) * sf))
+            lab = labels.get(p.get("kind"), p.get("label")) if labels else p.get("label")
+            ents.append(dict(path=p["path"], v=track, st=st, en=en, fin=max(0, round(a * sf)), label=lab, kind=p.get("kind"),
                              ak=("cam", p["cam"]) if "sound" in flags else None, on="off" not in flags))
         for it in rec:
             t0, path, a, b = it[:4]
             st = round((g + t0) * sf)
-            ents.append(dict(path=path, v=None, st=st, en=st + max(1, round((b - a) * sf)), fin=max(0, round(a * sf)),
-                             label=it[5] if len(it) > 5 else None, ak=it[4] if len(it) > 4 else ("rec", 0), on=True))
+            ents.append(dict(path=path, v=None, st=st, en=max(st + 1, round((g + t0 + b - a) * sf)), fin=max(0, round(a * sf)),
+                             label=_relabel(it[5] if len(it) > 5 else None, labels), kind=KINDS.get(it[5] if len(it) > 5 else ""),
+                             ak=it[4] if len(it) > 4 else ("rec", 0), on=True))
         g += length
     return ents, markers
 
@@ -549,11 +605,12 @@ def timeline(parts, marker=lambda s: s):
     ents, markers = _ents(parts)
     _r, sf = core._rate(SEQ_FPS)
     items = [dict(path=e["path"], v=e["v"], ak=list(e["ak"]) if e["ak"] else None, start=e["st"] / sf, src=e["fin"] / sf,
-                  dur=(e["en"] - e["st"]) / sf, label=e.get("label"), on=bool(e["on"]), aon=True) for e in ents]
+                  dur=(e["en"] - e["st"]) / sf, label=e.get("label"), kind=e.get("kind"), on=bool(e["on"]), aon=True)
+             for e in ents]
     return dict(items=items, markers=[[marker(m), t] for m, t in markers])
 
 
-def export_timeline(tl, infos, out_path, name, look=None, hidden=(), muted=()):
+def export_timeline(tl, infos, out_path, name, look=None, hidden=(), muted=(), labels=None):
     """The editor's timeline -> XML (hidden video tracks = clips switched off, muted audio lanes = sound switched off)."""
     _r, sf = core._rate(SEQ_FPS)
     ents = []
@@ -562,8 +619,9 @@ def export_timeline(tl, infos, out_path, name, look=None, hidden=(), muted=()):
             continue
         st = round(it["start"] * sf)
         ak = tuple(it["ak"]) if it.get("ak") else None
-        ents.append(dict(path=it["path"], v=it.get("v"), st=st, en=st + max(1, round(it["dur"] * sf)),
-                         fin=max(0, round(it["src"] * sf)), label=it.get("label"), ak=ak,
+        ents.append(dict(path=it["path"], v=it.get("v"), st=st, en=max(st + 1, round((it["start"] + it["dur"]) * sf)),
+                         fin=max(0, round(it["src"] * sf)),
+                         label=labels.get(it.get("kind"), it.get("label")) if labels else it.get("label"), ak=ak,
                          on=bool(it.get("on", True)) and it.get("v") not in set(hidden),
                          aon=bool(it.get("aon", True)) and (list(ak) if ak else None) not in [list(m) for m in muted]))
     return _write(ents, [tuple(m) for m in tl.get("markers", [])], infos, out_path, name, lambda s: s, look)
@@ -645,7 +703,7 @@ def auto_moments(L, pieces, recorder, infos, prog, cancel, jobs, model_dir):
         camk = {p["path"]: str(p["cam"]) for p in pieces}
         camk.update({f: "rec:" + Path(f).parent.name for f in extras})
         try:
-            info, res = sync.run_sync(masters, clips + extras, lambda s, f: prog(s, 0.06 + 0.3 * f), cancel,
+            info, res = sync.run_sync(masters, clips + extras, prog("auto_sync"), cancel,
                                       clocks=clocks, groups=camk, jobs=jobs)
             synced = (info, res)
             starts = sync.master_starts(info)
@@ -671,10 +729,11 @@ def auto_moments(L, pieces, recorder, infos, prog, cancel, jobs, model_dir):
         except Exception:
             model = None
     fz = {}
+    pf = prog("auto_faces")
     for k, p in enumerate(pieces):
         if cancel and cancel():
             raise InterruptedError("Cancelled")
-        prog(f"Looking at who is in every clip: {k + 1} of {len(pieces)}", 0.36 + 0.1 * k / max(1, len(pieces)))
+        pf(f"Looking at who is in every clip: {k + 1} of {len(pieces)}", (k + 1) / max(1, len(pieces)))
         feats = []
         if model is not None and p.get("w"):
             import faces
@@ -690,21 +749,156 @@ def auto_moments(L, pieces, recorder, infos, prog, cancel, jobs, model_dir):
     clips = {key_of(p): dict(t0=own[p["path"]] + shift[p["cam"]] + p["a"], dur=p["b"] - p["a"], path=p["path"])
              for p in pieces}
     lab, info = daymap.classify(clips, fz)
+    still = static_cams(pieces, infos)
     for p in pieces:
         k = key_of(p)
         p["t"] = clips[k]["t0"]
         p["label"] = lab.get(k, "Iris")
+        if p["cam"] in still and p["label"] not in ("Brown", "Iris"):
+            p["label"] = "Iris"             # a tripod camera is never the couple / venue / getting ready (a74 = Purple)
         p["kind"] = KINDS.get(p["label"], AUTO)
     info["counts"] = {}
     for p in pieces:
         info["counts"][p["label"]] = info["counts"].get(p["label"], 0) + 1
     info["faces"] = model is not None
     info["shift"] = {str(c): round(v) for c, v in shift.items()}
+    info["static"] = sorted(still)
+    # the first look: every other camera's clip filmed at the same moment joins it (it is synced on top of it)
+    fl = [p for p in pieces if p["kind"] == "firstlook"]
+    for p in pieces:
+        if p["kind"] in ("firstlook", "party", "drone") or p["cam"] in still:
+            continue
+        for q in fl:
+            if q["cam"] != p["cam"] and p["t"] < q["t"] + (q["b"] - q["a"]) and q["t"] < p["t"] + (p["b"] - p["a"]):
+                p["kind"], p["label"] = "firstlook", q["label"]
+                break
     return info, synced
 
 
+def static_cams(pieces, infos):
+    """Cameras on a tripod (the wide of the party / church): their clips are very long (median >= STATIC_CLIP).
+    At Alex & Andreea the a74: 7 clips, median 24 min (fx6 11 s, fx3 91 s)."""
+    out = set()
+    for c in {p["cam"] for p in pieces}:
+        durs = [(infos.get(f) or {}).get("dur") or 0.0 for f in {p["path"] for p in pieces if p["cam"] == c}]
+        if len(durs) >= 2 and float(np.median(durs)) >= STATIC_CLIP:
+            out.add(c)
+    return out
+
+
+def firstlook_sync(fl, progress=None):
+    """The first look SYNCED: the camera with the most first look on V1, every other camera's shot on top of the same
+    moment (V2, V3...). Placed by the SOUND of the whole files (the loudest single channel, never a mix: the FX6's first
+    channel can be empty), else by the common clock of the automatic mode (p["t"]), else after the others on V1.
+    Returns (length, [(track, t0, piece, src in, src out)])."""
+    if not fl:
+        return 0.0, []
+    foot = {}
+    for p in fl:
+        foot[p["cam"]] = foot.get(p["cam"], 0.0) + p["b"] - p["a"]
+    main = max(foot, key=lambda c: (foot[c], -c))
+    med = [p for p in fl if p["cam"] == main]
+    others = [p for p in fl if p["cam"] != main]
+    items, starts, t = [], [], 0.0
+    for p in med:
+        items.append((1, t, p, p["a"], p["b"]))
+        starts.append(t)
+        t += p["b"] - p["a"]
+    length = t
+    pcm = {}
+
+    def audio(path):
+        if path not in pcm:
+            try:
+                pcm[path] = sync.audio_pcm(path)
+            except Exception:
+                pcm[path] = np.zeros(sync.SR, np.float32)
+        return pcm[path]
+    idx = []
+    for p in med:
+        x = audio(p["path"])
+        idx.append(sync.MasterIndex(x if len(x) > sync.SR else np.zeros(sync.SR, np.float32)))
+    lanes = {}
+    for k, p in enumerate(others):
+        if progress:
+            progress(f"Syncing the first look of the other cameras: {k + 1} of {len(others)}", (k + 1) / max(1, len(others)))
+        g = None
+        x = audio(p["path"])[int(p["a"] * sync.SR):int(p["b"] * sync.SR)]
+        try:
+            r = sync.sync_clip(idx, x) if len(x) > sync.SR else dict(conf="fail")
+        except Exception:
+            r = dict(conf="fail")
+        if r.get("conf") in ("high", "medium"):
+            m = med[r["master"]]
+            g = starts[r["master"]] + r["offset"] - m["a"]        # where this selection starts on the timeline
+        elif p.get("t") is not None:
+            for st, m in zip(starts, med):                        # the common clock of the automatic mode
+                if m.get("t") is not None and m["t"] - 1 <= p["t"] + (p["b"] - p["a"]) and p["t"] <= m["t"] + (m["b"] - m["a"]) + 1:
+                    g = st + (p["t"] - m["t"])
+                    break
+        if g is not None:
+            s0, s1 = max(0.0, g), min(length, g + (p["b"] - p["a"]))
+            if s1 - s0 > 0.5:
+                lane = next((tr for tr in range(2, 8) if all(not (s0 < e1 and s1 > e0) for e0, e1 in lanes.get(tr, []))), None)
+                if lane:
+                    lanes.setdefault(lane, []).append((s0, s1))
+                    items.append((lane, s0, p, p["a"] + (s0 - g), p["a"] + (s1 - g)))
+                    continue
+        items.append((1, length, p, p["a"], p["b"]))              # no sound and no clock: after the others, on V1
+        length += p["b"] - p["a"]
+    return length, items
+
+
+class Stages:
+    """One honest bar for a job made of steps: every step gets a share of 0..1 as big as the work it is expected to
+    take (seconds of footage to read, clips to sync...), so the bar never jumps back and the time left holds.
+    replan() shares what is left again when a step learns more (the automatic mode finds the moments of the day)."""
+
+    def __init__(self, prog, weights):
+        self.prog, self.pos, self.span = prog, 0.0, {}
+        self.replan(weights)
+
+    def replan(self, weights):
+        tot = sum(max(0.0, w) for _n, w in weights) or 1.0
+        lo, left = self.pos, 1.0 - self.pos
+        self.span = {}
+        for n, w in weights:
+            hi = lo + left * max(0.0, w) / tot
+            self.span[n] = (lo, hi)
+            lo = hi
+
+    def __call__(self, name):
+        lo, hi = self.span.get(name, (self.pos, self.pos))
+
+        def f(text, x):
+            p = lo + (hi - lo) * max(0.0, min(1.0, x))
+            self.pos = max(self.pos, p)
+            self.prog(text, self.pos)
+        return f
+
+
+def _weights(pieces, recorder, infos, auto, jobs, todo_sec=None, kinds=True):
+    """Expected work of every step (relative seconds on his Mac: analysis ~ 15x real time per job, sync ~ 60x)."""
+    jobs = max(1, jobs)
+    dur = lambda ps: sum(max(0.0, p["b"] - p["a"]) for p in ps)
+    rec_h = sum((infos.get(r["path"]) or {}).get("dur") or 0.0 for r in recorder) / 3600.0
+    if todo_sec is None:
+        use = pieces if not kinds else [p for p in pieces if part_of(p["kind"]) in SELECT or p["kind"] == "party"]
+        todo_sec = dur(use)
+    party = dur([p for p in pieces if p["kind"] == "party"]) if kinds else dur(pieces)
+    w = []
+    if auto:
+        w += [("auto_sync", dur(pieces) / 60.0 / jobs + rec_h * 20), ("auto_faces", 2.0 * len(pieces))]
+    w += [("analyse", todo_sec / 15.0 / jobs),
+          ("priest", 2.0 * sum(1 for p in pieces if p["kind"] == "church" and p["b"] - p["a"] >= PRIEST_MIN) if kinds else 5),
+          ("firstlook", 4.0 * max(1, sum(1 for p in pieces if p["kind"] == "firstlook")) if kinds else 8),
+          ("vornic", 20.0 if kinds and any(p["kind"] == "vornic" for p in pieces) else 2.0),
+          ("party", party / 60.0 / jobs + rec_h * 20), ("music", rec_h * 6 + 1)]
+    return w
+
+
 # ---------------------------------------------------------------- 5. the build job (heavy work, in a thread)
-def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_dir=None):
+def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_dir=None, colours=None):
     """Everything that reads the media: probe, analyses (cached in `cache`: {key: dict(key=stamp, a=json)}), the
     priest, first look and vornic sync, the party sync and its music. Returns a JSON-able result for the page."""
     from concurrent.futures import ThreadPoolExecutor
@@ -713,7 +907,7 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
     def chk():
         if cancel and cancel():
             raise InterruptedError("Cancelled")
-    L = load(xml_path)
+    L = load(xml_path, kinds_for(colours))
     pieces, recorder = L["pieces"], L["recorder"]
     missing = sorted({p["path"] for p in pieces if not Path(p["path"]).exists()})
     pieces = [p for p in pieces if Path(p["path"]).exists()]
@@ -721,17 +915,21 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
         raise ValueError("None of the labelled clips were found on this computer: connect the disk with the footage.")
     paths = sorted({p["path"] for p in pieces} | {r["path"] for r in recorder if Path(r["path"]).exists()})
     infos = {}
+    st = Stages(prog, [("probe", 0.3 * len(paths))] + _weights(pieces, recorder, {}, L.get("auto"), jobs,
+                                                              kinds=not L.get("auto")))
+    sp = st("probe")
     for k, f in enumerate(paths):
         chk()
-        prog(f"Reading the files: {k + 1} of {len(paths)}", 0.05 * k / max(1, len(paths)))
+        sp(f"Reading the files: {k + 1} of {len(paths)}", (k + 1) / max(1, len(paths)))
         try:
             infos[f] = projectsetup.probe(f)
         except Exception:
             infos[f] = dict(video=False, dur=0.0, fps=25.0, w=1920, h=1080, ach=0, arate=48000, ctime=None, tod=None)
     auto = None
     psync_res = None
+    st.replan(_weights(pieces, recorder, infos, L.get("auto"), jobs, kinds=not L.get("auto")))
     if L.get("auto"):
-        auto, psync_res = auto_moments(L, pieces, recorder, infos, prog, cancel, jobs, model_dir)
+        auto, psync_res = auto_moments(L, pieces, recorder, infos, st, cancel, jobs, model_dir)
         pieces = [p for p in pieces if p["kind"] != AUTO]
     # analyses: every selection range + every party range (once, cached)
     use = [p for p in pieces if part_of(p["kind"]) in SELECT or p["kind"] == "party"]
@@ -746,6 +944,9 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
             except Exception:
                 pass
         todo.append(p)
+    st.replan([w for w in _weights(pieces, recorder, infos, False, jobs,
+                                    todo_sec=sum(p["b"] - p["a"] for p in todo)) if not w[0].startswith("auto")])
+    pa = st("analyse")
     done = [0]
 
     def one(p):
@@ -761,7 +962,7 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
         except Exception:
             pass
         done[0] += 1
-        prog(f"Looking at your selections: {done[0]} of {len(todo)}", 0.05 + 0.45 * done[0] / max(1, len(todo)))
+        pa(f"Looking at your selections: {done[0]} of {len(todo)}", done[0] / max(1, len(todo)))
     with ThreadPoolExecutor(max(1, jobs)) as ex:
         list(ex.map(one, todo))
     chk()
@@ -777,7 +978,7 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
     priests = []
     for k, p in enumerate(long_church):
         chk()
-        prog(f"Looking for the priest: {k + 1} of {len(long_church)}", 0.5 + 0.05 * k / max(1, len(long_church)))
+        st("priest")(f"Looking for the priest: {k + 1} of {len(long_church)}", (k + 1) / max(1, len(long_church)))
         try:
             if is_priest(p, analyses[key_of(p)], model):
                 priests.append(key_of(p))
@@ -795,8 +996,8 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
     fl = chrono([p for p in pieces if p["kind"] == "firstlook"], L["layout"], infos)
     for p in fl:
         p["train"] = p["cam"]
-    prog("Syncing the first look", 0.56)
-    fl_len, fl_items = longfilm.firstlook_layout(fl, progress=lambda s, f: prog(s, 0.56 + 0.06 * f)) if fl else (0.0, [])
+    st("firstlook")("Syncing the first look", 0.0)
+    fl_len, fl_items = firstlook_sync(fl, progress=st("firstlook")) if fl else (0.0, [])
     # vornic: always 2 cameras
     vo_len, vo_items, vo_cams = 0.0, [], []
     vps = [p for p in pieces if p["kind"] == "vornic"]
@@ -809,7 +1010,7 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
         vo_cams = [main] + [c for c in two if c != main]
         mp = chrono([p for p in vps if p["cam"] == main], L["layout"], infos)
         op = chrono([p for p in vps if p["cam"] in vo_cams[1:]], L["layout"], infos)
-        vo_len, vo_items = longfilm.vornic_cut(mp, op, progress=lambda s, f: prog(s, 0.62 + 0.06 * f), cancel=cancel)
+        vo_len, vo_items = longfilm.vornic_cut(mp, op, progress=st("vornic"), cancel=cancel)
     chk()
     # the party: sync with the recorder + its music
     party, pfiles, masters, extras = party_inputs(pieces, recorder, infos)
@@ -827,14 +1028,14 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
         if psync_res and all(f in psync_res[1] for f in clips):
             info, res = psync_res                   # already synced by the automatic day map
         else:
-            info, res = sync.run_sync(masters, clips, lambda s, f: prog(s, 0.68 + 0.22 * f), cancel,
+            info, res = sync.run_sync(masters, clips, st("party"), cancel,
                                       clocks=clocks, groups=camk, jobs=jobs)
         for f in pfiles:
             if f in masters:                # the longest party clip itself is the master
                 res[f] = dict(conf="high", master=masters.index(f), offset=0.0, dur=infos[f]["dur"], drift_ppm=0.0)
         for i, m in enumerate(info):
             chk()
-            prog(f"Reading the music (beats, bars, drops): {i + 1} of {len(info)}", 0.9 + 0.09 * i / max(1, len(info)))
+            st("music")(f"Reading the music (beats, bars, drops): {i + 1} of {len(info)}", i / max(1, len(info)))
             try:
                 import music
                 m["music"] = music.analyze(sync.audio_pcm(m["path"]))

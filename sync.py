@@ -37,6 +37,11 @@ def _audio_streams(path):
 
 
 def audio_pcm(path, sr=SR):
+    with core.slot():                    # the decoding places are shared by every job of the app
+        return _audio_pcm(path, sr)
+
+
+def _audio_pcm(path, sr=SR):
     """Mono float32 audio at `sr`, taken from the LOUDEST single channel of the file.
     Channels are never mixed together: a mono sound recorded on 2 channels with one channel empty or inverted,
     poly-WAVs from field recorders and Sony MXF with one mono stream per channel all work."""

@@ -51,7 +51,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.18.1"
+APP, VER = "MoneyMakingMachine", "v4.0.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -325,9 +325,11 @@ class Store:
         except Exception:
             pass
         core.HWACCEL = self.app["hwaccel"]
+        core.set_slots(max(2, self.app["jobs"]))
 
     def save_app(self):
         core.HWACCEL = self.app["hwaccel"]
+        core.set_slots(max(2, self.app["jobs"]))
         (self.dir / "settings.json").write_text(json.dumps(self.app), "utf-8")
 
     def save(self):
@@ -629,6 +631,45 @@ class Switch(QWidget):
         p.drawEllipse(18 if self.on else 2, 2, 14, 14)
 
 
+class ValueBox(QLineEdit):
+    """The blue value of a slider: click it and type the number (Enter or click away applies it, Esc cancels)."""
+    picked = Signal(int)
+
+    def __init__(self, text, lo, hi, suffix):
+        super().__init__(text)
+        self.lo, self.hi, self.suffix, self._old = lo, hi, suffix, text
+        self.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+        self.setFixedWidth(70)
+        self.setToolTip("Click to type the value")
+        self.setCursor(Qt.IBeamCursor)
+        self.setStyleSheet(f"QLineEdit{{color:{C['HOT']};font-size:12px;background:transparent;border:1px solid transparent;"
+                           f"border-radius:4px;padding:0 4px}} QLineEdit:hover{{border-color:{C['BORDER']}}}"
+                           f" QLineEdit:focus{{background:#161616;border-color:{C['HOT']}}}")
+        self.editingFinished.connect(self._apply)
+
+    def focusInEvent(self, e):
+        self._old = self.text()
+        super().focusInEvent(e)
+        QTimer.singleShot(0, self.selectAll)
+
+    def keyPressEvent(self, e):
+        if e.key() == Qt.Key_Escape:
+            self.setText(self._old)
+            self.clearFocus()
+            return
+        super().keyPressEvent(e)
+
+    def _apply(self):
+        m = re.search(r"-?\d+", self.text())
+        if not m:
+            self.setText(self._old)
+            return
+        x = max(self.lo, min(self.hi, int(m.group())))
+        self.setText(f"{x}{self.suffix}")
+        self._old = self.text()
+        self.picked.emit(x)
+
+
 class SliderRow(QWidget):
     changed = Signal(int)
     switched = Signal(bool)
@@ -643,8 +684,8 @@ class SliderRow(QWidget):
         self.t = lbl(title)
         q = lbl("?", "muted")
         q.setToolTip(sub)
-        self.pct = lbl(f"{value}{suffix}")
-        self.pct.setStyleSheet(f"color:{C['HOT']};font-size:12px")
+        self.pct = ValueBox(f"{value}{suffix}", lo, hi, suffix)
+        self.pct.picked.connect(lambda x: self.sl.setValue(x))
         top.addWidget(self.t)
         top.addWidget(q)
         top.addStretch()
@@ -666,6 +707,7 @@ class SliderRow(QWidget):
 
     def _dim(self, on):
         self.sl.setEnabled(on)
+        self.pct.setEnabled(on)
         self.t.setStyleSheet("font-weight:600" + ("" if on else ";color:#5e5e5e"))
 
     def _sw(self, on):
@@ -740,31 +782,44 @@ def _fmt_dur(s):
 
 class EtaClock:
     """Elapsed + time left that move every second, even when the job reports rarely (one long clip, one long step).
-    The estimate is smoothed and counts down between reports instead of freezing and then jumping."""
+    Time left = the speed of the last 2 minutes and of the whole job together (a slow step pulls it up at once, a fast
+    one does not promise too little), smoothed, counting down between reports. The bar never goes back inside one job."""
+    WINDOW = 120.0
 
     def __init__(self):
         self.reset()
 
     def reset(self):
         self.t0 = time.time()
-        self.f, self.total, self.tf = 0.0, None, self.t0
+        self.f, self.total, self.tf, self.hist = 0.0, None, self.t0, [(self.t0, 0.0)]
 
     def feed(self, f):
         now = time.time()
-        if f < self.f - 0.2:                    # a new job reuses the panel
+        if f < 0.01 and self.f > 0.3:           # a new job reuses the panel
             self.reset()
+        f = max(f, self.f)                      # never back inside one job
         el = now - self.t0
-        if f > 0.03 and el > 3 and f < 1 and f > self.f:
-            est = el / f
-            self.total = est if self.total is None else 0.7 * self.total + 0.3 * est
+        if f > self.f:
+            self.hist.append((now, f))
+            self.hist = [h for h in self.hist if now - h[0] <= self.WINDOW] or [(now, f)]
+        if 0.02 <= f < 1 and el > 8:
+            glob = el * (1 - f) / f
+            t1, f1 = self.hist[0]
+            rec = (1 - f) * (now - t1) / (f - f1) if f - f1 > 1e-4 and now - t1 > 5 else glob
+            left = 0.6 * rec + 0.4 * glob
+            est = el + left
+            self.total = est if self.total is None else 0.75 * self.total + 0.25 * est
         self.f, self.tf = f, now
 
     def text(self):
         el = time.time() - self.t0
         out = f"{_fmt_dur(el)} elapsed"
-        if self.total is not None and 0 < self.f < 1:
-            left = self.total - el
-            out += f"  ·  about {_fmt_dur(left)} left" if left >= 5 else "  ·  almost done"
+        if 0 < self.f < 1:
+            if self.total is None:
+                out += "  ·  estimating the time left…"
+            else:
+                left = self.total - el
+                out += f"  ·  about {_fmt_dur(left)} left" if left >= 5 else "  ·  almost done"
         return out
 
 
@@ -1097,7 +1152,7 @@ class ProjectCard(QFrame):
         v.setSpacing(3)
         top = QHBoxLayout()
         multi = p.get("type") == "multicam"
-        badge = QLabel(("SYNC" if p.get("sync_only") else "MULTICAM") if multi else "FOOTAGE")
+        badge = QLabel(("SYNCHRONIZE" if p.get("sync_only") else "MULTICAM") if multi else "FOOTAGE")
         col = "#7c5cff" if multi else C["BLUE"]
         badge.setStyleSheet(f"background:{col};color:white;font-size:9px;font-weight:700;border-radius:3px;padding:1px 6px")
         top.addWidget(badge)
@@ -1144,7 +1199,7 @@ class Dashboard(QWidget):
         v = QVBoxLayout(self)
         v.setContentsMargins(28, 22, 28, 22)
         head = QHBoxLayout()
-        head.addWidget(lbl({"multicam": "Multicam", "sync": "Sync"}.get(kind, "Selection"), "h1"))
+        head.addWidget(lbl({"multicam": "Multicam", "sync": "Synchronize"}.get(kind, "Selection"), "h1"))
         head.addStretch()
         head.addWidget(btn("+  New Project", "primary", self.new_project.emit))
         v.addLayout(head)
@@ -1754,6 +1809,14 @@ class AnalyzingPage(QWidget):
             c.setFixedWidth(360)
             c.hide()
         self.total, self.fin, self.part = len(paths), 0, [0.0] * len(paths)
+        sizes = []
+        for p in paths:                        # every clip weighted by its size (~ its length): an honest bar
+            try:
+                sizes.append(max(1, os.path.getsize(p)))
+            except OSError:
+                sizes.append(1)
+        tot = float(sum(sizes)) or 1.0
+        self.wt = [s / tot for s in sizes]
         self.state = ["waiting"] * len(paths)
         self.t0 = time.time()
         self.clock.reset()
@@ -1773,7 +1836,8 @@ class AnalyzingPage(QWidget):
             pass
 
     def _upd(self):
-        f = sum(self.part) / max(1, self.total)
+        wt = getattr(self, "wt", None) or [1.0 / max(1, self.total)] * self.total
+        f = sum(x * w for x, w in zip(self.part, wt))
         self.bar.setValue(int(f * 1000))
         self.pct.setText(f"{int(f * 100)}%")
         running = self.state.count("running")
@@ -2394,15 +2458,39 @@ class MCWorker(QThread):
                 except Exception:
                     pass
         left = [v for v in self.todo if v not in an]
-        done = [0]
+        need = [(i, m) for i, m in enumerate(self.masters) if m.get("path") and not m.get("music") and Path(m["path"]).exists()]
+        # one bar for the whole step, every clip weighted by its LENGTH (a 20 min clip is not the same as a 10 s one)
+        durs = {}
+        for v in left:
+            try:
+                durs[v] = max(1.0, core.probe(v).duration or 60.0)
+            except Exception:
+                durs[v] = 60.0
+        music_h = sum((m.get("duration") or 0.0) for _i, m in need) / 3600.0
+        w_an = sum(durs.values()) / 15.0 / max(1, self.jobs)
+        w_mu = music_h * 6 + (1 if need else 0)
+        share = w_an / max(1e-6, w_an + w_mu) if left else 0.0
+        got, done, lock = {}, [0], threading.Lock()
+        tot = sum(durs.values()) or 1.0
+
+        def report():
+            f = sum(min(1.0, got.get(v, 0.0)) * durs[v] for v in left) / tot
+            self.progress.emit(f"Step 2 · analysing video for the auto edit: {done[0]} of {len(left)} clips done", share * f)
         self.progress.emit(f"Step 2 · analysing video for the auto edit: 0 of {len(left)}", 0.0)
 
         def one(v):
             if self._stop:
                 return
-            an[v] = core.analyze(v, cancel=lambda: self._stop)
-            done[0] += 1
-            self.progress.emit(f"Step 2 · analysing video for the auto edit: {done[0]} of {len(left)} clips done", done[0] / max(1, len(left)))
+
+            def pr(x):
+                with lock:
+                    got[v] = x
+                report()
+            an[v] = core.analyze(v, pr, cancel=lambda: self._stop)
+            with lock:
+                got[v] = 1.0
+                done[0] += 1
+            report()
 
         with ThreadPoolExecutor(max(1, self.jobs)) as ex:
             list(ex.map(one, left))
@@ -2410,11 +2498,11 @@ class MCWorker(QThread):
             raise InterruptedError
         # the music map of every recorder file (once: kept in the project)
         maps = {}
-        need = [(i, m) for i, m in enumerate(self.masters) if m.get("path") and not m.get("music") and Path(m["path"]).exists()]
         for n, (i, m) in enumerate(need):
             if self._stop:
                 raise InterruptedError
-            self.progress.emit(f"Step 2 · reading the music (beats, bars, drops): {n + 1} of {len(need)}", (n + 0.5) / len(need))
+            self.progress.emit(f"Step 2 · reading the music (beats, bars, drops): {n + 1} of {len(need)}",
+                               share + (1 - share) * (n + 0.5) / len(need))
             try:
                 maps[i] = music.analyze(sync.audio_pcm(m["path"]))
             except Exception:
@@ -2921,7 +3009,7 @@ class MulticamPage(QWidget):
     # ---- Sync page (sync only) or Multicam
     def _mode_ui(self):
         so = bool(self.p.get("sync_only"))
-        self.b_back.setText("←  Sync" if so else "←  Multicam")
+        self.b_back.setText("←  Synchronize" if so else "←  Multicam")
         for w_ in (self.b_auto, self.b_all, self.right):
             w_.setVisible(not so)
         self.b_tomc.setVisible(so)
@@ -4696,7 +4784,106 @@ class TeaserPage(QWidget):
 # Premiere label colours (approximately as Premiere shows them)
 PR_LABEL = {"Blue": "#3f63e0", "Rose": "#f08ccb", "Teal": "#1f9e96", "Iris": "#6d78d6", "Brown": "#9a6233",
             "Yellow": "#e3cf3e", "Purple": "#9b4fc2", "Violet": "#b29de6", "Caribbean": "#22b8a5", "Mango": "#f39c2c",
-            "Forest": "#3d8b37", "Cerulean": "#2d9ad8", "Tan": "#c8a97e", "Sound": "#4a5a52"}
+            "Forest": "#3d8b37", "Cerulean": "#2d9ad8", "Tan": "#c8a97e", "Sound": "#4a5a52",
+            "Lavender": "#a99ad6", "Magenta": "#d6338a", "Green": "#4caf50"}
+DV_LABEL = {"Orange": "#e8772e", "Apricot": "#f0a35e", "Yellow": "#e2c337", "Lime": "#9fcf3a", "Olive": "#6f8a2e",
+            "Green": "#3c9b4a", "Teal": "#22928c", "Navy": "#2c3f87", "Blue": "#3b74d6", "Purple": "#8c4fc0",
+            "Violet": "#b26ad6", "Pink": "#e27aa8", "Tan": "#c8a97e", "Beige": "#d9c9a6", "Brown": "#8c5a32",
+            "Chocolate": "#5b3a22"}
+
+
+def _swatch(hexc):
+    pm = QPixmap(14, 14)
+    pm.fill(QColor(hexc))
+    return QIcon(pm)
+
+
+class ColourCard(QWidget):
+    """Clip colours of Long Film v2: the switch off = the default colours; on = his own colour for every moment, from
+    the Premiere labels or the DaVinci Resolve clip colours. Used to read his labelled sequence and written on the
+    exported clips (each program its own list)."""
+    changed = Signal(object)
+
+    def __init__(self):
+        super().__init__()
+        self.c = {}
+        v = QVBoxLayout(self)
+        v.setContentsMargins(0, 0, 0, 0)
+        v.setSpacing(8)
+        top = QHBoxLayout()
+        top.addWidget(lbl("Choose my own colours", "", True), 1)
+        self.sw = Switch(False)
+        self.sw.toggled.connect(self._on)
+        top.addWidget(self.sw, 0, Qt.AlignTop)
+        v.addLayout(top)
+        v.addWidget(lbl("Off: the default colours (Blue groom, Rose bride, Teal first look, Forest vornic, Brown church, "
+                        "Yellow venue, Purple couple, Violet drone, Iris party). On: pick a colour for every moment.",
+                        "muted", True))
+        prow = QHBoxLayout()
+        self.b_pr = btn("Premiere Pro", slot=lambda: self._show("premiere"))
+        self.b_dv = btn("DaVinci Resolve", slot=lambda: self._show("davinci"))
+        for b in (self.b_pr, self.b_dv):
+            b.setCheckable(True)
+            prow.addWidget(b)
+        prow.addStretch()
+        v.addLayout(prow)
+        g = QGridLayout()
+        g.setHorizontalSpacing(10)
+        g.setVerticalSpacing(6)
+        self.combos = {}
+        for r, m in enumerate(longfilm2.MOMENTS):
+            g.addWidget(lbl(longfilm2.MOMENT_NAMES[m]), r, 0)
+            cb = QComboBox()
+            cb.currentIndexChanged.connect(lambda _i, m=m: self._pick(m))
+            g.addWidget(cb, r, 1)
+            self.combos[m] = cb
+        v.addLayout(g)
+        v.addWidget(only_note("The Premiere colours read your labelled sequence and go on the clips of Export → Premiere; "
+                              "the DaVinci colours go on the clips of Export → DaVinci. Reading your labels changes at "
+                              "the next Build; the exported colours change at once."))
+        self.app = "premiere"
+
+    def load(self, c):
+        self.c = dict(c or {})
+        self.sw.blockSignals(True)
+        self.sw.set(bool(self.c.get("on")))
+        self.sw.blockSignals(False)
+        self._show(self.c.get("show", "premiere"), emit=False)
+
+    def _on(self, on):
+        self.c["on"] = on
+        self._fill()
+        self.changed.emit(dict(self.c))
+
+    def _show(self, app, emit=True):
+        self.app = app
+        self.c["show"] = app
+        for b, on in ((self.b_pr, app == "premiere"), (self.b_dv, app == "davinci")):
+            b.setChecked(on)
+            b.setObjectName("primary" if on else "")
+            repolish(b)
+        self._fill()
+        if emit:
+            self.changed.emit(dict(self.c))
+
+    def _fill(self):
+        pr, dv = longfilm2.colour_maps(dict(self.c, on=True) if self.c.get("on") else {})
+        cur = pr if self.app == "premiere" else dv
+        names = longfilm2.PR_COLOURS if self.app == "premiere" else longfilm2.DV_COLOURS
+        hexes = PR_LABEL if self.app == "premiere" else DV_LABEL
+        for m, cb in self.combos.items():
+            cb.blockSignals(True)
+            cb.clear()
+            for n in names:
+                cb.addItem(_swatch(hexes.get(n, "#777")), n)
+            cb.setCurrentIndex(names.index(cur[m]) if cur[m] in names else 0)
+            cb.setEnabled(bool(self.c.get("on")))
+            cb.blockSignals(False)
+
+    def _pick(self, m):
+        cb = self.combos[m]
+        self.c.setdefault(self.app, {})[m] = cb.currentText()
+        self.changed.emit(dict(self.c))
 
 
 class SelectsMap(QWidget):
@@ -7189,19 +7376,21 @@ class _LF2Worker(QThread):
     done = Signal(object)
     failed = Signal(str)
 
-    def __init__(self, xml_path, vornic, cache, jobs, base):
+    def __init__(self, xml_path, vornic, cache, jobs, base, colours=None):
         super().__init__()
         self.xml_path, self.vornic, self.cache, self.jobs, self.base, self._stop = xml_path, vornic, cache, jobs, base, False
+        self.colours = colours
 
     def run(self):
         try:
             made = None
             if Path(self.xml_path).is_dir():    # straight from the wedding folder: make the sequence first
-                made = longfilm2.folder_xml(self.xml_path, lambda s, f: self.progress.emit(s, 0.05 * f),
+                made = longfilm2.folder_xml(self.xml_path, lambda s, f: self.progress.emit(s, 0.04 * f),
                                             lambda: self._stop, jobs=max(2, self.jobs * 2))
                 self.xml_path = made
-            r = longfilm2.build(self.xml_path, self.vornic, self.cache, lambda s, f: self.progress.emit(s, f),
-                                lambda: self._stop, self.jobs, self.base)
+            lo = 0.04 if made else 0.0      # the folder step first, then the Build: one bar that never goes back
+            r = longfilm2.build(self.xml_path, self.vornic, self.cache, lambda s, f: self.progress.emit(s, lo + (1 - lo) * f),
+                                lambda: self._stop, self.jobs, self.base, self.colours)
             if made:
                 r["footage_xml"] = made
             self.done.emit(r)
@@ -7227,17 +7416,20 @@ class LongFilm2Page(QWidget):
         top.addWidget(btn("←  Projects", "link", lambda: self.back.emit()))
         self.pname = lbl("", "h2")
         top.addWidget(self.pname)
-        top.addWidget(lbl("·  Long Film v2", "muted"))
         badge = QLabel("BETA")
         badge.setStyleSheet(f"background:{C['POOR']};color:white;font-size:10px;font-weight:800;border-radius:9px;padding:2px 8px")
         top.addWidget(badge)
         top.addStretch()
         self.b_edit = btn("Edit the film", slot=self.edit_film)
         self.b_exp = ExportPair(self.export)
-        self.b_build = btn("Build", "primary", self.build)
+        self.b_build = btn("Build", slot=self.build)
+        self.b_be = btn("Build + Edit", "primary", self.build_edit)
+        self.b_be.setToolTip("Build, and the editor opens by itself as soon as the film is ready (good overnight).")
+        self._then_edit = False
         top.addWidget(self.b_edit)
         top.addWidget(self.b_exp)
         top.addWidget(self.b_build)
+        top.addWidget(self.b_be)
         v.addLayout(top)
         v.addWidget(lbl("The long film from the wedding folder or from the sequence of Create Project. With your colours "
                         "every colour is handled its own way; without colours the moments of the day are found "
@@ -7337,7 +7529,11 @@ class LongFilm2Page(QWidget):
         l4.addWidget(lbl("Premiere cannot receive an adjustment layer through an XML (tested: it becomes a black clip), so "
                          "the look (Lumetri) and the crop are put on every clip. To change it later, select the clips in "
                          "Premiere and change the Lumetri of one, then paste its attributes.", "muted", True))
-        l3 = card(4, "Party · Auto Director")
+        lc = card(4, "Clip colours")
+        self.colcard = ColourCard()
+        self.colcard.changed.connect(lambda c: (self.store.app.__setitem__("colours", dict(c)), self._remember(colours=c)))
+        lc.addWidget(self.colcard)
+        l3 = card(5, "Party · Auto Director")
         self.d_rows = {}
         for key, title, sub, lo, hi, suf in (
                 ("minshot", "Minimum shot", "No shot is shorter than this.", 1, 10, " s"),
@@ -7438,6 +7634,7 @@ class LongFilm2Page(QWidget):
             w_.blockSignals(False)
         self.sw_v.set(p.get("vornic", True))
         self._show_look()
+        self.colcard.load(p.get("colours") or self.store.app.get("colours"))
         self.map.set_zones(p.get("zones", []))
         blob = self.store.load_blob(p["id"]) if p.get("built") else {}
         self.r = blob.get("result")
@@ -7589,6 +7786,7 @@ class LongFilm2Page(QWidget):
         p = self._cur() or {}
         busy = self._busy()
         self.b_build.setEnabled(bool(p.get("footage")) and not busy)
+        self.b_be.setEnabled(bool(p.get("footage")) and not busy)
         self.b_exp.setEnabled(bool(self.parts) and not busy)
         self.b_edit.setEnabled(bool(self.parts) and not busy)
         _p = self._cur() or {}
@@ -7597,6 +7795,12 @@ class LongFilm2Page(QWidget):
                                       "kept in the project, even after closing the app."))
 
     # ---- build
+    def build_edit(self):
+        self._then_edit = True
+        self.build()
+        if not self._busy():
+            self._then_edit = False
+
     def build(self):
         p = self._cur()
         if p is None or not p.get("footage") or self._busy():
@@ -7604,12 +7808,13 @@ class LongFilm2Page(QWidget):
         self.pp.start("Starting…")
         self.pp.allow_cancel(lambda: self.worker and setattr(self.worker, "_stop", True))
         self.worker = _LF2Worker(p["footage"], p.get("vornic", True), dict(getattr(self, "_cache", {}) or {}),
-                                 self.store.app.get("jobs", 2), str(self.store.dir))
+                                 self.store.app.get("jobs", 2), str(self.store.dir), p.get("colours"))
         self._job_p = p
         if not hasattr(self, "_awake"):
             self._awake = Awake()
         self._awake.on()                       # a Build can take hours: the Mac stays awake
         self.worker.progress.connect(self.pp.set)
+        self.worker.finished.connect(self._after_build)
         self.worker.done.connect(self._done)
         self.worker.failed.connect(self._failed)
         self.worker.finished.connect(self._buttons)
@@ -7644,7 +7849,14 @@ class LongFilm2Page(QWidget):
             notify(i18n.T("{} clips not found on this computer: connect the disk with the footage.").format(len(r["missing"])), error=True)
         notify(i18n.T("Long Film v2 ready: {}").format(p["name"]))
 
+    def _after_build(self):
+        """Build + Edit the film: the editor opens by itself when the Build ended well."""
+        go, self._then_edit = self._then_edit, False
+        if go and self.parts and self._job_p is self._cur():
+            QTimer.singleShot(200, self.edit_film)
+
     def _failed(self, m):
+        self._then_edit = False
         self.pp.hide()
         self.pp.allow_cancel(None)
         self.status.setText(i18n.T("Stopped: ") + i18n.T(m))
@@ -7742,7 +7954,9 @@ class LongFilm2Page(QWidget):
             notify(i18n.T("Your changes are saved."))
 
         dlg = editor.Editor(self, tl, self.r["infos"], PR_LABEL, self._lane_name, str(self.store.dir / "thumbs"),
-                            p.get("hidden", []), p.get("muted", []), on_save=keep)
+                            p.get("hidden", []), p.get("muted", []), on_save=keep,
+                            keys=self.store.app.get("editor_keys"),
+                            on_keys=lambda k: (self.store.app.__setitem__("editor_keys", k), self.store.save_app()))
         dlg.exec()
         if dlg.reset:
             self._remember(timeline=None, hidden=[], muted=[], edits={})
@@ -7763,10 +7977,12 @@ class LongFilm2Page(QWidget):
             if p.get("timeline"):                  # the film as he edited it in the editor
                 n, nv, na = longfilm2.export_timeline(p["timeline"], self.r["infos"], f, f"{p['name']} - Long Film v2",
                                                       look=self._look_s(), hidden=p.get("hidden", []),
-                                                      muted=p.get("muted", []))
+                                                      muted=p.get("muted", []),
+                                                      labels=longfilm2.labels_out(p.get("colours"), target))
             else:
                 n, nv, na = longfilm2.export_xml(self.parts, self.r["infos"], [c["name"] for c in self.r["cams"]], f,
-                                                 f"{p['name']} - Long Film v2", marker=lambda s: s, look=self._look_s())
+                                                 f"{p['name']} - Long Film v2", marker=lambda s: s, look=self._look_s(),
+                                                 labels=longfilm2.labels_out(p.get("colours"), target))
             for_target(f, target)
         except Exception as e:
             logging.exception("long film v2 export failed")
@@ -7951,7 +8167,7 @@ class Main(QMainWindow):
         self.nav = {"offload": btn("Card Offload", "nav", lambda: self.go("offload")),
                     "project": btn("Create Project", "nav", lambda: self.go("project")),
                     "dash": btn("Selection", "nav", lambda: self.go("dash")),
-                    "syncdash": btn("Sync", "nav", lambda: self.go("syncdash")),
+                    "syncdash": btn("Synchronize", "nav", lambda: self.go("syncdash")),
                     "mcdash": btn("Multicam", "nav", lambda: self.go("mcdash")),
                     "long": btn("Long Film", "nav", lambda: self.go("long")),
                     "long2": btn("Long Film v2", "nav", lambda: self.go("long2")),

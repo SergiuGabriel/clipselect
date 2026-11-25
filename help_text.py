@@ -263,7 +263,7 @@ canale, ca MXF-ul de FX6, folosesc canalul 1). Culorile clipurilor: roșu / galb
 <h2>Multicam: Sync</h2>
 <p>Multicam sincronizează toate camerele cu recorderul de la mixer, apoi (opțional) face montajul. Sunt doi pași separați:
 <b>Sync</b> (rapid, doar sunet) și <b>Auto Edit</b> (lent, analiză video). Auto Edit nu se poate apăsa până nu există o sincronizare.</p>
-<p><b>Pagina Sync din meniu</b> e doar pentru sincronizare: același motor, fără Auto Edit. Faci proiect nou, tragi tot (carduri,
+<p><b>Pagina Sincronizare din meniu</b> e doar pentru sincronizare: același motor, fără Auto Edit. Faci proiect nou, tragi tot (carduri,
 recorder, lavaliere), apeși <b>Sync</b> și exporți: toate camerele și recorderul pe un singur timeline, clipurile întregi. Dacă vrei
 apoi și montajul, <b>Auto Edit în Multicam →</b> mută proiectul în Multicam cu sincronizarea păstrată.</p>
 <p><b>Export → Premiere</b> și <b>Export → DaVinci</b> (la fel la Multicam, Teaser Studio, Long Film și Long Film v2): același montaj, două
@@ -558,11 +558,27 @@ timecode poziția din timeline, la una cronologică ora de filmare din fișiere.
 ca să umple cadrul (4K = 50 %). Fiecare cameră își are pistele ei de sunet, legate de imagine, ca la Creează proiectul (FX6 = A1 și
 A2 stereo, FX3 / A7 = o pistă stereo). La petrecere e ca exportul Multicam: fiecare cameră pe pista ei video doar cu tăieturile ei,
 iar sunetul fiecărei camere e <b>întreg</b> (fiecare interval etichetat, netăiat) pe pistele ei; recorderul și celelalte surse de
-sunet sunt întregi sub toată petrecerea. Bucățile din petrecere în care nu filmează nicio cameră mai mult de 30 s (cina, o
-pauză) sunt scoase și înlocuite cu o pauză de 2 s (la Alex și Andreea erau 2 ore, 65 și 23 de minute goale). Deasupra camerelor e
+sunet sunt întregi sub toată petrecerea. Orice bucată din petrecere în care nu filmează nicio cameră (cina, o
+pauză, câteva secunde între două cadre) e scoasă de tot: cadrele se lipesc, fără niciun gol negru. Și cadrele
+de peste tot din film se lipesc la cadru (fără goluri de un frame). Deasupra camerelor e
 pista <b>unghiul alternativ</b> (oprită): pentru fiecare cadru de pe o cameră din mână, a doua cea mai bună cameră care a filmat tot
 acel moment, ca la Multicam. Build citește filmările (o dată: analizele rămân salvate);
 schimbarea setărilor de petrecere și a zonelor se vede imediat, fără alt Build.</p>
+
+<p><b>Construiește + Editează</b> face Build și deschide singur editorul când filmul e gata (apeși seara, dimineața ești în
+editor). Bara de progres merge până la 100 % o singură dată: fiecare pas (citirea fișierelor, sincronizarea, fețele, analiza
+cadrelor, preotul, first look, vornicul, petrecerea, muzica) are partea lui din bară cât de mult durează de obicei, iar timpul
+rămas e calculat din viteza ultimelor 2 minute și a întregului proces, deci nu mai crește de la 10 la 30 de minute.</p>
+<p><b>Culorile clipurilor</b> (cardul 4): oprit = culorile implicite. Pornit = îți alegi tu culoarea fiecărui moment (mire,
+mireasă, first look, vornic, biserică, sală, cuplu, dronă, petrecere), din etichetele Premiere sau din culorile DaVinci Resolve
+(două liste, butoanele Premiere Pro / DaVinci Resolve). Culorile Premiere sunt și cele după care e citită secvența ta etichetată
+(dacă la tine mirele e Mango, alegi Mango) și se pun pe clipurile din Export → Premiere; culorile DaVinci se pun pe clipurile din
+Export → DaVinci.</p>
+<p><b>First look-ul e sincronizat</b>: camera cu cel mai mult first look pe V1, celelalte deasupra, la același moment, după
+sunetul fișierelor întregi (cel mai clar canal, niciodată un amestec), iar în modul automat și după ceasul comun găsit cu
+recorderul; în modul automat orice clip al altei camere filmat în același timp cu first look-ul intră lângă el.
+O cameră pe trepied (clipuri foarte lungi, de peste 10 minute de obicei: a74 la Alex și Andreea) nu e niciodată aleasă pentru
+mire, mireasă, cuplu sau sală: doar biserica și petrecerea.</p>
 
 <h2>Cum trebuie să arate selecția</h2>
 <p>Ce trebuie să aibă XML-ul pe care îl dai fiecărei funcții. Culorile sunt etichetele (labels) din Premiere: Rose mireasa,
@@ -621,7 +637,11 @@ clip e atât de lung cât e, cu imagini de-a lungul lui și culoarea etichetei.<
 jos). Un clip lăsat peste altele le <b>suprascrie</b>, ca în Premiere. Tragi de marginea unui clip ca să-l scurtezi / lungești.
 Shift / Cmd + click selectează mai multe și le muți împreună.</li>
 <li><b>Tăiere (C)</b>: click pe un clip îl taie în două în acel punct.</li>
-<li>Delete scoate clipul (rămâne gol), Shift+Delete îl scoate și închide golul (doar dacă nimic altceva nu e acolo). Cmd+Z /
+<li>Selecție cu chenar: apasă pe un loc gol al timeline-ului și trage, ca în Finder; Shift / Cmd adaugă la selecție, un
+click simplu pe gol mută playhead-ul. Cmd+A selectează tot.</li>
+<li>Delete scoate clipul (rămâne gol), <b>X</b> (Ripple delete) îl scoate și închide golul (doar dacă nimic altceva nu e acolo).
+<b>Scurtături…</b> îți arată toate tastele și le poți schimba: dai click pe un câmp și apeși tasta pe care o vrei (o tastă luată
+de la altă acțiune se mută); Resetează tot pune înapoi tastele implicite. Tastele tale rămân pentru toate proiectele. Cmd+Z /
 Shift+Cmd+Z anulează / refac fiecare pas. S pornește / oprește alinierea la marginile clipurilor, playhead și markere.</li>
 <li>Space redă / oprește, Stânga / Dreapta un cadru, Sus / Jos tăietura anterioară / următoare, Home / End. Zoom din cursor,
 Cmd + rotița, + / −, iar tasta &#92; arată tot filmul. Click sau trage pe riglă ca să muți playhead-ul.</li>
@@ -761,7 +781,10 @@ verificare.</p>
 
 <h2>Coada de analiză</h2>
 <p>Arată tot ce rulează acum: analizele Footage Selection, Sync și Auto Edit din Multicam, analiza selecțiilor din Teaser Studio,
-construirea Long Film, Descărcare carduri, Creează proiectul și Transcriere (inclusiv povestea cu Claude), cu progres. <b>Deschide</b> te duce la job. Poți lucra în altă parte cât rulează; joburile merg în fundal.</p>
+construirea Long Film, Descărcare carduri, Creează proiectul și Transcriere (inclusiv povestea cu Claude), cu progres. <b>Deschide</b> te duce la job. Poți lucra în altă parte cât rulează; joburile merg în fundal.
+Mai multe procese pot rula deodată (de exemplu o analiză în Selection și un Sync în Multicam): își împart locurile de citire a
+video-ului (Setări &gt; Joburi în paralel), ca să nu pornească de două ori mai multe decodări decât suportă Mac-ul; dacă decodorul
+video al Mac-ului refuză un clip, clipul e citit din nou fără el.</p>
 
 <h2>Setări</h2>
 <h3>Performance</h3>
@@ -791,6 +814,8 @@ bază despre calculator, fără video. O eroare care se repetă apare o singură
 
 <h2>Sfaturi utile</h2>
 <ul>
+<li><b>Orice glisor se poate scrie de la tastatură:</b> dai click pe valoarea albastră din dreapta lui (de exemplu 100%), scrii
+numărul și apeși Enter (sau dai click în altă parte); Esc renunță. Valoarea e ținută între minimul și maximul glisorului.</li>
 <li><b>Auto sau Custom?</b> Auto păstrează doar cadrele bune, pe o pistă. Custom notează tot (Poor / Fair / Good) pe 3 piste și îți dă
 control pe fiecare criteriu.</li>
 <li><b>Camera statică apare prea des</b> în Multicam? Trage „Static ↔ Handheld” spre dreapta: camera statică nu tremură niciodată,
@@ -1068,7 +1093,7 @@ clips' colours: red / yellow / green by level.</li>
 <h2>Multicam: Sync</h2>
 <p>Multicam syncs every camera to the mixer recorder, then (optionally) edits. Two separate steps: <b>Sync</b> (fast, sound only) and
 <b>Auto Edit</b> (slow, video analysis). Auto Edit cannot be pressed until a sync exists.</p>
-<p><b>The Sync page in the menu</b> is for syncing only: the same engine, without Auto Edit. Make a new project, drop everything
+<p><b>The Synchronize page in the menu</b> is for syncing only: the same engine, without Auto Edit. Make a new project, drop everything
 (cards, recorder, lavaliers), press <b>Sync</b> and export: every camera and the recorder on one timeline, whole clips. If you then
 want the edit too, <b>Auto Edit in Multicam →</b> moves the project to Multicam with the sync kept.</p>
 <p><b>Export → Premiere</b> and <b>Export → DaVinci</b> (the same on Multicam, Teaser Studio, Long Film and Long Film v2): the same edit,
@@ -1354,11 +1379,26 @@ a timecode sequence the timeline position, in a chronological one the recording 
 <p><b>The export</b>: one 25 fps 1920x1080 sequence with a marker on every part. Clips of another size are scaled to fill the frame
 (4K = 50 %). Every camera has its own sound tracks, linked to the picture, like Create Project (FX6 = A1 and A2 stereo, FX3 / A7 = one
 stereo track). The party is like the Multicam export: every camera on its own video track with only its cuts, and every camera's
-sound <b>whole</b> (each labelled range, uncut) on its own tracks; the recorder and the other sound sources are whole under the party. Stretches of the party where no camera filmed for more than
-30 s (dinner, a break) are taken out and replaced by a 2 s pause (at Alex & Andreea there were 2 hours, 65 and 23 minutes of
-nothing). Above the cameras is the <b>alternative angle</b> track (switched off): for every shot on a handheld camera, the second best
+sound <b>whole</b> (each labelled range, uncut) on its own tracks; the recorder and the other sound sources are whole under the party. Every stretch of the party where no camera filmed (dinner, a
+break, a few seconds between two shots) is taken out completely: the shots join, with no black gap. All over the film the shots
+join to the frame (no one-frame gaps). Above the cameras is the <b>alternative angle</b> track (switched off): for every shot on a handheld camera, the second best
 camera that filmed the whole moment, like Multicam. Build reads the footage (once: the analyses are kept); changing the party
 settings and the zones shows at once, without another Build.</p>
+
+<p><b>Build + Edit</b> builds and opens the editor by itself when the film is ready (press it in the evening, be in
+the editor in the morning). The progress bar goes to 100 % once: every step (reading the files, the sync, the faces, the shot
+analysis, the priest, the first look, the vornic, the party, the music) gets its share of the bar as long as it usually takes,
+and the time left is worked out from the speed of the last 2 minutes and of the whole job, so it no longer climbs from 10 to
+30 minutes.</p>
+<p><b>Clip colours</b> (card 4): off = the default colours. On = you pick the colour of every moment (groom, bride, first look,
+vornic, church, venue, couple, drone, party), from the Premiere labels or from the DaVinci Resolve clip colours (two lists, the
+Premiere Pro / DaVinci Resolve buttons). The Premiere colours are also the ones your labelled sequence is read by (if your groom
+is Mango, choose Mango) and they go on the clips of Export → Premiere; the DaVinci colours go on the clips of Export → DaVinci.</p>
+<p><b>The first look is synced</b>: the camera with the most first look on V1, the others above it at the same moment, by the
+sound of the whole files (the clearest channel, never a mix) and, in the automatic mode, by the common clock found with the
+recorder too; in the automatic mode any other camera's clip filmed at the same time as the first look joins it.
+A camera on a tripod (very long clips, usually over 10 minutes: the a74 at Alex & Andreea) is never chosen for the groom, the
+bride, the couple or the venue: only the church and the party.</p>
 
 <h2>What your selects need</h2>
 <p>What the XML you give each feature must have. The colours are your Premiere labels: Rose bride, Blue groom, Purple couple,
@@ -1416,7 +1456,11 @@ sources). Every clip is as long as it is, with pictures along it and its label c
 first one down). A clip dropped over others <b>overwrites</b> them, like Premiere. Drag a clip's edge to trim it. Shift / Cmd + click
 selects more and moves them together.</li>
 <li><b>Razor (C)</b>: a click cuts a clip in two at that point.</li>
-<li>Delete lifts the clip (a gap stays), Shift+Delete removes it and closes the gap (only when nothing else is there). Cmd+Z /
+<li>Box selection: press on an empty place of the timeline and drag, like in Finder; Shift / Cmd add to the selection, a
+plain click on empty space moves the playhead. Cmd+A selects everything.</li>
+<li>Delete lifts the clip (a gap stays), <b>X</b> (Ripple delete) removes it and closes the gap (only when nothing else is there).
+<b>Shortcuts…</b> shows every key and lets you change it: click a field and press the key you want (a key taken from another
+action moves); Reset all puts the default keys back. Your keys stay for every project. Cmd+Z /
 Shift+Cmd+Z undo / redo every step. S switches snapping to clip edges, the playhead and markers.</li>
 <li>Space plays / stops, Left / Right one frame, Up / Down previous / next edit, Home / End. Zoom with the slider, Cmd + wheel, + / -,
 and the &#92; key shows the whole film. Click or drag on the ruler to move the playhead.</li>
@@ -1558,7 +1602,10 @@ the check.</p>
 
 <h2>Analysis Queue</h2>
 <p>Shows everything running now: Footage Selection analyses, Multicam Sync and Auto Edit, the Teaser Studio selection analysis, the
-Long Film build, Card Offload, Create Project and Transcribe (the Claude story too), with progress. <b>Open</b> takes you to the job. You can work elsewhere while it runs; the jobs run in the background.</p>
+Long Film build, Card Offload, Create Project and Transcribe (the Claude story too), with progress. <b>Open</b> takes you to the job. You can work elsewhere while it runs; the jobs run in the background.
+Several processes can run at once (e.g. an analysis in Selection and a Sync in Multicam): they share the video reading places
+(Settings &gt; Parallel jobs), so they never start twice as many decoders as the Mac can take; when the Mac's video decoder
+refuses a clip, the clip is read again without it.</p>
 
 <h2>Settings</h2>
 <h3>Performance</h3>
@@ -1588,6 +1635,8 @@ information about the computer, no video. An error that repeats shows at most on
 
 <h2>Useful tips</h2>
 <ul>
+<li><b>Every slider can be typed:</b> click the blue value on its right (e.g. 100%), type the number and press Enter (or click
+elsewhere); Esc cancels. The value is kept between the slider's minimum and maximum.</li>
 <li><b>Auto or Custom?</b> Auto keeps only the good shots, on one track. Custom grades everything (Poor / Fair / Good) on 3 tracks and
 gives you control over every criterion.</li>
 <li><b>The static camera shows too often</b> in Multicam? Drag "Static ↔ Handheld" to the right: the static camera never shakes, so it
