@@ -263,6 +263,9 @@ canale, ca MXF-ul de FX6, folosesc canalul 1). Culorile clipurilor: roșu / galb
 <h2>Multicam: Sync</h2>
 <p>Multicam sincronizează toate camerele cu recorderul de la mixer, apoi (opțional) face montajul. Sunt doi pași separați:
 <b>Sync</b> (rapid, doar sunet) și <b>Auto Edit</b> (lent, analiză video). Auto Edit nu se poate apăsa până nu există o sincronizare.</p>
+<p><b>Sync + Auto Edit</b> (butonul albastru) face totul dintr-o apăsare: Sync, iar imediat ce se termină pornește singur Auto Edit.
+Bun pentru peste noapte: apeși, pleci, dimineață montajul e gata. Mac-ul e ținut treaz până la final (nu intră în sleep).
+La fel și <b>Build</b> din Long Film v2. Sync și Auto Edit separate rămân, pentru când vrei doar unul din ele.</p>
 <h3>Pașii</h3>
 <ol>
 <li><b>Arunci tot materialul</b>: carduri, recorder, foldere întregi. Fișierele auxiliare sunt ignorate automat.</li>
@@ -608,6 +611,8 @@ Shift+Cmd+Z anulează / refac fiecare pas. S pornește / oprește alinierea la m
 Cmd + rotița, + / −, iar tasta &#92; arată tot filmul. Click sau trage pe riglă ca să muți playhead-ul.</li>
 <li>Ochiul unei piste video o ascunde (clipurile ei sunt exportate oprite), M pe o pistă audio îi oprește sunetul.</li>
 </ul>
+<p>Editorul e făcut să fie fluid și pe filme mari (mii de cadre, petrecerea inclusă): cadrele din monitor sunt citite cu
+decodorul video al Mac-ului și ultimele 240 rămân în memorie, așa că înapoi pe timeline e instant.</p>
 <p><b>Salvează (Cmd+S)</b> păstrează varianta ta în proiect și editorul rămâne deschis; <b>Salvează și închide</b> o păstrează și
 închide; <b>Închide</b> te întreabă dacă ai modificări nesalvate. <b>Te poți întoarce oricând în editor fără alt Build</b>: butonul
 devine <b>Continuă editarea</b> și deschide exact varianta salvată, și după ce închizi aplicația sau calculatorul (Build-ul și editarea
@@ -1047,6 +1052,9 @@ clips' colours: red / yellow / green by level.</li>
 <h2>Multicam: Sync</h2>
 <p>Multicam syncs every camera to the mixer recorder, then (optionally) edits. Two separate steps: <b>Sync</b> (fast, sound only) and
 <b>Auto Edit</b> (slow, video analysis). Auto Edit cannot be pressed until a sync exists.</p>
+<p><b>Sync + Auto Edit</b> (the blue button) does everything in one press: Sync, and as soon as it ends Auto Edit starts by
+itself. Good overnight: press it, leave, the edit is ready in the morning. The Mac is kept awake until the end (no sleep).
+The same for <b>Build</b> in Long Film v2. Separate Sync and Auto Edit stay, for when you want only one of them.</p>
 <h3>The steps</h3>
 <ol>
 <li><b>Drop all the material</b>: cards, recorder, whole folders. Side files are ignored automatically.</li>
@@ -1382,6 +1390,8 @@ Shift+Cmd+Z undo / redo every step. S switches snapping to clip edges, the playh
 and the &#92; key shows the whole film. Click or drag on the ruler to move the playhead.</li>
 <li>The eye of a video track hides it (its clips are exported switched off), M on an audio track mutes it.</li>
 </ul>
+<p>The editor is made to stay smooth on big films (thousands of shots, the party included): monitor frames are read with the
+Mac's video decoder and the last 240 stay in memory, so going back on the timeline is instant.</p>
 <p><b>Save (Cmd+S)</b> keeps your version in the project and the editor stays open; <b>Save and close</b> keeps it and closes;
 <b>Close</b> asks when there are unsaved changes. <b>You can go back into the editor any time without a new Build</b>: the button
 becomes <b>Continue editing</b> and opens exactly the saved version, also after closing the app or the computer (the Build and the

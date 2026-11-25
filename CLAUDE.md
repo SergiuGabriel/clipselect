@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.16.1), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v3.17.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -936,6 +936,19 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   project blob and the edit in p["timeline"], so "Edit the film" (now "Continue editing" when an edit is saved) reopens it,
   also after a restart. The editor now saves WITHOUT closing (Save (Cmd+S), on_save callback -> _remember), "Save and close",
   "Close" / window X asks Save / Don't save / Cancel when dirty (snapshot compare), "Back to the automatic film" asks first.
+
+## v3.17.0 (owner: "the editor is not as fluid as Premiere"; "one button for the whole process, for overnight")
+- Editor speed (measured on a synthetic 3000-cut film + 30 recorder files, /home/claude/perf/bench.py): rows() was rebuilt
+  for EVERY clip (tracks_v scans all items) -> hover 853 ms, whole-film paint 1060 ms. Now TimelineView._geo caches the
+  row layout keyed on Model.rev (bumped by push / undo / redo), rect_of / audio_rect are dict lookups, hit() looks only at
+  clips under the mouse in time, thumbnails are scaled once into QPixmaps (self.scaled, device pixel ratio), clips < 4 px
+  are plain bars, undo snapshots copy clip dicts (no deepcopy). After: hover 0.2 ms, whole-film paint 30 ms, drag step
+  4.6 ms, undo 4 ms. Monitor: -hwaccel videotoolbox (core.decode_flags, when the setting is on) + the last 240 frames
+  kept in memory (FrameReader.cache).
+- Multicam "Sync + Auto Edit" (primary, b_all): run_all -> sync, and on_done starts _auto_for(p) for the SAME project
+  (_chain = project) without waiting; Sync / Auto Edit stay as separate outlined buttons. class Awake = caffeinate -i -w
+  (always terminated and waited) during the chain and during the Long Film v2 Build (overnight). Tested headless:
+  sync -> analyze -> edit, buttons Cancel while chained, awake released.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

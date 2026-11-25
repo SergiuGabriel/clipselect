@@ -655,3 +655,8 @@ EXACT.update({
 EXACT.setdefault("Close", "Închide")
 TEMPLATES.update({"Saved at {}": "Salvat la {}"})
 EXACT.update({"Don't save": "Nu salva"})
+EXACT.update({
+    "Sync + Auto Edit": "Sync + Auto Edit",
+    "Everything in one go (good overnight): Sync, then Auto Edit right after it. The Mac is kept awake until it ends.":
+        "Totul dintr-o apăsare (bun peste noapte): Sync, apoi Auto Edit imediat după. Mac-ul e ținut treaz până se termină.",
+})

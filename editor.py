@@ -15,7 +15,6 @@ off), M on an audio track mutes it.
 The timeline is longfilm2.timeline(parts) (seconds); Save keeps it in the project, Export XML writes it with
 longfilm2.export_timeline.
 """
-import copy
 import os
 import queue
 import subprocess
@@ -51,8 +50,15 @@ class FrameReader(QThread):
     def __init__(self, width):
         super().__init__()
         self.q, self.width, self._stop = queue.Queue(), width, False
+        self.cache, self.order = {}, []           # the last frames seen: going back over them is instant
 
     def ask(self, tag, path, t, latest=True):
+        img = self.cache.get((path, round(t * FPS)))
+        if img is not None and latest:
+            with self.q.mutex:
+                self.q.queue.clear()
+            self.got.emit(tag, img)
+            return
         if latest:
             with self.q.mutex:
                 self.q.queue.clear()
@@ -68,8 +74,9 @@ class FrameReader(QThread):
             if job is None or self._stop:
                 return
             tag, path, t = job
+            hw = [f for f in core.decode_flags() if f in ("-hwaccel", "videotoolbox")]   # Mac video decoder
             try:
-                out = subprocess.run([_ffmpeg(), "-v", "error", "-nostdin", "-ss", f"{max(0.0, t):.3f}", "-i", path,
+                out = subprocess.run([_ffmpeg(), "-v", "error", "-nostdin"] + hw + ["-ss", f"{max(0.0, t):.3f}", "-i", path,
                                       "-frames:v", "1", "-vf", f"scale={self.width}:-2", "-f", "image2pipe",
                                       "-vcodec", "mjpeg", "-q:v", "4", "-"],
                                      capture_output=True, timeout=30, **core._NOWIN).stdout
@@ -77,6 +84,12 @@ class FrameReader(QThread):
             except Exception:
                 img = None
             if img is not None and not img.isNull():
+                k = (path, round(t * FPS))
+                if k not in self.cache:
+                    self.cache[k] = img
+                    self.order.append(k)
+                    if len(self.order) > 240:
+                        self.cache.pop(self.order.pop(0), None)
                 self.got.emit(tag, img)
 
 
@@ -130,6 +143,7 @@ class Model:
         self.durs = durs                                    # file length per path (trim limit)
         self.hidden, self.muted = set(), []
         self.undo_st, self.redo_st = [], []
+        self.rev = 0                                        # bumped on every change: the view's caches follow it
         lanes = []
         for it in self.items:
             if it.get("ak") and it["ak"] not in lanes:
@@ -139,15 +153,19 @@ class Model:
 
     # ---- undo
     def snap(self):
-        return copy.deepcopy((self.items, self.hidden, self.muted))
+        # clip dicts hold only numbers / strings / the small "ak" pair: a copy per clip is enough (deepcopy was slow)
+        return ([dict(it, ak=list(it["ak"]) if it.get("ak") else it.get("ak")) for it in self.items],
+                set(self.hidden), [list(x) for x in self.muted])
 
     def push(self):
+        self.rev += 1
         self.undo_st.append(self.snap())
         self.undo_st = self.undo_st[-300:]
         self.redo_st.clear()
 
     def undo(self):
         if self.undo_st:
+            self.rev += 1
             self.redo_st.append(self.snap())
             self.items, self.hidden, self.muted = self.undo_st.pop()
             return True
@@ -155,6 +173,7 @@ class Model:
 
     def redo(self):
         if self.redo_st:
+            self.rev += 1
             self.undo_st.append(self.snap())
             self.items, self.hidden, self.muted = self.redo_st.pop()
             return True
@@ -302,7 +321,10 @@ class TimelineView(QWidget):
         self.tool, self.snapping = "select", True
         self.drag = None
         self.thumbs = {}
+        self.scaled = {}                       # (key, w, h) -> QPixmap already at the size it is drawn
+        self._cols, self._green = {}, QColor("#2f6e4f")
         self.thumb_reader = None
+        self._geo_rev = None
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.StrongFocus)
         self.setMinimumHeight(RULER + 4 * VH + 3 * AH + 20)
@@ -311,17 +333,26 @@ class TimelineView(QWidget):
         self._range()
 
     # ---- geometry
+    def _geo(self):
+        """Row layout, cached until the model changes (it used to be rebuilt for every clip: slow on big films)."""
+        if self._geo_rev != self.m.rev:
+            out, y = [], RULER
+            vy, ay = {}, {}
+            for v in range(self.m.tracks_v(), 0, -1):
+                out.append(("v", v, y, VH))
+                vy[v] = y
+                y += VH
+            y += 6
+            for k in self.m.lanes:
+                out.append(("a", k, y, AH))
+                ay[tuple(k)] = y
+                y += AH
+            self._rows, self._vy, self._ay, self._geo_rev = out, vy, ay, self.m.rev
+        return self._rows
+
     def rows(self):
         """[(kind, key, y, h)] top to bottom: video tracks from the top one down to V1, then the audio lanes."""
-        out, y = [], RULER
-        for v in range(self.m.tracks_v(), 0, -1):
-            out.append(("v", v, y, VH))
-            y += VH
-        y += 6
-        for k in self.m.lanes:
-            out.append(("a", k, y, AH))
-            y += AH
-        return out
+        return self._geo()
 
     def x_of(self, t):
         return HDR + (t - self.x0) * self.pps
@@ -336,25 +367,33 @@ class TimelineView(QWidget):
         return None
 
     def rect_of(self, it):
-        for kind, key, y, h in self.rows():
-            if (kind == "v" and it.get("v") == key) or (kind == "a" and not it.get("v") and it.get("ak") == key):
-                return QRectF(self.x_of(it["start"]), y + 1, max(2.0, it["dur"] * self.pps), h - 2)
-        return None
+        self._geo()
+        v = it.get("v")
+        if v:
+            y, h = self._vy.get(v), VH
+        else:
+            y, h = (self._ay.get(tuple(it["ak"])) if it.get("ak") else None), AH
+        if y is None:
+            return None
+        return QRectF(self.x_of(it["start"]), y + 1, max(2.0, it["dur"] * self.pps), h - 2)
 
     def audio_rect(self, it):
         """A picture clip's own sound, drawn on its lane (it moves with the picture: linked)."""
         if not it.get("v") or not it.get("ak"):
             return None
-        for kind, key, y, h in self.rows():
-            if kind == "a" and key == it["ak"]:
-                return QRectF(self.x_of(it["start"]), y + 1, max(2.0, it["dur"] * self.pps), h - 2)
-        return None
+        self._geo()
+        y = self._ay.get(tuple(it["ak"]))
+        if y is None:
+            return None
+        return QRectF(self.x_of(it["start"]), y + 1, max(2.0, it["dur"] * self.pps), AH - 2)
 
     def hit(self, p):
+        t, slack = self.t_of(p.x()), 2.0 / self.pps      # only the clips under the mouse in time are looked at
         for it in reversed(self.m.items):
-            for r in (self.rect_of(it), self.audio_rect(it)):
-                if r is not None and r.contains(p):
-                    return it, r
+            if it["start"] - slack <= t <= it["start"] + it["dur"] + slack:
+                for r in (self.rect_of(it), self.audio_rect(it)):
+                    if r is not None and r.contains(p):
+                        return it, r
         return None, None
 
     def _range(self):
@@ -478,9 +517,15 @@ class TimelineView(QWidget):
         r = r.intersected(QRectF(HDR, 0, self.width() - HDR, self.height()))
         if r.width() <= 0:
             return
-        col = QColor(self.colours.get(it.get("label") or "", "#5b6f8f"))
+        lab = it.get("label") or ""
+        col = self._cols.get(lab)
+        if col is None:
+            col = self._cols[lab] = QColor(self.colours.get(lab, "#5b6f8f"))
         off = (not it.get("on", True)) or (it.get("v") in self.m.hidden if not audio else
                                             (it.get("ak") in self.m.muted or not it.get("aon", True)))
+        if r.width() < 4 and it["id"] not in self.sel:      # zoomed far out: a plain bar is all that can be seen
+            g.fillRect(r, QColor("#333") if off else (self._green if audio else col.darker(130)))
+            return
         if audio:
             base = QColor("#2f6e4f") if not off else QColor("#333")
             g.fillRect(r, base)
@@ -519,7 +564,17 @@ class TimelineView(QWidget):
             if img is None and self.thumb_reader is not None:
                 self.thumb_reader.want(it["path"], st)
             if img is not None:
-                g.drawImage(QRectF(x, inner.y(), tw, inner.height()), img)
+                sk = (key, int(tw), int(inner.height()))
+                pm = self.scaled.get(sk)
+                if pm is None:                  # scaled once, then only copied (drawImage scaled it every paint)
+                    if len(self.scaled) > 6000:
+                        self.scaled.clear()
+                    dpr = self.devicePixelRatioF()
+                    pm = QPixmap.fromImage(img.scaled(int(tw * dpr), int(inner.height() * dpr), Qt.IgnoreAspectRatio,
+                                                      Qt.SmoothTransformation))
+                    pm.setDevicePixelRatio(dpr)
+                    self.scaled[sk] = pm
+                g.drawPixmap(int(x), int(inner.y()), pm)
         g.restore()
 
     def got_thumb(self, key, img):

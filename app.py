@@ -50,7 +50,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v3.16.1"
+APP, VER = "MoneyMakingMachine", "v3.17.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -2167,6 +2167,28 @@ class SyncMap(QWidget):
             t += step
 
 
+class Awake:
+    """Keeps the Mac awake while a long job runs (overnight). Always reaped: no zombie process."""
+    def __init__(self):
+        self.p = None
+
+    def on(self):
+        if self.p is None and sys.platform == "darwin":
+            try:
+                self.p = subprocess.Popen(["caffeinate", "-i", "-w", str(os.getpid())])
+            except Exception:
+                self.p = None
+
+    def off(self):
+        if self.p is not None:
+            try:
+                self.p.terminate()
+                self.p.wait(timeout=3)
+            except Exception:
+                pass
+            self.p = None
+
+
 class MCWorker(QThread):
     """mode 'sync': read files, find the recorder, sync audio (fast).  mode 'analyze': video analysis for the auto edit."""
     progress = Signal(str, float)
@@ -2281,11 +2303,16 @@ class MulticamPage(QWidget):
         self.b_xml = btn("Import XML", slot=lambda: self.import_xml())
         self.b_xml.setToolTip("Use a timeline that is already synced in Syncaila, Premiere Pro or DaVinci Resolve (FCP7 XML).")
         self.b_auto = btn("Auto Edit", slot=self.run_auto)
-        self.b_run = btn("Sync", "primary", self.toggle_run)
+        self.b_run = btn("Sync", slot=self.toggle_run)
+        self.b_all = btn("Sync + Auto Edit", "primary", self.run_all)
+        self.b_all.setToolTip("Everything in one go (good overnight): Sync, then Auto Edit right after it. "
+                              "The Mac is kept awake until it ends.")
+        self._chain, self._awake = None, Awake()
         hh.addWidget(self.b_xml)
         hh.addWidget(self.b_exp)
-        hh.addWidget(self.b_auto)
         hh.addWidget(self.b_run)
+        hh.addWidget(self.b_auto)
+        hh.addWidget(self.b_all)
         v.addWidget(head)
         body = QHBoxLayout()
         body.setSpacing(0)
@@ -2749,10 +2776,15 @@ class MulticamPage(QWidget):
         busy = self._busy()
         mine = busy and self.p is getattr(self, "_job_p", None)
         mode = self.worker.mode if busy else ""
-        self.b_run.setText("Cancel" if mine and mode == "sync" else "Sync")
-        self.b_auto.setText("Cancel" if mine and mode == "analyze" else "Auto Edit")
-        self.b_run.setEnabled((not busy and bool(self.p["files"])) or (mine and mode == "sync"))
-        self.b_auto.setEnabled((not busy and bool(self.p.get("sync"))) or (mine and mode == "analyze"))
+        chained = mine and self._chain is self._job_p
+        self.b_all.setText("Cancel" if chained else "Sync + Auto Edit")
+        self.b_all.setEnabled((not busy and bool(self.p["files"])) or chained)
+        self.b_run.setText("Cancel" if mine and mode == "sync" and not chained else "Sync")
+        self.b_auto.setText("Cancel" if mine and mode == "analyze" and not chained else "Auto Edit")
+        self.b_run.setEnabled((not busy and bool(self.p["files"])) or (mine and mode == "sync" and not chained))
+        self.b_auto.setEnabled((not busy and bool(self.p.get("sync"))) or (mine and mode == "analyze" and not chained))
+        if not busy and self._chain is None:
+            self._awake.off()
         self.b_xml.setEnabled(not busy)
         if mine and mode == "xml":
             self.b_run.setText("Cancel")
@@ -2761,8 +2793,8 @@ class MulticamPage(QWidget):
         if busy and not mine:
             self.status.setText(f"Another job is running ({self._job_p['name']}). See Analysis Queue.")
 
-    def _start(self, worker, button):
-        self._job_p, self.job_status, self.job_progress = self.p, "Starting…", 0.0
+    def _start(self, worker, button, p=None):
+        self._job_p, self.job_status, self.job_progress = p or self.p, "Starting…", 0.0
         self.pp.start()
         self.worker = worker
         worker.progress.connect(self.on_progress)
@@ -2789,17 +2821,32 @@ class MulticamPage(QWidget):
         if f:
             self._start(MCWorker("xml", None, todo=f), self.b_run)
 
+    def run_all(self):
+        """Sync, then Auto Edit as soon as the sync ends: one press, nothing to wait for in between."""
+        if self._busy():
+            if self.p is self._job_p and self._chain is self._job_p:
+                self._chain = None
+                self.worker.cancel()
+            return
+        if not self.p["files"]:
+            return
+        self._chain = self.p
+        self._awake.on()
+        self._start(MCWorker("sync", list(self.p["files"]), jobs=self.store.app["jobs"]), self.b_all)
+
     def run_auto(self):
         if self._busy():
             if self.p is self._job_p:
                 self.worker.cancel()
             return
-        s = self.p.get("sync")
-        if not s:
-            return
-        todo = [x for c in self.p["cams"] if c["role"] != "Audio" and not c.get("approx") and not c.get("check") for x in c["clips"]]
-        self._start(MCWorker("analyze", None, self.store.load_blob(self.p["id"]), todo, self.store.app["jobs"],
-                             masters=s["masters"]), self.b_auto)
+        if self.p.get("sync"):
+            self._auto_for(self.p)
+
+    def _auto_for(self, p):
+        s = p.get("sync")
+        todo = [x for c in p["cams"] if c["role"] != "Audio" and not c.get("approx") and not c.get("check") for x in c["clips"]]
+        self._start(MCWorker("analyze", None, self.store.load_blob(p["id"]), todo, self.store.app["jobs"],
+                             masters=s["masters"]), self.b_auto, p)
 
     def on_progress(self, text, f):
         self.job_status, self.job_progress = text, f
@@ -2814,6 +2861,7 @@ class MulticamPage(QWidget):
 
     def on_failed(self, msg):
         logging.error("multicam job stopped: %s", msg)
+        self._chain = None
         self._finish()
         if self.p is self._job_p:
             self.status.setText("Stopped: " + msg)
@@ -2849,6 +2897,19 @@ class MulticamPage(QWidget):
                     c["role"] = director.detect_role(have) if all(h is not None for h in have) else "Handheld"
             p["cams"] = cams
             ok = sum(1 for x in r["results"].values() if x["conf"] != "fail")
+            if self._chain is p:              # Sync + Auto Edit: the auto edit starts right away
+                self.job_status, self.job_progress = "Done", 1.0
+                self.store.save()
+                if self.worker:
+                    self.worker.wait(5000)
+                notify(f"Sync finished: {ok} of {len(r['results'])} clips synced")
+                if here:
+                    self.refresh_files()
+                    self.recompute()
+                if any(c["role"] != "Audio" and not c.get("approx") and not c.get("check") for c in p["cams"]):
+                    self._auto_for(p)
+                    return
+                self._chain = None
             msg = ((r.get("report") or "") + "\n" +f"Sync finished: {ok} of {len(r['results'])} clips synced. You can export now, "
                                 f"or press Auto Edit to let the program build the edit (this analyses the video and takes longer).")
             if here:
@@ -2870,6 +2931,7 @@ class MulticamPage(QWidget):
             if here:
                 self.status.setText("Auto edit ready. Tweak it on the right, then Export XML.")
             notify(f"Auto edit ready: {p['name']}")
+            self._chain = None
         self.job_status, self.job_progress = "Done", 1.0
         self._finish()
         self.store.save()
@@ -7352,10 +7414,14 @@ class LongFilm2Page(QWidget):
         self.worker = _LF2Worker(p["footage"], p.get("vornic", True), dict(getattr(self, "_cache", {}) or {}),
                                  self.store.app.get("jobs", 2), str(self.store.dir))
         self._job_p = p
+        if not hasattr(self, "_awake"):
+            self._awake = Awake()
+        self._awake.on()                       # a Build can take hours: the Mac stays awake
         self.worker.progress.connect(self.pp.set)
         self.worker.done.connect(self._done)
         self.worker.failed.connect(self._failed)
         self.worker.finished.connect(self._buttons)
+        self.worker.finished.connect(self._awake.off)
         self.worker.start()
         self._buttons()
 
