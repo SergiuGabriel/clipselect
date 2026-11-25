@@ -28,12 +28,22 @@ CHURCH_GAP = 15 * 60         # long clips of the ceremony follow each other with
 TAIL = 10 * 60               # short clips up to 10 min after the ceremony still belong to the church
 HEAD = 5 * 60                # and up to 5 min before it (the entrance)
 AFTER_BREAK = 40 * 60        # couple + venue last until the first break of 40 min after the church
+CV_MAX = 2 * 3600            # ... and never more than 2 h after it (a friend filmed without breaks: 5 h of "couple")
+COUPLE_LOOK = 3600           # no getting ready filmed: the couple = the faces seen most in the church + the hour after
 SAME = 0.363                 # faces.SAME
 DRONE_RE = re.compile(r"(?i)(drona|drone|mavic|dji|avata|mini ?\d|air ?\d)")
 
 
+GIMBAL_RE = re.compile(r"(?i)(osmo|pocket|action|gopro|insta ?360|ronin)")
+
+
 def is_drone(path):
+    """A drone clip: a drone folder (drona, mavic, dji...) or a DJI_ file name, but NEVER a gimbal / action camera
+    folder (OSMO, Pocket, Action, GoPro): DJI's Osmo cameras name their files DJI_... too (his friend's OSMO went to
+    the drone part)."""
     p = Path(path)
+    if any(GIMBAL_RE.search(x) for x in (p.parent.name, p.parent.parent.name)):
+        return False
     return bool(DRONE_RE.search(p.parent.name) or p.name.upper().startswith("DJI_"))
 
 
@@ -123,6 +133,14 @@ def classify(clips, faces):
         bride = top_person([k for s in morning[1:] for k in s], faces, exclude=groom)
     elif morning:
         bride = top_person(morning[0], faces, exclude=groom)
+    if groom is None and ci < len(sc) and sc[ci]:          # no getting ready: the couple from the church + the hour after
+        c_end = max(clips[k]["t0"] + clips[k]["dur"] for k in sc[ci])
+        look = [k for x in sc[ci + 1:] for k in x if clips[k]["t0"] <= c_end + COUPLE_LOOK]
+        if sum(1 for k in look if faces.get(k)) < 6:     # the couple session is thin: the church too (priest risk)
+            look = list(sc[ci]) + look
+        groom = top_person(look, faces)
+        bride = top_person(look, faces, exclude=groom) if groom is not None else None
+        info["couple_from"] = "church"
     info.update(groom=groom is not None, bride=bride is not None)
     # morning: groom / bride by face, else by the scene (first = groom), long clips = vornic, both together = first look
     for si, s in enumerate(morning):
@@ -149,9 +167,18 @@ def classify(clips, faces):
     after = [x for x in sc[ci + 1:] if x]
     end = info.get("church", (clips[keys[0]]["t0"] if keys else 0, 0))[1]
     in_cv, cv_seen = True, False
+    cv_end = end + CV_MAX
+    split = []
+    for s in after:                         # a scene running past the 2 h limit is split there
+        a_ = [k for k in s if clips[k]["t0"] < cv_end]
+        b_ = [k for k in s if clips[k]["t0"] >= cv_end]
+        split += [x for x in (a_, b_) if x]
+    after = split
     for s in after:
         start = clips[s[0]]["t0"]
         if in_cv and cv_seen and start - end >= AFTER_BREAK:   # the first scene after the church is always couple/venue
+            in_cv = False
+        if start >= cv_end:
             in_cv = False
         cv_seen = True
         if in_cv:

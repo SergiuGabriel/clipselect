@@ -348,9 +348,18 @@ def party_inputs(pieces, recorder, infos):
         masters = sorted(r["path"] for r in rec if (r.get("group") or Path(r["path"]).parent.name) == main)
         extras = sorted(r["path"] for r in rec if r["path"] not in masters)
     if not masters:
-        snd = [f for f in files if (infos.get(f) or {}).get("ach")]
+        # no recorder: the camera that filmed the most of the party (with sound) is the reference, ALL its clips laid on
+        # its own clock (one camera never films two things at once). Before, only its longest clip was the master and
+        # every clip not overlapping it was left out (his friend's R&A: no multicam at all).
+        snd = [p for p in party if (infos.get(p["path"]) or {}).get("ach")]
         if snd:
-            masters = [max(snd, key=lambda f: infos[f]["dur"])]
+            tot = {}
+            for p in snd:
+                tot[p["cam"]] = tot.get(p["cam"], 0.0) + ((infos.get(p["path"]) or {}).get("dur") or 0.0)
+            main = max(tot, key=lambda c: (tot[c], -c))
+            mf = sorted({p["path"] for p in snd if p["cam"] == main},
+                        key=lambda f: ((infos.get(f) or {}).get("ctime") or (infos.get(f) or {}).get("mtime") or 0.0, f))
+            masters = mf
     return party, files, masters, extras
 
 
@@ -735,7 +744,7 @@ def auto_moments(L, pieces, recorder, infos, prog, cancel, jobs, model_dir):
     shift, synced = {c: 0.0 for c in cams}, None
     tmp = [dict(p, kind="party") for p in pieces]
     _party, files, masters, extras = party_inputs(tmp, recorder, infos)
-    if masters and recorder:
+    if masters:                             # the recorder, else the camera that filmed the most (no recorder)
         clips = [f for f in files if f not in masters and (infos.get(f) or {}).get("ach")]
         clocks = {}
         for f in clips + masters + extras:
@@ -748,6 +757,10 @@ def auto_moments(L, pieces, recorder, infos, prog, cancel, jobs, model_dir):
         try:
             info, res = sync.run_sync(masters, clips + extras, prog("auto_sync"), cancel,
                                       clocks=clocks, groups=camk, jobs=jobs)
+            for i, f in enumerate(masters):         # a camera used as the reference is placed by itself
+                if f not in res:
+                    res[f] = dict(conf="high", master=i, offset=0.0, dur=(infos.get(f) or {}).get("dur") or 0.0,
+                                  drift_ppm=0.0)
             synced = (info, res)
             starts = sync.master_starts(info)
             d = {}
@@ -1141,9 +1154,10 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
                                       clocks=clocks, groups=camk, jobs=jobs)
         if L["layout"] == "timecode" and not no_rec:
             timeline_fill(party, recorder, info, res, infos)   # clips the sound could not place keep their timeline place
+        mpaths = [m.get("path") for m in info]
         for f in pfiles:
-            if f in masters:                # the longest party clip itself is the master
-                res[f] = dict(conf="high", master=masters.index(f), offset=0.0, dur=infos[f]["dur"], drift_ppm=0.0)
+            if f in mpaths:                 # a party clip used as the reference (no recorder) is placed by itself
+                res[f] = dict(conf="high", master=mpaths.index(f), offset=0.0, dur=infos[f]["dur"], drift_ppm=0.0)
         for i, m in enumerate(info):
             chk()
             if not m.get("path"):

@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.1.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.1.1), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -1038,6 +1038,23 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   MasterIndex of the whole files); joined only with conf high and an overlap >= min(5 s, half the clip). Stage
   "auto_fl". Synthetic test: the right clip 8 min off by the clock joined, a clip 10 s away by the clock with other
   sound rejected.
+
+## v4.1.1 (his friend's R&A export of v4.0.0: DaVinci user, filmed differently)
+- Measured on the friend's "R&A - Long Film v2 (DaVinci).xml" (automatic mode, no recorder, cameras RAZ / ROX RS-MAIN /
+  RX-MAIN 4K50 + OSMO): 6 h 25 min sequence, church 27 min, "couple" 1608 cuts = 5 h, venue 15 min, "drone" 43 min = the
+  OSMO, NO party at all. Causes: no getting ready -> no groom / bride faces -> any face = Purple; he filmed without a 40-min
+  break -> the whole evening stayed "after the church"; daymap.is_drone took DJI_ names in the OSMO folder for the drone.
+  Fixes: is_drone never for OSMO / Pocket / Action / GoPro / Insta360 / Ronin folders (GIMBAL_RE); couple / venue window
+  = until the first 40-min break AND at most CV_MAX 2 h after the church (scenes split there); no getting ready -> the
+  couple = top faces of the hour after the church (COUPLE_LOOK), plus the church when < 6 clips with faces there.
+  tools/daymap_check scenario 2 (no getting ready, no breaks, OSMO): 82/82; the old daymap fails it.
+- No recorder (any layout but a synced timeline): party_inputs uses ALL party clips of the camera with the most party
+  sound as masters (sorted by its clock), not only its longest clip; auto_moments syncs to them too (clock shifts without
+  a recorder); masters placed by themselves (mpaths). Synthetic test: two clips of camera B, each under a different clip
+  of camera A, both synced (before, one was lost).
+- The crash: his XML imports WITHOUT a crash in the owner's DaVinci Resolve Studio 20 (media offline, 2035 clips,
+  6:25:31); structure checked (links, overlaps, durations, file ends, ids): clean. Not reproduced; asked for the friend's
+  Resolve version and whether the disk was connected.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

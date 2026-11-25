@@ -58,3 +58,27 @@ for b in bad:
 assert info["groom"] and info["bride"], "groom / bride not found"
 assert ok >= 0.95 * len(clips), "the day map got worse"
 print("daymap check OK")
+
+# 2. his friend's style (R&A, v4.0.0 gave 5 h of "couple" and the Osmo as drone): no getting ready, the church, the couple
+# session, the venue, then the party filmed WITHOUT any break of 40 min until the night; an OSMO folder with DJI_ files
+clips, faces, want = {}, {}, {}
+for i, d in enumerate([300, 600, 400, 200]):          # 14:00 church
+    add(840 + i * 6, d, "Brown", ("o",))
+for i in range(10):                                    # 15:00 couple session
+    add(900 + i * 3, 12, "Purple", ("g", "b") if i % 2 else ("b",))
+for i in range(5):                                     # 15:40 venue, no faces
+    add(940 + i, 6, "Yellow")
+for i in range(60):                                    # 16:00 -> 22:00 party, a clip every 6 min, guests
+    add(960 + i * 6, 40, "Iris", ("o", "o"), cam="fx3" if i % 2 else "fx6")
+for i in range(3):                                     # Osmo filming the party: DJI_ names in an OSMO folder
+    add(1000 + i * 60, 500, "Iris", ("o",), path=f"/w/OSMO/DJI_20260718{16 + i:02d}0000_000{i}_D.MP4")
+lab, info = daymap.classify(clips, faces)
+ok = sum(lab[k] == want[k] for k in clips)
+bad = [(k, want[k], lab[k]) for k in clips if lab[k] != want[k]]
+print(f"daymap (no getting ready, no breaks): {ok} of {len(clips)} right · {info}")
+for b in bad:
+    print("  wrong:", b)
+assert not any(lab[k] == "Violet" for k in clips if "/OSMO/" in k), "an Osmo clip went to the drone"
+assert sum(lab[k] == "Purple" for k in clips) <= 12, "the party became couple shots"
+assert ok >= 0.9 * len(clips), "the day map without getting ready got worse"
+print("daymap check 2 OK")

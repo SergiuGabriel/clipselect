@@ -621,11 +621,17 @@ scenă a zilei (mirele e filmat primul), mireasa = fața din cele mai multe clip
 altul), plus clipurile scurte până la 5 minute înainte și 10 minute după.</li>
 <li><b>Înainte de biserică</b>: mirele (fața lui, altfel prima scenă), mireasa (fața ei, altfel scenele următoare), amândoi în cadru =
 first look, clipurile lungi de dimineață (150 s+) = vornicul.</li>
-<li><b>După biserică</b> (prima scenă, apoi până la o pauză de 40+ minute): clipurile fără nicio față = <b>sala</b> (la Alex și
+<li><b>După biserică</b> (prima scenă, apoi până la o pauză de 40+ minute, dar cel mult 2 ore după biserică): clipurile fără nicio față = <b>sala</b> (la Alex și
 Andreea 14 din 14), cele în care se vede mirele sau mireasa = <b>cuplul</b>; cele doar cu invitați (felicitări, sosirea la sală)
 merg la petrecere.</li>
 <li><b>Restul = petrecerea</b>; o scenă din petrecere cu mirii în cel puțin 40 % din clipuri, clipuri scurte (sub 40 s), 4 sau mai
-multe = cuplu (ședința de la apus). Drona = folderele / fișierele de dronă (DJI, mavic, drona).</li>
+multe = cuplu (ședința de la apus). Drona = folderele / fișierele de dronă (DJI, mavic, drona); un folder OSMO / Pocket /
+Action / GoPro nu e niciodată dronă, chiar dacă fișierele se numesc DJI_….</li>
+<li><b>Fără pregătiri filmate</b> (filmarea începe la biserică): mirii sunt fețele văzute cel mai des în ora de după biserică
+(ședința foto), iar dacă acolo sunt prea puține fețe, și în biserică.</li>
+<li><b>Fără recorder</b>: camera care a filmat cel mai mult din petrecere (cu sunet) e referința, cu <b>toate</b> clipurile ei
+puse pe ceasul ei; celelalte camere se sincronizează după sunet pe ea. Înainte se lua doar cel mai lung clip al ei și tot ce nu
+se suprapunea cu el rămânea pe dinafară.</li>
 </ul>
 <p><b>Un XML deja sincronizat</b> (Syncaila, sincronizare Premiere / DaVinci, Create Project pe timecode): locurile din timeline
 sunt ceasul comun. Fără recorder, petrecerea folosește <b>toate camerele</b> pe locurile lor din timeline (înainte se folosea doar
@@ -1452,11 +1458,17 @@ scene (the groom is filmed first), the bride = the face in the most clips of the
 the short clips up to 5 minutes before and 10 minutes after.</li>
 <li><b>Before the church</b>: the groom (his face, else the first scene), the bride (her face, else the following scenes), both in the
 frame = first look, long morning clips (150 s+) = the vornic.</li>
-<li><b>After the church</b> (its first scene, then until a break of 40+ minutes): clips without any face = <b>the venue</b> (14 of 14
+<li><b>After the church</b> (its first scene, then until a break of 40+ minutes, but at most 2 hours after the church): clips without any face = <b>the venue</b> (14 of 14
 at Alex & Andreea), clips where the groom or the bride is seen = <b>the couple</b>; clips with guests only (congratulations,
 arriving at the venue) go to the party.</li>
 <li><b>The rest = the party</b>; a party scene with the couple in at least 40 % of the clips, short clips (under 40 s), 4 or more =
-couple (the sunset session). Drone = drone folders / files (DJI, mavic, drona).</li>
+couple (the sunset session). Drone = drone folders / files (DJI, mavic, drona); an OSMO / Pocket / Action / GoPro folder is
+never the drone, even when its files are named DJI_….</li>
+<li><b>No getting ready filmed</b> (the footage starts at the church): the couple are the faces seen most in the hour after the
+church (the photo session), and in the church too when there are too few faces there.</li>
+<li><b>No recorder</b>: the camera that filmed most of the party (with sound) is the reference, with <b>all</b> its clips laid
+on its own clock; the other cameras are synced by sound to it. Before, only its longest clip was used and everything not
+overlapping it was left out.</li>
 </ul>
 <p><b>An already synced XML</b> (Syncaila, Premiere / DaVinci sync, Create Project on timecode): the places on the timeline are the
 common clock. Without a recorder the party uses <b>every camera</b> at its place on the timeline (before, only the longest clip was
