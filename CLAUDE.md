@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.1.1), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.2.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -63,6 +63,7 @@ linking to https://www.instagram.com/sergiugabrielcg/.
 - `longfilm2.py` — Long Film v2 (BETA): the long film from the labelled Create Project sequence (load, selection,
   priest, first look, vornic, party multicam, 1920x1080 25 fps export) or from the wedding folder (automatic).
 - `daymap.py` — the moments of the day without labels (scenes, church, faces of groom / bride, venue / couple, party).
+- `scenes.py` — what every clip shows, judged by SigLIP 2 (church, drone, speech...), for the automatic mode.
 - `resolve.py` — the DaVinci Resolve version of any exported xmeml (no Basic Motion, no Lumetri, project -> sequence).
 - `editor.py` — the Premiere-like editor of Long Film v2 (monitor, V / A tracks, overwrite, razor, trim, undo).
 - `colour.py` — his LUT(s) as Lumetri + 10 % crop on every clip (assets/ = his Lumetri template).
@@ -1055,6 +1056,44 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 - The crash: his XML imports WITHOUT a crash in the owner's DaVinci Resolve Studio 20 (media offline, 2035 clips,
   6:25:31); structure checked (links, overlaps, durations, file ends, ids): clean. Not reproduced; asked for the friend's
   Resolve version and whether the disk was connected.
+
+## v4.2.0 (owner: "everything at once": Premiere | DaVinci switch, AI for the moments, the vornic, no friend-specific rules)
+- The v4.1.1 diagnosis of R&A was WRONG: the friend HAD filmed getting ready; daymap took the getting ready for the church
+  (first cluster of long clips: two long morning takes). Removed: CV_MAX (2 h cap) and "couple from the church". The
+  v4.1.0 guest rule (faces without a groom / bride match -> Iris) cost 6 of HIS couple clips (face match misses small /
+  profile faces): without AI the cv window is v4.0.0 again (faces -> Purple); with AI only clips the AI sees as party -> Iris.
+- scenes.py: SigLIP 2 (the AI test model, ai.ensure_model / ai.Siglip) judges 3 frames per clip (20/50/80 %, ungrade):
+  ready / church / couple / venue / party / drone / speech (+ unclear). longfilm2.scene_judgements (cache key
+  scenes.cache_key in the project's analysis cache, stage "auto_ai"); {} when the model cannot load -> old rules.
+  daymap.classify(clips, faces, ai, speech): church = daymap._church_by_ai (runs of church clips, <= 3 others inside,
+  earliest run with >= 50 % of the biggest run's time, trimmed to SURE church clips >= AI_SURE 0.9; no HEAD expansion);
+  drone: a DJI_ file outside a drone folder only when AI drone >= 0.35 / top (drone folders always, gimbal folders never);
+  cv window also ends when 4 of 6 clips in a row are AI party; sunset-couple rule skips AI party clips.
+  Measured on HIS Alex & Andreea with a CLIP ViT-B/32 stand-in (tidy app's quantized ONNX, /home/claude/aitest: proxy.py,
+  emb.json of his th640 thumbnails, real.py / real2.py / cmp.py): fx6 v4.0.0 130/146 -> no AI 130 -> AI 132; fx6+fx3
+  149 -> 154/188 with AI + sound; church: 0 misses. SigLIP 2 itself NOT runnable here (HF blocked in both sandboxes).
+- Vornic (daymap._vornic, only when the sound is measured): a continuous take >= VORNIC_TAKE 120 s with speech share
+  >= SPEECH_FRAC 0.8 (music.py regions, speech = not music / silence) that another camera films too (a take of 120 s
+  overlapping >= 60 s), or other-camera clips >= 30 s inside it when the AI sees a speech. MEASURED on his footage (device
+  shell on albastru, Documents/_mmm_analiza/code/speech_aa.json): speech share alone is useless (every talking clip ~1.0),
+  his 4 Forest clips = 2 simultaneous fx6+fx3 pairs of 3-5 min -> 4/4 (+ the 11:30 pair he labelled Iris); the lone
+  4-min getting-ready take 63181 is no longer the vornic. longfilm2.speech_shares on the morning clips (stage
+  "auto_speech", second classify pass); join_by_sound(kind, label, cand_kinds) = join_firstlook generalised, also for
+  the vornic. tools/daymap_check: his day (no AI = v4.0.0), with AI + sound, church in short clips, R&A style.
+- DaVinci: TargetSwitch top right ("I work in: Premiere Pro | DaVinci Resolve", store.app["target"], set_target /
+  target() / on_target listeners); ExportPair = ONE button "Export XML → Premiere / → DaVinci" calling slot(target());
+  Footage results follow the switch (its own buttons disabled); Create Project / Transcribe write the DaVinci copy when
+  target() == "davinci" (davinci_tick is now an info line); Open in Premiere Pro hidden on DaVinci.
+  resolve.rewrite = the DaVinci file written FROM SCRATCH like Resolve's own FCP7 export (reference exported from his
+  Resolve Studio 20, /home/claude/dv/ref.xml): sequence only, clipitem ids "<file> <n>", file <timecode> = the camera's
+  real timecode (resolve.file_tc via ffmpeg), plain mono audio tracks (sourcetrack = channel), links re-indexed, labels,
+  markers; no exploded tracks / premiere attributes / ppro* / filters / bins / generator items. resolve.make uses it.
+  KEY FINDING (his Mac, Resolve 20): his own Premiere XML imported into Resolve went OFFLINE ("no overlap between target
+  timecodes 00:00:00:00 and file timecodes 23:08:00:36"); the rewrite with file timecodes came in ONLINE (church selects
+  414 clips, and v4.0.0 long 2 = 4645 clips with party + recorder). The friends' Resolve 21.2 crash is not reproduced;
+  most likely the Premiere-shaped file / timecode mismatch. tools/resolve_check tests the rewrite.
+- longfilm2._write: overlapping pieces on one video track are trimmed / dropped (his v4.0.0 export had 3 overlapping
+  C2048 pieces on the a74 track; Resolve logged "Trimming item ... overlaps").
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

@@ -752,3 +752,31 @@ EXACT.update({
 TEMPLATES.update({
     "Checking the first look on the other cameras: {} of {}": "Verific first look-ul pe celelalte camere: {} din {}",
 })
+
+# v4.2.0
+EXACT.update({
+    "I work in": "Lucrez în",
+    "Every Export XML is written for this program. DaVinci Resolve gets its own file, written the way Resolve writes it "
+    "(no Premiere effects, the cameras' timecode), checked from end to end.":
+        "Fiecare Export XML se scrie pentru acest program. DaVinci Resolve primește fișierul lui, scris cum îl scrie "
+        "Resolve însuși (fără efecte Premiere, cu timecode-ul camerelor), verificat de la un capăt la altul.",
+    "Export XML → DaVinci": "Export XML → DaVinci",
+    "Export XML → Premiere": "Export XML → Premiere",
+    "XML made for DaVinci Resolve (File > Import > Timeline). Change the program top right.":
+        "XML făcut pentru DaVinci Resolve (File > Import > Timeline). Programul se schimbă din dreapta sus.",
+    "XML for Premiere Pro (File > Import). Change the program top right.":
+        "XML pentru Premiere Pro (File > Import). Programul se schimbă din dreapta sus.",
+    "You work in DaVinci Resolve (top right): the XML is written for DaVinci Resolve.":
+        "Lucrezi în DaVinci Resolve (dreapta sus): XML-ul se scrie pentru DaVinci Resolve.",
+    "You work in Premiere Pro (top right): the XML is written for Premiere Pro.":
+        "Lucrezi în Premiere Pro (dreapta sus): XML-ul se scrie pentru Premiere Pro.",
+    "Change the program top right (I work in: Premiere Pro | DaVinci Resolve).":
+        "Programul se schimbă din dreapta sus (Lucrez în: Premiere Pro | DaVinci Resolve).",
+})
+TEMPLATES.update({
+    "Exports are now written for {}": "Exporturile se scriu acum pentru {}",
+    "The AI is looking at every clip: {} of {}": "AI-ul se uită la fiecare clip: {} din {}",
+    "Listening to the morning clips (vornic): {} of {}": "Ascult clipurile de dimineață (vornic): {} din {}",
+    "Checking the vornic on the other cameras: {} of {}": "Verific vornicul pe celelalte camere: {} din {}",
+    "Writing the clips for DaVinci: {} of {}": "Scriu clipurile pentru DaVinci: {} din {}",
+})

@@ -51,7 +51,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v4.1.1"
+APP, VER = "MoneyMakingMachine", "v4.2.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -186,20 +186,82 @@ def btn(text, obj="", slot=None):
     return b
 
 
+TARGET = {"v": "premiere"}           # the program he works in (top-right switch, store.app["target"])
+_TARGET_LISTENERS = []
+
+
+def target():
+    return TARGET["v"]
+
+
+def on_target(fn):
+    """fn(target) is called whenever the Premiere | DaVinci switch changes (and once now)."""
+    _TARGET_LISTENERS.append(fn)
+    try:
+        fn(TARGET["v"])
+    except RuntimeError:
+        pass
+
+
+def set_target(t):
+    TARGET["v"] = "davinci" if t == "davinci" else "premiere"
+    for fn in list(_TARGET_LISTENERS):
+        try:
+            fn(TARGET["v"])
+        except RuntimeError:                # a widget that is gone
+            _TARGET_LISTENERS.remove(fn)
+
+
+class TargetSwitch(QWidget):
+    """Top right of the window: Premiere Pro | DaVinci Resolve. Every export writes the XML for the program chosen here
+    (remembered for the next start)."""
+    def __init__(self, store):
+        super().__init__()
+        self.store = store
+        h = QHBoxLayout(self)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(0)
+        h.addWidget(lbl("I work in", "muted"))
+        h.addSpacing(8)
+        self.b = {"premiere": btn("Premiere Pro", "seg", lambda: self.pick("premiere")),
+                  "davinci": btn("DaVinci Resolve", "seg", lambda: self.pick("davinci"))}
+        for b in self.b.values():
+            h.addWidget(b)
+        self.setToolTip("Every Export XML is written for this program. DaVinci Resolve gets its own file, written the "
+                        "way Resolve writes it (no Premiere effects, the cameras' timecode), checked from end to end.")
+        on_target(self._show)
+
+    def pick(self, t):
+        if t == target():
+            return
+        self.store.app["target"] = t
+        self.store.save_app()
+        set_target(t)
+        notify(i18n.T("Exports are now written for {}").format("DaVinci Resolve" if t == "davinci" else "Premiere Pro"))
+
+    def _show(self, t):
+        for k, b in self.b.items():
+            b.setProperty("active", k == t)
+            repolish(b)
+
+
 class ExportPair(QWidget):
-    """Two buttons: the XML for Premiere Pro and the XML for DaVinci Resolve (resolve.py). slot(target)."""
+    """ONE Export XML button: the XML for the program of the top-right switch (Premiere Pro or DaVinci Resolve).
+    slot(target). (Two buttons until v4.1.1; the name stayed.)"""
     def __init__(self, slot, primary=False):
         super().__init__()
         h = QHBoxLayout(self)
         h.setContentsMargins(0, 0, 0, 0)
         h.setSpacing(6)
-        self.pr = btn("Export → Premiere", "primary" if primary else "", lambda: slot("premiere"))
-        self.dv = btn("Export → DaVinci", slot=lambda: slot("davinci"))
-        self.pr.setToolTip("XML for Premiere Pro (File > Import).")
-        self.dv.setToolTip("XML made for DaVinci Resolve (File > Import > Timeline): clips fitted by Resolve itself, no "
-                           "Premiere-only effects. Apply your LUT in Resolve's Color page.")
-        h.addWidget(self.pr)
-        h.addWidget(self.dv)
+        self.b = btn("Export XML", "primary" if primary else "", lambda: slot(target()))
+        h.addWidget(self.b)
+        on_target(self._show)
+
+    def _show(self, t):
+        self.b.setText(i18n.T("Export XML → DaVinci") if t == "davinci" else i18n.T("Export XML → Premiere"))
+        self.b.setToolTip(i18n.T("XML made for DaVinci Resolve (File > Import > Timeline). Change the program top right.")
+                          if t == "davinci" else
+                          i18n.T("XML for Premiere Pro (File > Import). Change the program top right."))
 
 
 def only_note(text):
@@ -211,11 +273,17 @@ def only_note(text):
 
 
 def davinci_tick(store, cfg):
-    """'Also for DaVinci Resolve' (off by default: Premiere stays as fast as before)."""
-    cb = QCheckBox("Also for DaVinci Resolve (a second XML, checked from end to end: takes a little longer)")
-    cb.setChecked(bool(cfg.get("davinci")))
-    cb.toggled.connect(lambda on: (cfg.__setitem__("davinci", on), store.save_app()))
-    return cb
+    """(until v4.1.1 a tick 'Also for DaVinci Resolve'.) Now a line that follows the top-right switch."""
+    w = QLabel()
+    w.setWordWrap(True)
+    w.setStyleSheet(f"color:{C['HOT']};font-size:11px")
+
+    def show(t):
+        w.setText("ⓘ  " + (i18n.T("You work in DaVinci Resolve (top right): the XML is written for DaVinci Resolve.")
+                           if t == "davinci" else
+                           i18n.T("You work in Premiere Pro (top right): the XML is written for Premiere Pro.")))
+    on_target(show)
+    return w
 
 
 def for_target(out, target, src=None):
@@ -1958,6 +2026,11 @@ class ResultsPage(QWidget):
         sr.addWidget(self.b_pp)
         sr.addWidget(self.b_dr)
         rv.addLayout(sr)
+        for b in (self.b_pp, self.b_dr):        # v4.2.0: the program comes from the top-right switch
+            b.setEnabled(False)
+            b.setToolTip("Change the program top right (I work in: Premiere Pro | DaVinci Resolve).")
+        on_target(lambda t: self.set_sw("DaVinci Resolve" if t == "davinci" else "Premiere Pro")
+                  if hasattr(self, "next") else None)
         rv.addWidget(lbl("Sequence Settings", "muted"))
         self.c_size, self.c_rate, self.c_fields = QComboBox(), QComboBox(), QComboBox()
         self.c_size.addItems(SEQ_SIZES)
@@ -2026,7 +2099,7 @@ class ResultsPage(QWidget):
             f'<span style="color:{C["MUTED"]}">({cnt[l]} segment{'s' if cnt[l] != 1 else ''})</span>' for l in (2, 1, 0)))
         self.dir.setText(p["out_dir"] or str(Path(an[0].info.path).parent))
         self.name.setText(p["out_name"] or p["name"])
-        self.set_sw(p["out_sw"])
+        self.set_sw("DaVinci Resolve" if target() == "davinci" else "Premiere Pro")
         sq = {**SEQ_DEFAULT, **p.get("seq", {})}
         self.c_size.setCurrentText(sq["size"])
         self.c_rate.setCurrentText(sq["rate"])
@@ -5822,7 +5895,7 @@ class CreateProjectPage(QWidget):
         txt += self._davinci_copy(out)
         self.result.setText(txt)
         self.b_show.show()
-        self.b_open.setVisible(bool(_premiere_app()))
+        self.b_open.setVisible(bool(_premiere_app()) and target() == "premiere")
         notify(i18n.T("Project ready: {} clips in {} bins and the sequence \"{}\". Open it in Premiere Pro.").format(
             r["clips"], len(r["cameras"]) + sum(1 for _n, fs in sound_bins if fs), name))
         logging.info("create project %s: %s clips, %s unreadable", out, r["clips"], len(bad))
@@ -5865,14 +5938,14 @@ class CreateProjectPage(QWidget):
         txt += self._davinci_copy(out)
         self.result.setText(txt)
         self.b_show.show()
-        self.b_open.setVisible(bool(_premiere_app()))
+        self.b_open.setVisible(bool(_premiere_app()) and target() == "premiere")
         notify(i18n.T("Project ready: {} clips in {} bins and the sequence \"{}\", synced by timecode. Open it in Premiere Pro.")
                .format(r["clips"], nb, name))
         logging.info("create project timecode %s: %s clips", out, r["clips"])
 
     def _davinci_copy(self, out):
-        """Only when "Also for DaVinci Resolve" is ticked: the same project for Resolve next to it, made and checked."""
-        if not self.cfg.get("davinci"):
+        """Only when he works in DaVinci Resolve (top-right switch): the same timeline for Resolve, made and checked."""
+        if target() != "davinci":
             return ""
         dv = projectsetup.free_path(Path(resolve.name_for(str(out), "davinci")))
         QTimer.singleShot(0, lambda: for_target(str(dv), "davinci", src=str(out)))
@@ -7083,7 +7156,7 @@ class TranscribePage(QWidget):
             self._report(x_err, warnings, written=None)
             return
         os.replace(tmp, out)
-        if self.cfg.get("davinci"):            # only when asked: the same story for DaVinci Resolve, made and checked
+        if target() == "davinci":              # he works in DaVinci Resolve: the same story for Resolve, made and checked
             QTimer.singleShot(0, lambda o=str(out): for_target(resolve.name_for(o, "davinci"), "davinci", src=o))
         n_in = good = 0
         speech = []
@@ -8191,8 +8264,20 @@ class Main(QMainWindow):
         sv.addStretch()
         sv.addWidget(lbl("Local workspace", "muted"))
         h.addWidget(side)
+        set_target(self.store.app.get("target", "premiere"))
+        right = QWidget()
+        rv_ = QVBoxLayout(right)
+        rv_.setContentsMargins(0, 0, 0, 0)
+        rv_.setSpacing(0)
+        bar = QHBoxLayout()
+        bar.setContentsMargins(16, 8, 18, 0)
+        bar.addStretch()
+        self.target_sw = TargetSwitch(self.store)
+        bar.addWidget(self.target_sw)
+        rv_.addLayout(bar)
         self.stack = QStackedWidget()
-        h.addWidget(self.stack, 1)
+        rv_.addWidget(self.stack, 1)
+        h.addWidget(right, 1)
         self.setCentralWidget(central)
 
         self.dash, self.proj = Dashboard("footage"), ProjectPage(self.store)

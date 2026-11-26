@@ -560,6 +560,20 @@ def _write(ents, markers, infos, out_path, name, marker=lambda s: s, look=None):
         mx = int((i.get("dur") or 0) * sf)
         if mx and e["fin"] + (e["en"] - e["st"]) > mx:
             e["en"] = e["st"] + max(1, mx - e["fin"])
+    # one clip at a time on a video track: a piece that starts inside the previous one is trimmed to start where it ends
+    # (his v4.0.0 party had 3 overlapping C2048 pieces on the a74 track: DaVinci trims / refuses them)
+    for t in sorted({e["v"] for e in ents if e["v"]}):
+        end = None
+        for e in sorted((e for e in ents if e["v"] == t), key=lambda e: (e["st"], e["en"])):
+            if end is not None and e["st"] < end:
+                d = end - e["st"]
+                if d >= e["en"] - e["st"]:
+                    e["drop"] = True
+                    continue
+                e["st"] += d
+                e["fin"] += d
+            end = e["en"] if end is None else max(end, e["en"])
+    ents[:] = [e for e in ents if not e.get("drop")]
     # audio slots: cameras in their order, then the recorder; inside: stereo pairs first, then mono
     gr = lambda e: projectsetup.groups((infos.get(e["path"]) or {}).get("ach", 0))
     slots = sorted({(e["ak"], k, kind) for e in ents if e["ak"] for k, (kind, _c) in enumerate(gr(e))},
@@ -727,7 +741,7 @@ def own_clock(paths, infos):
     return {f: (infos.get(f) or {}).get("mtime", 0.0) - (infos.get(f) or {}).get("dur", 0.0) for f in paths}
 
 
-def auto_moments(L, pieces, recorder, infos, prog, cancel, jobs, model_dir):
+def auto_moments(L, pieces, recorder, infos, prog, cancel, jobs, model_dir, cache=None):
     """No colours in his sequence: 1. every clip with sound is synced to the recorder (like Multicam) -> every camera's
     clock error; 2. the faces of 5 frames of every clip; 3. daymap.classify -> colours. Sets p["label"] / p["kind"] /
     p["t"] (common clock). Returns (info for the page, (masters info, sync results) or None)."""
@@ -801,10 +815,18 @@ def auto_moments(L, pieces, recorder, infos, prog, cancel, jobs, model_dir):
                     except Exception:
                         pass
         fz[key_of(p)] = feats
-    # 3. the moments
+    # 3. what every clip shows, seen by the AI (church, drone, a speech...): style-free, the same model as the AI test
+    sc_ai = scene_judgements(pieces, model_dir, cache, prog("auto_ai"), cancel)
+    # 4. the moments: a first map gives the morning, the speech of the morning clips is measured (vornic), then the map
     clips = {key_of(p): dict(t0=own[p["path"]] + shift[p["cam"]] + p["a"], dur=p["b"] - p["a"], path=p["path"])
              for p in pieces}
-    lab, info = daymap.classify(clips, fz)
+    lab, info = daymap.classify(clips, fz, sc_ai)
+    church0 = info.get("church", (float("inf"), 0))[0]
+    morning = [p for p in pieces if clips[key_of(p)]["t0"] < church0 and lab.get(key_of(p)) != "Violet"]
+    speech = speech_shares(morning, infos, prog("auto_speech"), cancel)
+    if speech:
+        lab, info = daymap.classify(clips, fz, sc_ai, speech)
+    info["ai"] = bool(sc_ai)
     still = static_cams(pieces, infos)
     if still >= set(cams):                  # every camera films long takes: none of them is "the tripod one"
         still = set()
@@ -824,7 +846,68 @@ def auto_moments(L, pieces, recorder, infos, prog, cancel, jobs, model_dir):
     # the first look: another camera's clip joins it only when its SOUND is the same moment (the clock alone took a
     # clip of the bride with her friends on the fx3, filmed a few minutes earlier)
     info["firstlook_joined"] = join_firstlook(pieces, still, prog("auto_fl"), cancel)
+    # the vornic the same way: the other cameras' morning clips of that moment, checked by the sound
+    info["vornic_joined"] = join_by_sound(pieces, still, "vornic", "Forest", ("groom", "bride"), prog("auto_fl"), cancel)
     return info, synced
+
+
+def scene_judgements(pieces, model_dir, cache, progress=None, cancel=None):
+    """{piece key: scene probabilities} from scenes.py (SigLIP 2), cached per clip in the project's analysis cache.
+    {} when the model cannot be loaded / downloaded (the old rules then work alone)."""
+    if not model_dir:
+        return {}
+    import scenes
+    cache = cache if cache is not None else {}
+    out, todo = {}, []
+    for p in pieces:
+        ck = scenes.cache_key(p["path"], p["a"], p["b"], stamp(p["path"]))
+        if (cache.get(ck) or {}).get("scene"):
+            out[key_of(p)] = cache[ck]["scene"]
+        elif p.get("w"):
+            todo.append((p, ck))
+    if not todo:
+        return out
+    try:
+        judge = scenes.Judge(scenes.load(model_dir, progress, cancel))
+    except InterruptedError:
+        raise
+    except Exception:
+        return out
+    for k, (p, ck) in enumerate(todo):
+        if cancel and cancel():
+            raise InterruptedError("Cancelled")
+        if progress:
+            progress(f"The AI is looking at every clip: {k + 1} of {len(todo)}", (k + 1) / len(todo))
+        try:
+            sc = judge.clip(p["path"], p["a"], p["b"])
+        except Exception:
+            sc = None
+        if sc:
+            out[key_of(p)] = sc
+            cache[ck] = dict(scene=sc)
+    return out
+
+
+def speech_shares(pieces, infos, progress=None, cancel=None):
+    """{piece key: share of the clip that is speech without music} for clips with sound (music.py regions)."""
+    import music
+    out = {}
+    ps = [p for p in pieces if (infos.get(p["path"]) or {}).get("ach") and p["b"] - p["a"] >= 4]
+    pcm = {}
+    for k, p in enumerate(ps):
+        if cancel and cancel():
+            raise InterruptedError("Cancelled")
+        if progress:
+            progress(f"Listening to the morning clips (vornic): {k + 1} of {len(ps)}", (k + 1) / max(1, len(ps)))
+        try:
+            if p["path"] not in pcm:
+                pcm = {p["path"]: sync.audio_pcm(p["path"])}
+            x = pcm[p["path"]][int(p["a"] * sync.SR):int(p["b"] * sync.SR)]
+            m = music.analyze(x)
+            out[key_of(p)] = sum(r[1] - r[0] for r in m["regions"] if r[2] == "speech") / max(1e-6, p["b"] - p["a"])
+        except Exception:
+            pass
+    return out
 
 
 def use_timeline(L, pieces, recorder):
@@ -840,10 +923,14 @@ FL_WINDOW = 30 * 60     # other cameras' clips up to 30 min (by the clock) aroun
 
 
 def join_firstlook(pieces, still, progress=None, cancel=None):
-    """Automatic mode: the first look found by the faces (groom + bride together) is mostly on one camera. Every
-    other camera's clip of the morning near it by the clock is synced by SOUND to it; a sure match (conf high,
-    overlapping the first look by >= min(5 s, half the clip)) joins the first look. Returns the number joined."""
-    fl = [p for p in pieces if p["kind"] == "firstlook" and p.get("t") is not None]
+    return join_by_sound(pieces, still, "firstlook", "Teal", ("groom", "bride", "firstlook"), progress, cancel)
+
+
+def join_by_sound(pieces, still, kind, label, cand_kinds, progress=None, cancel=None):
+    """Automatic mode: a moment (first look found by the faces, vornic found by the speech) is mostly on one camera.
+    Every other camera's clip of the morning near it by the clock is synced by SOUND to it; a sure match (conf high,
+    overlapping it by >= min(5 s, half the clip)) joins the moment. Returns the number joined."""
+    fl = [p for p in pieces if p["kind"] == kind and p.get("t") is not None]
     if not fl:
         return 0
     foot = {}
@@ -854,7 +941,7 @@ def join_firstlook(pieces, still, progress=None, cancel=None):
     lo = min(p["t"] for p in med) - FL_WINDOW
     hi = max(p["t"] + p["b"] - p["a"] for p in med) + FL_WINDOW
     cands = [p for p in pieces if p["cam"] != main and p["cam"] not in still and p.get("t") is not None
-             and p["kind"] in ("groom", "bride", "firstlook") and p["t"] < hi and p["t"] + p["b"] - p["a"] > lo]
+             and p["kind"] in cand_kinds and p["kind"] != kind and p["t"] < hi and p["t"] + p["b"] - p["a"] > lo]
     if not cands:
         return 0
     pcm, idx = {}, []
@@ -874,7 +961,8 @@ def join_firstlook(pieces, still, progress=None, cancel=None):
         if cancel and cancel():
             raise InterruptedError("Cancelled")
         if progress:
-            progress(f"Checking the first look on the other cameras: {k + 1} of {len(cands)}", (k + 1) / len(cands))
+            progress((f"Checking the vornic on the other cameras: {k + 1} of {len(cands)}" if kind == "vornic" else
+                      f"Checking the first look on the other cameras: {k + 1} of {len(cands)}"), (k + 1) / len(cands))
         x = audio(p["path"])[int(p["a"] * sync.SR):int(p["b"] * sync.SR)]
         try:
             r = sync.sync_clip(idx, x) if len(x) > 2 * sync.SR else dict(conf="fail")
@@ -887,7 +975,7 @@ def join_firstlook(pieces, still, progress=None, cancel=None):
             ov = min(g0 + (p["b"] - p["a"]), m["b"]) - max(g0, m["a"])
             ok = ov >= min(5.0, 0.5 * (p["b"] - p["a"]))
         if ok:
-            p["kind"], p["label"] = "firstlook", "Teal"
+            p["kind"], p["label"] = kind, label
             n += 1
     return n
 
@@ -1006,7 +1094,7 @@ def _weights(pieces, recorder, infos, auto, jobs, todo_sec=None, kinds=True):
     w = []
     if auto:
         w += [("auto_sync", dur(pieces) / 60.0 / jobs + rec_h * 20), ("auto_faces", 2.0 * len(pieces)),
-              ("auto_fl", 30.0)]
+              ("auto_ai", 3.0 * len(pieces)), ("auto_speech", 0.3 * len(pieces)), ("auto_fl", 30.0)]
     w += [("analyse", todo_sec / 15.0 / jobs),
           ("priest", 2.0 * sum(1 for p in pieces if p["kind"] == "church" and p["b"] - p["a"] >= PRIEST_MIN) if kinds else 5),
           ("firstlook", 4.0 * max(1, sum(1 for p in pieces if p["kind"] == "firstlook")) if kinds else 8),
@@ -1047,7 +1135,7 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
     psync_res = None
     st.replan(_weights(pieces, recorder, infos, L.get("auto"), jobs, kinds=not L.get("auto")))
     if L.get("auto"):
-        auto, psync_res = auto_moments(L, pieces, recorder, infos, st, cancel, jobs, model_dir)
+        auto, psync_res = auto_moments(L, pieces, recorder, infos, st, cancel, jobs, model_dir, cache)
         pieces = [p for p in pieces if p["kind"] != AUTO]
     # analyses: every selection range + every party range (once, cached)
     use = [p for p in pieces if part_of(p["kind"]) in SELECT or p["kind"] == "party"]

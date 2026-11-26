@@ -266,19 +266,21 @@ canale, ca MXF-ul de FX6, folosesc canalul 1). Culorile clipurilor: roșu / galb
 <p><b>Pagina Sincronizare din meniu</b> e doar pentru sincronizare: același motor, fără Auto Edit. Faci proiect nou, tragi tot (carduri,
 recorder, lavaliere), apeși <b>Sync</b> și exporți: toate camerele și recorderul pe un singur timeline, clipurile întregi. Dacă vrei
 apoi și montajul, <b>Auto Edit în Multicam →</b> mută proiectul în Multicam cu sincronizarea păstrată.</p>
-<p><b>Export → Premiere</b> și <b>Export → DaVinci</b> (la fel la Multicam, Teaser Studio, Long Film și Long Film v2): același montaj, două
-fișiere făcute pentru fiecare program. Pentru DaVinci Resolve (File &gt; Import &gt; Timeline): scalarea Premiere „umple cadrul” e scoasă,
-pentru că Resolve încadrează singur fiecare clip (Project Settings &gt; Image Scaling, implicit „Scale entire image to fit”; cu
-scalarea Premiere în plus un clip 4K ieșea de 4 ori mai mic); culoarea din Premiere (Lumetri + crop) e scoasă, Resolve nu o poate citi:
-LUT-ul îl pui în pagina Color; un proiect Premiere cu bin-uri (Create Project) devine doar secvența lui. Numele clipurilor rămân exact
-numele fișierelor (Resolve leagă media după nume), la fel timpii, pistele, legăturile sunet-imagine, markerele și culorile.
-La DaVinci, după export pornește automat o <b>verificare cap-coadă</b> (are bara ei de progres): legăturile sunet-imagine, fiecare
-clip numit exact ca fișierul lui (altfel Resolve îl arată offline; dacă nu e, îl repară singur), in / out în interiorul fișierului,
-efectele doar de Premiere scoase și fiecare fișier găsit pe calculator. La final vezi „Gata pentru DaVinci Resolve” sau exact ce
-nu e în regulă. Exportul pentru Premiere rămâne cum era, fără timp în plus. La <b>Create Project</b> și la povestea din
-<b>Transcriere</b> bifezi „Și pentru DaVinci Resolve” doar dacă vrei și al doilea fișier („nume (DaVinci).xml”). Lângă opțiunile care
-merg doar într-un program scrie cu albastru, de exemplu la Culoare (Long Film v2) și la bin-urile din Create Project: doar pentru Premiere Pro.
-La Footage Selection alegi Premiere Pro / DaVinci Resolve înainte de Generează.</p>
+<p><b>Lucrez în: Premiere Pro | DaVinci Resolve</b> (sus în dreapta, în toată aplicația): alegi o dată programul în care lucrezi,
+aplicația îl ține minte și <b>fiecare Export XML</b> (Multicam, Sincronizare, Teaser Studio, Long Film, Long Film v2, Footage
+Selection, Create Project, povestea din Transcriere) se scrie pentru el. Butonul arată „Export XML → Premiere” sau
+„Export XML → DaVinci”.</p>
+<p><b>Pe Premiere Pro</b> totul rămâne exact cum era, fără timp în plus. <b>Pe DaVinci Resolve</b> fișierul e scris de la zero, cum îl
+scrie chiar Resolve (am copiat forma dintr-un export făcut de Resolve Studio 20 pe Mac-ul tău): doar secvența, fiecare clip numit
+exact ca fișierul lui, <b>timecode-ul camerei</b> scris la fiecare fișier (Resolve pune media după timecode: fără el, un clip FX6 cu
+timecode 23:08:00 „nu se suprapune” cu 00:00:00:00 și apare offline; verificat pe nunta Alex și Andreea: cu timecode-ul scris,
+clipurile apar online), fiecare canal de sunet pe pista lui, legăturile sunet-imagine, culorile clipurilor și markerele. Nimic
+din Premiere nu mai rămâne: fără piste stereo „explodate”, fără atributele Premiere, fără Basic Motion / Lumetri / Crop, fără bin-uri.
+Resolve încadrează singur fiecare clip (Project Settings &gt; Image Scaling); LUT-ul îl pui în pagina Color. După export pornește
+automat o <b>verificare cap-coadă</b> (bara ei de progres): legături, nume, in / out în interiorul fișierului, fiecare fișier găsit
+pe calculator. La final vezi „Gata pentru DaVinci Resolve” sau exact ce nu e în regulă. La Create Project, pe DaVinci butonul
+„Deschide în Premiere Pro” nu mai apare. Lângă opțiunile care merg doar într-un program scrie cu albastru (Culoare în Long Film v2,
+bin-urile din Create Project: doar pentru Premiere Pro).</p>
 <p><b>Sync + Auto Edit</b> (butonul albastru) face totul dintr-o apăsare: Sync, iar imediat ce se termină pornește singur Auto Edit.
 Bun pentru peste noapte: apeși, pleci, dimineață montajul e gata. Mac-ul e ținut treaz până la final (nu intră în sleep).
 La fel și <b>Build</b> din Long Film v2. Sync și Auto Edit separate rămân, pentru când vrei doar unul din ele.</p>
@@ -617,18 +619,27 @@ fx3 era cu ~2 ore în urmă, a74 cu o zi) și toate ajung pe același ceas.</li>
 <li><b>Fețele</b>: 5 cadre din fiecare clip, recunoaștere facială locală. Mirele = fața văzută în cele mai multe clipuri din prima
 scenă a zilei (mirele e filmat primul), mireasa = fața din cele mai multe clipuri ale scenelor următoare.</li>
 <li><b>Scenele</b>: o pauză de 15 minute în care nu filmează nicio cameră desparte două scene.</li>
-<li><b>Biserica</b> = primul grup de clipuri lungi (cel puțin 150 s fiecare, cel puțin 900 s împreună, la cel mult 15 minute unul de
-altul), plus clipurile scurte până la 5 minute înainte și 10 minute după.</li>
+<li><b>Ce se vede în fiecare clip</b> (AI-ul din testul AI, SigLIP 2, se descarcă o singură dată): 3 cadre din fiecare clip, AI-ul
+spune ce vede: pregătiri, biserică, miri, sală, petrecere, dronă, cineva care ține un discurs. Merge la orice stil de filmare,
+pentru că se uită la imagine, nu la cât de lungi sunt clipurile. Dacă modelul nu se poate descărca, regulile de mai jos merg singure.</li>
+<li><b>Biserica</b>: cu AI, cel mai devreme șir lung de clipuri „biserică” (până la 3 alte clipuri între ele), care începe și se
+termină cu un clip sigur de biserică (sosirea în fața bisericii nu mai intră); plus clipurile scurte până la 10 minute după. Fără AI:
+primul grup de clipuri lungi (cel puțin 150 s fiecare, cel puțin 900 s împreună, la cel mult 15 minute unul de altul), plus clipurile
+scurte până la 5 minute înainte și 10 minute după.</li>
 <li><b>Înainte de biserică</b>: mirele (fața lui, altfel prima scenă), mireasa (fața ei, altfel scenele următoare), amândoi în cadru =
-first look, clipurile lungi de dimineață (150 s+) = vornicul.</li>
-<li><b>După biserică</b> (prima scenă, apoi până la o pauză de 40+ minute, dar cel mult 2 ore după biserică): clipurile fără nicio față = <b>sala</b> (la Alex și
-Andreea 14 din 14), cele în care se vede mirele sau mireasa = <b>cuplul</b>; cele doar cu invitați (felicitări, sosirea la sală)
-merg la petrecere.</li>
+first look. <b>Vornicul</b> = un discurs pe care îl filmează ambele camere în același timp, în casă sau afară în curte: o filmare
+continuă de cel puțin 2 minute, numai vorbire (fără muzică), filmată și de cealaltă cameră cel puțin 1 minut; sau, când AI-ul vede
+pe cineva ținând un discurs, cealaltă cameră îl poate filma și în clipuri scurte. Măsurat pe Alex și Andreea: vornicul tău = 2
+perechi de filmări de 3–5 minute pe fx6 + fx3, deci 4 din 4; o filmare lungă a unei singure camere (pregătiri) nu mai e luată drept
+vornic. Clipurile celorlalte camere de lângă vornic intră lângă el doar dacă sunetul arată că e același moment.</li>
+<li><b>După biserică</b> (prima scenă, apoi până la o pauză de 40+ minute; cu AI și până când AI-ul vede că a început petrecerea:
+4 din 6 clipuri la rând): clipurile fără nicio față = <b>sala</b> (la Alex și Andreea 14 din 14), cele cu fețe = <b>cuplul</b>
+(fețele mici sau din profil nu sunt recunoscute mereu, de aceea nu se cere fața mirilor); cu AI, clipurile cu fețe pe care AI-ul
+le vede ca petrecere merg la petrecere.</li>
 <li><b>Restul = petrecerea</b>; o scenă din petrecere cu mirii în cel puțin 40 % din clipuri, clipuri scurte (sub 40 s), 4 sau mai
-multe = cuplu (ședința de la apus). Drona = folderele / fișierele de dronă (DJI, mavic, drona); un folder OSMO / Pocket /
-Action / GoPro nu e niciodată dronă, chiar dacă fișierele se numesc DJI_….</li>
-<li><b>Fără pregătiri filmate</b> (filmarea începe la biserică): mirii sunt fețele văzute cel mai des în ora de după biserică
-(ședința foto), iar dacă acolo sunt prea puține fețe, și în biserică.</li>
+multe = cuplu (ședința de la apus), dar nu clipurile pe care AI-ul le vede ca petrecere. <b>Drona</b> = folderele de dronă (drona,
+mavic, dji). Un fișier DJI_… în afara unui folder de dronă e dronă doar dacă AI-ul îl vede de sus, de foarte departe (un Osmo ridicat
+la 3–5 m nu, drona zboară mai sus); un folder OSMO / Pocket / Action / GoPro nu e niciodată dronă.</li>
 <li><b>Fără recorder</b>: camera care a filmat cel mai mult din petrecere (cu sunet) e referința, cu <b>toate</b> clipurile ei
 puse pe ceasul ei; celelalte camere se sincronizează după sunet pe ea. Înainte se lua doar cel mai lung clip al ei și tot ce nu
 se suprapunea cu el rămânea pe dinafară.</li>
@@ -637,8 +648,8 @@ se suprapunea cu el rămânea pe dinafară.</li>
 sunt ceasul comun. Fără recorder, petrecerea folosește <b>toate camerele</b> pe locurile lor din timeline (înainte se folosea doar
 cel mai lung clip ca referință și doar ce se suprapunea cu el); cu recorder, un clip pe care sunetul nu-l poate pune își păstrează
 locul din timeline.</p>
-<p>Măsurat pe Alex și Andreea (fx6, comparat cu etichetele tale): 130 din 146 clipuri în momentul corect (89 %). Greșelile: cele 8
-clipuri de la luarea miresei pe care tu le-ai pus Iris (aplicația le pune la mireasă) și cele 3 interviuri Tan (ajung la petrecere).
+<p>Măsurat pe Alex și Andreea (fx6 + fx3, comparat cu etichetele tale): fără AI 149 din 188 clipuri în momentul corect, cu AI și sunet 154 din 188 (fx6 singur: 130 → 132 din 146; biserica fără nicio greșeală). Greșelile rămase: cele
+de la luarea miresei pe care tu le-ai pus Iris (aplicația le pune la mire / mireasă), clipurile fx3 din biserică pe care le-ai pus Iris (aplicația: biserică) și cele 3 interviuri Tan (ajung la petrecere). Măsurătoarea AI-ului a fost făcută aici cu un model mai mic (CLIP); aplicația folosește SigLIP 2, mai precis.
 Restul îl corectezi în editor.</p>
 <h3>Editează filmul</h3>
 <p>După Build, butonul <b>Editează filmul</b> deschide editorul, făcut ca Premiere, pe <b>tot filmul</b> (inclusiv petrecerea):
@@ -1114,19 +1125,20 @@ clips' colours: red / yellow / green by level.</li>
 <p><b>The Synchronize page in the menu</b> is for syncing only: the same engine, without Auto Edit. Make a new project, drop everything
 (cards, recorder, lavaliers), press <b>Sync</b> and export: every camera and the recorder on one timeline, whole clips. If you then
 want the edit too, <b>Auto Edit in Multicam →</b> moves the project to Multicam with the sync kept.</p>
-<p><b>Export → Premiere</b> and <b>Export → DaVinci</b> (the same on Multicam, Teaser Studio, Long Film and Long Film v2): the same edit,
-two files made for each program. For DaVinci Resolve (File &gt; Import &gt; Timeline): Premiere's "fill the frame" scaling is removed,
-because Resolve fits every clip itself (Project Settings &gt; Image Scaling, default "Scale entire image to fit"; with the Premiere
-scale on top a 4K clip came out 4 times smaller); Premiere's colour (Lumetri + crop) is removed, Resolve cannot read it: put the
-LUT on the Color page; a Premiere project with bins (Create Project) becomes its sequence alone. Clip names stay exactly the file
-names (Resolve links media by name), and so do the times, tracks, sound-picture links, markers and colours.
-For DaVinci an <b>end-to-end check</b> starts by itself after the export (with its own progress bar): the sound-picture links,
-every clip named exactly like its file (otherwise Resolve shows it offline; if not, it is fixed by itself), in / out inside the
-file, the Premiere-only effects gone and every file found on this computer. At the end you see "Ready for DaVinci Resolve" or
-exactly what is wrong. The Premiere export stays as it was, with no extra time. In <b>Create Project</b> and the story of
-<b>Transcribe</b> tick "Also for DaVinci Resolve" only when you want the second file ("name (DaVinci).xml"). Next to the options that
-work in one program only it says so in blue, e.g. Colour (Long Film v2) and the bins of Create Project: Premiere Pro only.
-In Footage Selection choose Premiere Pro / DaVinci Resolve before Generate.</p>
+<p><b>I work in: Premiere Pro | DaVinci Resolve</b> (top right, in the whole app): choose your program once, the app remembers it
+and <b>every Export XML</b> (Multicam, Synchronize, Teaser Studio, Long Film, Long Film v2, Footage Selection, Create Project, the
+story of Transcribe) is written for it. The button says "Export XML → Premiere" or "Export XML → DaVinci".</p>
+<p><b>On Premiere Pro</b> everything stays exactly as it was, with no extra time. <b>On DaVinci Resolve</b> the file is written from
+scratch, the way Resolve itself writes it (the shape copied from an export of Resolve Studio 20 on your Mac): the sequence only,
+every clip named exactly like its file, <b>the camera's timecode</b> written on every file (Resolve places media by timecode: without
+it an FX6 clip with timecode 23:08:00 "does not overlap" 00:00:00:00 and shows offline; checked on Alex &amp; Andreea: with the
+timecode written the clips come in online), every sound channel on its own track, the sound-picture links, the clip colours and
+markers. Nothing of Premiere stays: no "exploded" stereo tracks, no Premiere attributes, no Basic Motion / Lumetri / Crop, no bins.
+Resolve fits every clip itself (Project Settings &gt; Image Scaling); put your LUT on the Color page. After the export an
+<b>end-to-end check</b> starts by itself (its own progress bar): links, names, in / out inside the file, every file found on this
+computer. At the end you see "Ready for DaVinci Resolve" or exactly what is wrong. In Create Project, on DaVinci the "Open in
+Premiere Pro" button is not shown. Next to the options that work in one program only it says so in blue (Colour in Long Film v2,
+the bins of Create Project: Premiere Pro only).</p>
 <p><b>Sync + Auto Edit</b> (the blue button) does everything in one press: Sync, and as soon as it ends Auto Edit starts by
 itself. Good overnight: press it, leave, the edit is ready in the morning. The Mac is kept awake until the end (no sleep).
 The same for <b>Build</b> in Long Film v2. Separate Sync and Auto Edit stay, for when you want only one of them.</p>
@@ -1454,18 +1466,27 @@ Every clip with sound is synced to the recorder, like Multicam; that gives every
 <li><b>Faces</b>: 5 frames of every clip, local face recognition. The groom = the face seen in the most clips of the day's first
 scene (the groom is filmed first), the bride = the face in the most clips of the following scenes.</li>
 <li><b>Scenes</b>: a pause of 15 minutes where no camera films separates two scenes.</li>
-<li><b>The church</b> = the first group of long clips (at least 150 s each, at least 900 s together, at most 15 minutes apart), plus
-the short clips up to 5 minutes before and 10 minutes after.</li>
+<li><b>What every clip shows</b> (the AI of the AI test, SigLIP 2, downloaded once): 3 frames of every clip, the AI says what it
+sees: getting ready, church, couple, venue, party, drone, someone giving a speech. It works with any filming style, because it
+looks at the picture, not at how long the clips are. When the model cannot be downloaded the rules below work alone.</li>
+<li><b>The church</b>: with the AI, the earliest long run of "church" clips (up to 3 other clips inside), starting and ending with a
+sure church clip (the arrival in front of the church no longer counts); plus the short clips up to 10 minutes after. Without the
+AI: the first group of long clips (at least 150 s each, at least 900 s together, at most 15 minutes apart), plus the short clips up
+to 5 minutes before and 10 minutes after.</li>
 <li><b>Before the church</b>: the groom (his face, else the first scene), the bride (her face, else the following scenes), both in the
-frame = first look, long morning clips (150 s+) = the vornic.</li>
-<li><b>After the church</b> (its first scene, then until a break of 40+ minutes, but at most 2 hours after the church): clips without any face = <b>the venue</b> (14 of 14
-at Alex & Andreea), clips where the groom or the bride is seen = <b>the couple</b>; clips with guests only (congratulations,
-arriving at the venue) go to the party.</li>
+frame = first look. <b>The vornic</b> = a speech that BOTH cameras film at the same time, in the house or outside in the yard: a
+continuous take of at least 2 minutes, only speech (no music), also filmed by the other camera for at least 1 minute; or, when
+the AI sees someone giving a speech, the other camera can film it in short clips too. Measured on Alex &amp; Andreea: your vornic =
+2 pairs of 3-5 minute takes on fx6 + fx3, so 4 of 4; a long take of one camera alone (getting ready) is no longer taken for the
+vornic. The other cameras' clips near the vornic join it only when the sound shows it is the same moment.</li>
+<li><b>After the church</b> (its first scene, then until a break of 40+ minutes; with the AI also until the AI sees the party has
+started: 4 of 6 clips in a row): clips without any face = <b>the venue</b> (14 of 14 at Alex &amp; Andreea), clips with faces = <b>the
+couple</b> (small or profile faces are not always recognised, so the couple's faces are not required); with the AI, clips with
+faces that the AI sees as the party go to the party.</li>
 <li><b>The rest = the party</b>; a party scene with the couple in at least 40 % of the clips, short clips (under 40 s), 4 or more =
-couple (the sunset session). Drone = drone folders / files (DJI, mavic, drona); an OSMO / Pocket / Action / GoPro folder is
-never the drone, even when its files are named DJI_….</li>
-<li><b>No getting ready filmed</b> (the footage starts at the church): the couple are the faces seen most in the hour after the
-church (the photo session), and in the church too when there are too few faces there.</li>
+couple (the sunset session), but not the clips the AI sees as the party. <b>The drone</b> = drone folders (drona, mavic, dji). A
+DJI_… file outside a drone folder is the drone only when the AI sees it from high above (an Osmo lifted 3-5 m is not, a drone flies
+higher); an OSMO / Pocket / Action / GoPro folder is never the drone.</li>
 <li><b>No recorder</b>: the camera that filmed most of the party (with sound) is the reference, with <b>all</b> its clips laid
 on its own clock; the other cameras are synced by sound to it. Before, only its longest clip was used and everything not
 overlapping it was left out.</li>
@@ -1474,8 +1495,8 @@ overlapping it was left out.</li>
 common clock. Without a recorder the party uses <b>every camera</b> at its place on the timeline (before, only the longest clip was
 the reference and only what overlapped it was used); with a recorder, a clip the sound cannot place keeps its place on the
 timeline.</p>
-<p>Measured on Alex & Andreea (fx6, compared with your labels): 130 of 146 clips in the right moment (89 %). The misses: the 8 clips
-of fetching the bride you labelled Iris (the app puts them with the bride) and the 3 Tan interviews (they end up in the party). You
+<p>Measured on Alex & Andreea (fx6 + fx3, compared with your labels): without the AI 149 of 188 clips in the right moment, with the AI and the sound 154 of 188 (fx6 alone: 130 → 132 of 146; the church without a single miss). The misses left: the clips
+of fetching the bride you labelled Iris (the app puts them with the groom / bride), the fx3 church clips you labelled Iris (the app: church) and the 3 Tan interviews (they end up in the party). The AI was measured here with a smaller model (CLIP); the app uses SigLIP 2, which is more precise. You
 correct the rest in the editor.</p>
 <h3>Edit the film</h3>
 <p>After Build, <b>Edit the film</b> opens the editor, laid out like Premiere, on the <b>whole film</b> (the party included): the
