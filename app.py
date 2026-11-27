@@ -53,7 +53,7 @@ import sync
 import bridge
 import colour
 
-APP, VER = "MoneyMakingMachine", "v4.5.0"
+APP, VER = "MoneyMakingMachine", "v4.5.1"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -378,6 +378,25 @@ def weights_of(s):
 
 # ---------------------------------------------------------------- persistence
 
+def _jsonable(o):
+    """numpy numbers / arrays (from the analyses and the sync) as plain JSON values."""
+    if hasattr(o, "tolist"):
+        return o.tolist()
+    if isinstance(o, (set, tuple)):
+        return list(o)
+    if isinstance(o, Path):
+        return str(o)
+    raise TypeError(f"Object of type {type(o).__name__} is not JSON serializable")
+
+
+def _write_json(path, obj):
+    """Written whole or not at all: a temporary file, then renamed over the old one (a crash never leaves half a file)."""
+    path = Path(path)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(obj, default=_jsonable), "utf-8")
+    os.replace(tmp, path)
+
+
 class Store:
     def __init__(self):
         base = os.environ.get("MMM_DATA") or QStandardPaths.writableLocation(QStandardPaths.AppDataLocation)
@@ -404,7 +423,7 @@ class Store:
         core.set_slots(max(2, self.app["jobs"]))
         sync.TAKE_PREF = self.app.get("rec_take", "auto")
         sync.ENGINE = self.app.get("sync_engine", "graph")
-        (self.dir / "settings.json").write_text(json.dumps(self.app), "utf-8")
+        _write_json(self.dir / "settings.json", self.app)
 
     def save(self):
         """Debounced: sliders call this many times per second."""
@@ -418,7 +437,7 @@ class Store:
     def flush(self):
         if hasattr(self, "_t"):
             self._t.stop()
-        self.file.write_text(json.dumps(self.projects), "utf-8")
+        _write_json(self.file, self.projects)
 
     def load_blob(self, pid):
         try:
@@ -427,7 +446,7 @@ class Store:
             return {}
 
     def save_blob(self, pid, obj):
-        (self.dir / f"{pid}.analysis.json").write_text(json.dumps(obj), "utf-8")
+        _write_json(self.dir / f"{pid}.analysis.json", obj)
 
     def new(self, name, kind="footage"):
         p = dict(id=uuid.uuid4().hex, name=name, created=datetime.now().isoformat(timespec="seconds"),
@@ -3598,6 +3617,7 @@ class MulticamPage(QWidget):
         def keep(dlg):
             self.p.update(mc_timeline=dlg.timeline(), mc_hidden=sorted(dlg.m.hidden), mc_muted=dlg.m.muted)
             self.store.save()
+            self.b_edit.setText("Continue editing")
             notify(i18n.T("Your changes are saved."))
         dlg = editor.Editor(self, tl, infos, PR_LABEL, lane, str(self.store.dir / "thumbs"),
                             self.p.get("mc_hidden", []), self.p.get("mc_muted", []), on_save=keep,
@@ -3889,7 +3909,7 @@ class SettingsPage(QWidget):
             text = "(no log yet)"
         safe = {k: ("(set, hidden)" if k == "claude_key" and v else v) for k, v in self.store.app.items()}   # never the key
         info = (f"{APP} {VER}\n{platform.platform()}\nPython {platform.python_version()}\n"
-                f"CPU cores: {os.cpu_count()}\nSettings: {json.dumps(safe)}\n\n")
+                f"CPU cores: {os.cpu_count()}\nSettings: {json.dumps(safe, default=str)}\n\n")
         Path(out).write_text(info + text, encoding="utf-8")
         self.upd.setText(f"Report saved: {out}")
         notify(f"Report saved: {Path(out).name}")
@@ -4884,7 +4904,7 @@ class TeaserPage(QWidget):
                 if r_:
                     p["who"] = {k: round(v[0], 3) for k, v in r_.items()}
                     data[f'{p.get("_k") or p["path"]}|{p["a"]:.2f}|{key}'] = p["who"]
-            cf.write_text(json.dumps(data), "utf-8")
+            cf.write_text(json.dumps(data, default=_jsonable), "utf-8")
             self._face_ui()
             notify("The bride and groom were looked for in every selection")
         self._stop = False
@@ -4913,7 +4933,7 @@ class TeaserPage(QWidget):
             cache = json.loads(cache_file.read_text("utf-8"))
         except Exception:
             cache = {}
-        save = lambda c: cache_file.write_text(json.dumps(c), "utf-8")
+        save = lambda c: cache_file.write_text(json.dumps(c, default=_jsonable), "utf-8")
         jobs = max(2, (os.cpu_count() or 4) // 2)        # light work per clip: use half of the cores
         teaser.analyse_pieces(pieces, cache, progress, jobs, cancel=lambda: self._stop, save=save)
         return pieces, skipped

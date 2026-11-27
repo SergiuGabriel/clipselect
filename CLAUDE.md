@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.5.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.5.1), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -1220,6 +1220,16 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   Premiere without opening the panel, the job imported ADJ_TEST_C.xml, opened the sequence, Adjustment Layer on V2 over the
   whole sequence, Crop Top 10 % / Bottom 10 %. The device shell cannot write ~/Library (protected): files were copied there
   with Finder (Go to Folder) for the test. A missing-media "Link Media" dialog waits for him (offline media only).
+
+## v4.5.1 (bug sweep before his test)
+- BUG (v4.4.0): the new sync engine (sync2) put numpy float32 values in the results -> projects.json could NOT be saved
+  after a Sync ("float32 is not JSON serializable"; the project's sync would be lost at the next start). sync2 results are
+  plain floats now, and every save (settings.json, projects.json, <id>.analysis.json, caches) goes through _write_json:
+  numpy values converted (_jsonable) and written to a .tmp file then renamed (a crash never leaves half a file).
+- Multicam: the Edit button says "Continue editing" right after Save in the editor.
+- Checked: every tools/*_check.py, pyflakes, RO / EN scan of every screen, Long Film v2 scripts (labelled, chrono, no
+  recorder, editor, save / reopen), Multicam Sync + Auto Edit chain + editor + export, editor bench, DaVinci conversion,
+  the bridge path with a fake Premiere (XML without per-clip crop, job sent, answer -> notification).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

@@ -370,8 +370,8 @@ def run_sync(masters, clips, progress=None, cancel=None, clocks=None, groups=Non
         nwin = max([meta[m]["n"] for m in meta if fi in m] or [0])
         conf = "high" if (nb and nwin >= 2 and sharp >= 6) else ("medium" if nb else "low")
         drift = next((meta[m]["drift"] for m in ms_direct), 0.0)
-        results[f] = dict(base_r, conf=conf, z=sharp, n=nwin, k=len(nb), offset=gpos[best] - start[best] + 0.0,
-                          master=best, drift_ppm=drift)
+        results[f] = dict(base_r, conf=conf, z=float(sharp), n=int(nwin), k=len(nb),
+                          offset=float(gpos[best] - start[best]), master=int(best), drift_ppm=float(drift))
     for mi, m in enumerate(masters):          # a clip used as the reference (no recorder) is placed by itself
         if m in clips:
             results[m] = dict(conf="high", z=99.0, n=1, k=1, offset=0.0, drift_ppm=0.0, master=mi,
