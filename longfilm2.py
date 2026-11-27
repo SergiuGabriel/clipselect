@@ -345,8 +345,9 @@ def party_inputs(pieces, recorder, infos):
             g = r.get("group") or Path(r["path"]).parent.name
             tot[g] = tot.get(g, 0.0) + ((infos.get(r["path"]) or {}).get("dur") or 0.0)
         main = max(tot, key=lambda g: (tot[g], g))
-        masters = sorted(r["path"] for r in rec if (r.get("group") or Path(r["path"]).parent.name) == main)
-        extras = sorted(r["path"] for r in rec if r["path"] not in masters)
+        allm = sorted(r["path"] for r in rec if (r.get("group") or Path(r["path"]).parent.name) == main)
+        masters = _one_per_take(allm, infos)        # one file per take (MIX), never the copies one after the other
+        extras = _one_per_take(sorted(r["path"] for r in rec if r["path"] not in allm), infos)
     if not masters:
         # no recorder: the camera that filmed the most of the party (with sound) is the reference, ALL its clips laid on
         # its own clock (one camera never films two things at once). Before, only its longest clip was the master and
@@ -400,6 +401,52 @@ def timeline_fill(party, recorder, info, res, infos):
                    else min(abs(z - x[1]), abs(z - x[1] - (info[x[0]].get("duration") or 0))))
         res[p["path"]] = dict(conf="high", z=0.0, n=0, k=0, offset=z - s, drift_ppm=0.0, master=i,
                               dur=(infos.get(p["path"]) or {}).get("dur") or 0.0, manual=False, source="xml")
+
+
+def _natkey(f):
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", Path(f).name)]
+
+
+def camera_order_check(party, res, info):
+    """Syncaila's rule for the party: one camera films its files ONE AFTER THE OTHER, in the order of their numbers, and
+    never two things at once. Per camera the clips are put on the common timeline (master start + offset); the longest
+    chain (by length) whose times grow with the file numbers without overlapping is kept, every other clip of that camera
+    is a wrong match (a copy of the take, a song repeated) and goes out of the multicam (conf "low"). Returns the number
+    taken out. (His friend's Denisa & Cornel: A7iv8619 / 8620 landed after 8622.)"""
+    starts = sync.master_starts(info)
+    by_cam = {}
+    for p in party:
+        r = res.get(p["path"])
+        if not r or r.get("conf") not in ("high", "medium") or r.get("master") is None:
+            continue
+        by_cam.setdefault(p["cam"], {})[p["path"]] = r
+    out = 0
+    for cam, rs in by_cam.items():
+        fs = sorted(rs, key=_natkey)
+        t0 = [starts[rs[f]["master"]] + rs[f]["offset"] for f in fs]
+        t1 = [t0[i] + (rs[f].get("dur") or 0.0) for i, f in enumerate(fs)]
+        n = len(fs)
+        # longest chain by length, then the most compact one (a wrong match lands far away); O(n^2), a few hundred clips
+        best = [(t1[i] - t0[i], 0.0, -1, t0[i]) for i in range(n)]     # (length, -span, previous, chain start)
+        for i in range(n):
+            for j in range(i):
+                if t0[i] >= t1[j] - 1.0:
+                    cand = (best[j][0] + (t1[i] - t0[i]), -(t1[i] - best[j][3]), j, best[j][3])
+                    if cand[:2] > best[i][:2]:
+                        best[i] = cand
+        if not n:
+            continue
+        i = max(range(n), key=lambda k: best[k][:2])
+        keep = set()
+        while i >= 0:
+            keep.add(fs[i])
+            i = best[i][2]
+        for f in fs:
+            if f not in keep:
+                rs[f]["conf"] = "low"
+                rs[f]["order"] = "out of the camera's order"
+                out += 1
+    return out
 
 
 def party_edit(party, results, masters, analyses, cams_n, roles, st):
@@ -690,18 +737,14 @@ def export_timeline(tl, infos, out_path, name, look=None, hidden=(), muted=(), l
 
 
 # ---------------------------------------------------------------- 4a. straight from the wedding folder
-def _one_per_take(files):
-    """A recorder writes one take as several files (Tascam 260823_0195_3 / _4 / _MIX): keep one per take (the MIX when
-    there is one, else the first track), or the takes would be laid one after the other as if they followed."""
-    takes = {}
-    for f in files:
-        m = re.match(r"(.+?)[_-](\d|MIX|mix|LR|lr)$", Path(f).stem)
-        takes.setdefault(m.group(1) if m else Path(f).stem, []).append(f)
-    out = []
-    for _k, fs in sorted(takes.items()):
-        mix = [f for f in fs if re.search(r"(?i)[_-](mix|lr)$", Path(f).stem)]
-        out.append(mix[0] if mix else sorted(fs)[0])
-    return out
+TAKE_RE = sync.TAKE_RE
+
+
+def _one_per_take(files, infos=None):
+    """See sync.one_per_take (longfilm2 infos: dur, ctime / mtime)."""
+    inf = infos or {}
+    return sync.one_per_take(files, lambda f: (inf.get(f) or {}).get("dur"),
+                             lambda f: (inf.get(f) or {}).get("ctime") or (inf.get(f) or {}).get("mtime"))
 
 
 def folder_xml(root, progress=None, cancel=None, jobs=4):
@@ -1242,6 +1285,8 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
                                       clocks=clocks, groups=camk, jobs=jobs)
         if L["layout"] == "timecode" and not no_rec:
             timeline_fill(party, recorder, info, res, infos)   # clips the sound could not place keep their timeline place
+        if info and info[0].get("path"):
+            camera_order_check(party, res, info)    # a camera films its files in order and never two things at once
         mpaths = [m.get("path") for m in info]
         for f in pfiles:
             if f in mpaths:                 # a party clip used as the reference (no recorder) is placed by itself

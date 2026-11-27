@@ -659,6 +659,45 @@ def _clock(t, path, dur):
         return None
 
 
+TAKE_RE = re.compile(r"(?i)^(.+?)[_-](\d{1,2}(?:-\d{1,2})?|MIX|LR|L|R|ST|Tr\d{1,2}(?:-\d{1,2})?|TrLR|Tr)$")
+
+
+def one_per_take(files, dur=lambda f: None, start=lambda f: None):
+    """A recorder writes one take as several files: Tascam 260823_0195_3 / _4 / _MIX, Tascam X8 260711_0190_3-4 / _MIX,
+    Zoom ZOOM0001_Tr1 / _LR. Keep ONE per take (the MIX / LR when there is one, else the first), or the copies of one take
+    are laid one after the other as if they followed (a friend's Denisa & Cornel: 0190_3-4, 0190_MIX, 0191_3-4,
+    0191_MIX in a row -> the party synced into the wrong half). Files of one name group are one take only when they have
+    the same length (+-2 s) and a name says it is a track (MIX, LR, L, R, Tr1, 3-4...) or they started together (+-2 s);
+    Lav_01 / Lav_02 recorded at different times stay two takes."""
+    takes = {}
+    for f in files:
+        m = TAKE_RE.match(Path(f).stem)
+        takes.setdefault((str(Path(f).parent), m.group(1) if m else Path(f).stem), []).append(f)
+    out = []
+    for _k, fs in sorted(takes.items()):
+        groups = []
+        for f in sorted(fs):
+            d = dur(f)
+            for g in groups:
+                d0 = dur(g[0])
+                if d is None or d0 is None or abs(d - d0) <= 2.0:
+                    g.append(f)
+                    break
+            else:
+                groups.append([f])
+        for g in groups:
+            if len(g) > 1:
+                track = any(not TAKE_RE.match(Path(f).stem).group(2).isdigit() for f in g)
+                ts = [start(f) for f in g]
+                together = all(t is not None for t in ts) and max(ts) - min(ts) <= 2.0
+                if not (track or together):
+                    out.extend(g)
+                    continue
+            mix = [f for f in g if re.search(r"(?i)[_-](mix|lr|trlr)$", Path(f).stem)]
+            out.append(mix[0] if mix else g[0])
+    return sorted(out)
+
+
 def classify(files, infos):
     """files: [{"path","group"}]. The MAIN recorder = the folder of audio-only files with the most recorded time (the
     mixer recorder runs all night); other audio-only folders (LAV I, LAV II, a second recorder) are EXTRA sources that
@@ -671,8 +710,10 @@ def classify(files, infos):
         for f in audio_only:
             tot[f["group"]] = tot.get(f["group"], 0) + infos[f["path"]]["duration"]
         main = max(tot, key=tot.get)
-        masters = sorted(f["path"] for f in audio_only if f["group"] == main)
-        extra = sorted(f["path"] for f in audio_only if f["group"] != main)
+        dur = lambda p: infos[p]["duration"]
+        clk = lambda p: infos[p].get("clock")
+        masters = one_per_take(sorted(f["path"] for f in audio_only if f["group"] == main), dur, clk)
+        extra = one_per_take(sorted(f["path"] for f in audio_only if f["group"] != main), dur, clk)
         note = f"Recorder: folder \"{main}\". Other audio ({', '.join(sorted(g for g in tot if g != main))}) synced as extra sources. " if extra else ""
         return masters, videos, note, extra
     with_sound = [p for p in videos if infos[p]["audio"]]

@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.2.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.2.1), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -1094,6 +1094,19 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   most likely the Premiere-shaped file / timecode mismatch. tools/resolve_check tests the rewrite.
 - longfilm2._write: overlapping pieces on one video track are trimmed / dropped (his v4.0.0 export had 3 overlapping
   C2048 pieces on the a74 track; Resolve logged "Trimming item ... overlaps").
+
+## v4.2.1 (his Premiere friend's Denisa & Cornel v4.2.0 export: "the party is not synced, only a part")
+- His export: recorder Tascam X8 written as 260711_0190_3-4 + 260711_0190_MIX + 0191_3-4 + 0191_MIX; v2 laid all 4 one
+  after the other (the old take regex only knew _<digit> / _MIX, not _3-4, and party_inputs never de-duplicated in the
+  labelled mode) -> the cameras synced to either copy landed in different halves (A7iv8619/8620 after 8622, the entrance
+  in the middle of the party, the first dance on one camera). sync.one_per_take(files, dur, start) (TAKE_RE: digits,
+  3-4, MIX, LR, L, R, ST, Tr1, TrLR; same length +-2 s; merged only when a name is a track or they started together, so
+  Lav_01 / Lav_02 stay two takes; MIX / LR kept) is now used by longfilm2.party_inputs (masters + extras),
+  longfilm2.folder_xml and sync.classify (Multicam masters / extras, clocks as start).
+- longfilm2.camera_order_check (Syncaila's rule) after the party sync: per camera, clips on the common timeline; the
+  longest (then most compact) chain whose times grow with the file numbers without overlapping is kept, the rest ->
+  conf "low" (not in the multicam). tools/party_check.py (CI) + an end-to-end synthetic test (/tmp/dup: two takes as
+  _3-4 + _MIX copies, 4 A7iv clips -> 2 masters, every clip at its true place, 0 out of order).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

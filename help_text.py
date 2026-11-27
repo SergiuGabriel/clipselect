@@ -640,6 +640,13 @@ le vede ca petrecere merg la petrecere.</li>
 multe = cuplu (ședința de la apus), dar nu clipurile pe care AI-ul le vede ca petrecere. <b>Drona</b> = folderele de dronă (drona,
 mavic, dji). Un fișier DJI_… în afara unui folder de dronă e dronă doar dacă AI-ul îl vede de sus, de foarte departe (un Osmo ridicat
 la 3–5 m nu, drona zboară mai sus); un folder OSMO / Pocket / Action / GoPro nu e niciodată dronă.</li>
+<li><b>Recorderul scrie o melodie / o înregistrare în mai multe fișiere</b> (Tascam X8: 260711_0190_3-4 și 260711_0190_MIX; Tascam:
+_3 / _4 / _MIX; Zoom: _Tr1 / _LR): se păstrează <b>unul singur pe înregistrare</b> (MIX / LR). Înainte copiile erau puse una după alta,
+ca și cum ar urma, și petrecerea se sincroniza în jumătatea greșită (la un prieten: intrarea în sală la jumătatea petrecerii). La fel și
+în Multicam.</li>
+<li><b>Regula Syncaila</b>: o cameră își filmează fișierele unul după altul, în ordinea numerelor, și niciodată două lucruri deodată.
+După sincronizare, pentru fiecare cameră se păstrează cel mai lung șir de clipuri care merg în ordinea numerelor fără să se suprapună;
+un clip care cade în afara ordinii (de exemplu A7iv8619 pus după 8622) e o potrivire greșită și nu intră în multicam.</li>
 <li><b>Fără recorder</b>: camera care a filmat cel mai mult din petrecere (cu sunet) e referința, cu <b>toate</b> clipurile ei
 puse pe ceasul ei; celelalte camere se sincronizează după sunet pe ea. Înainte se lua doar cel mai lung clip al ei și tot ce nu
 se suprapunea cu el rămânea pe dinafară.</li>
@@ -1487,6 +1494,12 @@ faces that the AI sees as the party go to the party.</li>
 couple (the sunset session), but not the clips the AI sees as the party. <b>The drone</b> = drone folders (drona, mavic, dji). A
 DJI_… file outside a drone folder is the drone only when the AI sees it from high above (an Osmo lifted 3-5 m is not, a drone flies
 higher); an OSMO / Pocket / Action / GoPro folder is never the drone.</li>
+<li><b>The recorder writes one recording as several files</b> (Tascam X8: 260711_0190_3-4 and 260711_0190_MIX; Tascam: _3 / _4 / _MIX;
+Zoom: _Tr1 / _LR): <b>one per recording</b> is kept (MIX / LR). Before, the copies were laid one after the other as if they followed and
+the party synced into the wrong half (a friend's: the entrance in the middle of the party). The same in Multicam.</li>
+<li><b>Syncaila's rule</b>: a camera films its files one after the other, in the order of their numbers, and never two things at once.
+After the sync, per camera the longest run of clips that follows the numbers without overlapping is kept; a clip out of that order
+(e.g. A7iv8619 placed after 8622) is a wrong match and stays out of the multicam.</li>
 <li><b>No recorder</b>: the camera that filmed most of the party (with sound) is the reference, with <b>all</b> its clips laid
 on its own clock; the other cameras are synced by sound to it. Before, only its longest clip was used and everything not
 overlapping it was left out.</li>
