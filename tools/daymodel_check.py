@@ -30,4 +30,17 @@ for name, rows in FX.items():
     share = ok / n
     print(f"day model, {name}: {ok} of {n} clips right ({share:.0%})", info.get("church_by"), "civil" in info)
     assert share >= NEED[name], f"{name}: {share:.0%} < {NEED[name]:.0%}"
+# a camera whose clock is wrong (an Osmo set to any time, no sound match): its place in the day from what it shows
+for name, c in (("w28", "osmo"), ("w28", "fx3"), ("w04", "fx3"), ("w12", "fx3")):
+    rows = FX[name]
+    for sh in (5 * 3600 + 777, -9 * 3600):
+        clips = {r["k"]: dict(t0=r["t0"] + (sh if r["k"].startswith(c + "/") else 0), dur=r["dur"], path="/W/" + r["k"])
+                 for r in rows}
+        faces = {r["k"]: [A if f == "A" else B for f in r["faces"]] for r in rows}
+        ai = {r["k"]: {"_p": r["p"], "_civil": r["civil"]} for r in rows}
+        o = daymap.clock_offsets(clips, faces, ai, {c}).get(c, 0.0)
+        print(f"clock, {name} {c} moved {sh / 60:.0f} min: found {-o / 60:.0f} min")
+        assert abs(o + sh) <= 20 * 60, (name, c, sh, o)
+    clips = {r["k"]: dict(t0=r["t0"], dur=r["dur"], path="/W/" + r["k"]) for r in rows}
+    assert daymap.clock_offsets(clips, faces, ai, {c}).get(c, 0.0) == 0.0, (name, c, "right clock moved")
 print("day model check OK")

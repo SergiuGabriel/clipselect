@@ -51,9 +51,10 @@ import projectsetup
 import story
 import sync
 import bridge
+import appnap
 import colour
 
-APP, VER = "MoneyMakingMachine", "v4.6.0"
+APP, VER = "MoneyMakingMachine", "v4.6.1"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -9302,6 +9303,7 @@ def main():
             logging.exception("premiere bridge install failed")
     w = Main()
     setup_logging(w.store.dir)
+    appnap.disable()        # minimised in the Dock, macOS used to throttle the jobs (App Nap): "the process is very slow"
     w.show()
     w.settings.update_found.connect(lambda tag: w.toast.show_msg(i18n.T("New version {} available: Settings > Download and install").format(tag), 6000))
     QTimer.singleShot(5000, lambda: w.settings.check_updates(True))

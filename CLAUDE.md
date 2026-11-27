@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.6.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.6.1), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -1268,6 +1268,18 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   Long Film page, sync options "SYNC section of the page", seconds, 3 projects per row.
 - NOT done: another wedding with a real Build in the app on his Mac (each needs his Mac awake ~1.5 h); 30 Aug, 5 / 11 / 20 Sep
   not measured (the device VM embeds ~4 clips per 45 s call).
+
+## v4.6.1 (owner: "minimised in the Dock it went into a sleep mode, the process is very slow"; "the Osmo can have any time")
+- App Nap: appnap.disable() at start (ctypes NSProcessInfo beginActivityWithOptions:reason: with
+  NSActivityUserInitiatedAllowingIdleSystemSleep, token retained for the app's life; + `defaults write
+  com.moneymakingmachine.app NSAppSleepDisabled -bool YES`); build.yml adds NSAppSleepDisabled + LSAppNapIsDisabled to
+  Info.plist. The Mac itself still sleeps when idle unless a job holds Awake (caffeinate). NOT testable here (Linux).
+- Cameras the sound could not place (not in the recorder sync's median clock errors) get their clock from what they show:
+  daymap.clock_offsets(clips, faces, ai, free) = the shift (+-26 h, 1-min steps) where the clips' moment probabilities
+  are most similar (Bhattacharyya, sqrt(P) dot) to the reference cameras' clips filmed at the same time (+-10 min,
+  intervals); kept 0 unless better by OFF_BETTER 0.05; only for cameras with fewer clips than the reference (>= 20).
+  The camera's own order is kept. On the 4 weddings: a camera moved +5 h / -9 h comes back within 0-20 min; right clocks
+  stay; it also found the w29 fx3 2 h behind. Checked in tools/daymodel_check.py (CI).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

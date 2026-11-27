@@ -16,6 +16,7 @@ The order of the parts = the order in which the colours appear on camera A (V1 o
 of a chronological one). The export: ONE 25 fps 1920x1080 sequence, other frame sizes scaled to fill it, every camera
 with its own sound tracks (stereo pairs like Premiere), the recorder under the party.
 """
+import logging
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -851,7 +852,7 @@ def auto_moments(L, pieces, recorder, infos, prog, cancel, jobs, model_dir, cach
         for c in cams:
             own.update(own_clock(sorted({p["path"] for p in pieces if p["cam"] == c}), infos))
     # 1. the recorder sync gives every camera's clock error
-    shift, synced = {c: 0.0 for c in cams}, None
+    shift, synced, unsure = {c: 0.0 for c in cams}, None, set()
     tmp = [dict(p, kind="party") for p in pieces]
     _party, files, masters, extras = party_inputs(tmp, recorder, infos)
     if masters:                             # the recorder, else the camera that filmed the most (no recorder)
@@ -882,6 +883,7 @@ def auto_moments(L, pieces, recorder, infos, prog, cancel, jobs, model_dir, cach
             ref = 0 if 0 in med else (min(med) if med else None)
             if ref is not None and not use_timeline(L, pieces, recorder):
                 shift = {c: med.get(c, med[ref]) - med[ref] for c in cams}
+                unsure = {c for c in cams if c not in med}      # no sound match: its clock may be anything (an Osmo)
         except InterruptedError:
             raise
         except Exception:
@@ -916,6 +918,19 @@ def auto_moments(L, pieces, recorder, infos, prog, cancel, jobs, model_dir, cach
     # 4. the moments: a first map gives the morning, the speech of the morning clips is measured (vornic), then the map
     clips = {key_of(p): dict(t0=own[p["path"]] + shift[p["cam"]] + p["a"], dur=p["b"] - p["a"], path=p["path"])
              for p in pieces}
+    if unsure and sc_ai:                    # cameras the sound could not place: their place in the day from what they show
+        folders = {Path(p["path"]).parent.name: p["cam"] for p in pieces if p["cam"] in unsure}
+        try:
+            offs = daymap.clock_offsets(clips, fz, sc_ai, set(folders))
+        except Exception:
+            logging.exception("clock offsets failed")
+            offs = {}
+        for p in pieces:
+            o = offs.get(Path(p["path"]).parent.name)
+            if o and p["cam"] in unsure:
+                clips[key_of(p)]["t0"] += o
+        if offs:
+            logging.info("clocks moved by what the clips show: %s", {f: round(o / 60) for f, o in offs.items()})
     lab, info = daymap.classify(clips, fz, sc_ai)
     church0 = info.get("church", (float("inf"), 0))[0]
     morning = [p for p in pieces if clips[key_of(p)]["t0"] < church0 and lab.get(key_of(p)) != "Violet"]

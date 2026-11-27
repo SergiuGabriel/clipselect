@@ -544,7 +544,7 @@ locurile pentru care nunta nouă nu are filmări sunt numărate în pagină și 
 (fără culori) le găsește AI-ul, care se uită la fiecare clip (3 imagini) și spune ce arată: pregătiri mire / mireasă, detalii,
 first look, cuplu, cununia civilă, biserică, sală, petrecere, dronă, interviu. Ordinea zilei e doar o probabilitate, nu o regulă:
 pentru fiecare cameră se alege drumul cel mai probabil prin zi (pregătiri → first look → cuplu → cununie → biserică → după),
-iar o pauză de peste 15 minute face trecerea mai ușoară. Cununia poate fi și dimineața, înaintea pregătirilor. Testat pe trei nunți
+iar o pauză de peste 15 minute face trecerea mai ușoară. Cununia poate fi și dimineața, înaintea pregătirilor. O cameră pe care sunetul n-a putut-o sincroniza (de exemplu un Osmo cu ora setată la întâmplare) e pusă la locul ei în zi după ce arată clipurile ei, comparat cu ce filmau celelalte camere atunci; ordinea clipurilor ei rămâne cea în care au fost filmate. Testat pe trei nunți
 ale tale (28 august, 29 august, 4 septembrie): 93–95 % din clipuri în momentul corect.</p>
 <p><b>Cununia civilă</b> (culoarea Mango): e recunoscută după <b>eșarfa tricoloră</b> a ofițerului de stare civilă; clipurile
 celorlalte camere filmate în aceeași scenă (fără pauză de 15 minute) sau în ±10 minute sunt tot cununia. Se montează ca vornicul:
@@ -917,6 +917,7 @@ Start) sau folosești Import XML din Syncaila.</li>
 <li><b>Toate sequence-urile finale sunt la 25 fps.</b></li>
 <li><b>Cât a durat</b>: la final, notificarea spune cât a durat tot procesul (Build, Sync, Auto Edit, analiza, descărcarea
 cardurilor, transcrierea...), cu secunde (de exemplu 1 h 5 min 12 s). Pe Mac, dacă a durat peste un minut, rămâne și în Centrul de notificări.</li>
+<li><b>Minimizat în bară</b>: din v4.6.1 aplicația nu mai e pusă la somn de macOS (App Nap) cât lucrează, chiar dacă e minimizată; înainte procesul mergea foarte greu așa.</li>
 <li><b>Proiectele</b> din Teaser Studio, Long Film și Long Film Blueprint stau câte 3 pe rând, apoi rândul următor (fără derulare în lateral).</li>
 <li><b>Scoaterea discului</b>: editorul Long Film eliberează fișierele când îl închizi, ca SSD-ul să poată fi scos (Eject).</li>
 <li><b>Proiectele se salvează singure</b> pe calculator. Ștergerea unui proiect nu șterge clipurile tale.</li>
@@ -1455,7 +1456,8 @@ the new wedding has no footage for are counted on the page and marked in the XML
 groom / bride getting ready, details, first look, couple, civil ceremony, church, venue, party, drone, interview. The order of the
 day is only a probability, not a rule: for every camera the most likely path through the day is chosen (getting ready → first look
 → couple → civil ceremony → church → after), and a pause of more than 15 minutes makes moving on easier. The civil ceremony can also
-be in the morning, before getting ready. Tested on three of your weddings (28 August, 29 August, 4 September): 93-95 % of the clips
+be in the morning, before getting ready. A camera the sound could not sync (an Osmo set to a random time, say) is put in its place in the day
+from what its clips show, compared with what the other cameras filmed then; its clips keep the order they were filmed in. Tested on three of your weddings (28 August, 29 August, 4 September): 93-95 % of the clips
 in the right moment.</p>
 <p><b>The civil ceremony</b> (colour Mango): recognised by the registrar's <b>tricolour sash</b>; the other cameras' clips filmed in
 the same scene (no 15-minute pause) or within ±10 minutes are the civil ceremony too. It is edited like the vornic: the registrar's
@@ -1827,6 +1829,7 @@ on Start) or use Import XML from Syncaila.</li>
 <li><b>How long it took</b>: at the end the notification says how long the whole process took (Build, Sync, Auto Edit, the
 analysis, the card offload, the transcription...). On a Mac, when it took more than a minute, it also stays in the Notification
 Center. With seconds (e.g. 1 h 5 min 12 s).</li>
+<li><b>Minimised in the Dock</b>: since v4.6.1 macOS no longer puts the app to sleep (App Nap) while it works, even minimised; before, the process became very slow that way.</li>
 <li><b>Projects</b> of Teaser Studio, Long Film and Long Film Blueprint sit 3 per row, then the next row (no side scroll).</li>
 <li><b>Ejecting the disk</b>: the Long Film editor lets go of the files when you close it, so the SSD can be ejected.</li>
 <li><b>Projects save themselves</b> on your computer. Deleting a project does not delete your clips.</li>

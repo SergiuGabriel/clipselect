@@ -54,6 +54,8 @@ jobs:
         run: |
           find dist/MoneyMakingMachine.app -name 'ffmpeg*' -type f
           chmod +x dist/MoneyMakingMachine.app/Contents/Resources/imageio_ffmpeg/binaries/ffmpeg* || true
+          plutil -replace NSAppSleepDisabled -bool YES dist/MoneyMakingMachine.app/Contents/Info.plist
+          plutil -replace LSAppNapIsDisabled -bool YES dist/MoneyMakingMachine.app/Contents/Info.plist
           codesign --force --deep -s - dist/MoneyMakingMachine.app
       - name: Create DMG
         run: |

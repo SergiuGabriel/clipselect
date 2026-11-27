@@ -543,6 +543,45 @@ def _sides(keys, P, cats, face_side):
     return out
 
 
+OFF_STEP, OFF_RANGE, OFF_NEAR, OFF_BETTER = 60, 26 * 3600, 600, 0.05    # clock search of a camera the sound could not place
+
+
+def clock_offsets(clips, faces, ai, free):
+    """Cameras (folder names in `free`) whose clock is not known (an Osmo set to a random time, no sound match): the
+    shift that makes what its clips show agree best with what the other cameras filmed at that time (the AI's moment
+    probabilities, Bhattacharyya similarity to the nearest clips). The camera's own order is kept, only its place in
+    the day moves; its own clock (shift 0) is kept unless another shift fits clearly better. Returns {folder: s}."""
+    if not free or not has_moments(ai):
+        return {}
+    t0 = lambda k: clips[k]["t0"]
+    cam = lambda k: Path(clips[k]["path"]).parent.name
+    rest = sorted((k for k in clips if not is_drone(clips[k]["path"], ai.get(k))), key=t0)
+    P, _, _ = _probs(ai, rest, faces, _couple_ids(rest, faces))
+    ref = [k for k in rest if cam(k) not in free and k in P]
+    if len(ref) < 20:
+        return {}
+    rs = np.array([t0(k) for k in ref])
+    re_ = rs + np.array([clips[k]["dur"] for k in ref])
+    R = np.sqrt(np.array([P[k] for k in ref]))
+    out = {}
+    for c in free:
+        ks = [k for k in rest if cam(k) == c and k in P]
+        if len(ks) < 3 or len(ks) > len(ref):
+            continue
+        a0 = np.array([t0(k) for k in ks])
+        a1 = a0 + np.array([clips[k]["dur"] for k in ks])
+        S = np.sqrt(np.array([P[k] for k in ks])) @ R.T          # similarity of every clip to every reference clip
+
+        def score(off):                     # reference clips filmed at the same time (within OFF_NEAR) count
+            near = (re_[None, :] >= a0[:, None] + off - OFF_NEAR) & (rs[None, :] <= a1[:, None] + off + OFF_NEAR)
+            return float(np.where(near, S, 0.0).max(axis=1).mean())
+        base = score(0.0)
+        best = max(((score(off), -abs(off), off) for off in range(-OFF_RANGE, OFF_RANGE + 1, OFF_STEP)))
+        if best[0] > base + OFF_BETTER:
+            out[c] = float(best[2])
+    return out
+
+
 def classify_ai(clips, faces, ai, speech=None):
     """The day model. Same arguments / result as classify (+ 'Mango' = the civil ceremony)."""
     speech = speech or {}
