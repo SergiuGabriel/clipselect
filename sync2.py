@@ -36,6 +36,22 @@ MAX_RES = 0.04               # a pair disagreeing with its group by more than 40
 
 
 # ------------------------------------------------------------------------------------------------- fingerprints
+def _maxfilt(L, nt, nf):
+    """Separable max filter (nt frames x nf bins, edges repeated); numpy only (scipy is not in every build)."""
+    def one(a, n, axis):
+        r = n // 2
+        pad = [(0, 0)] * a.ndim
+        pad[axis] = (r, r)
+        p = np.pad(a, pad, mode="edge")
+        out = a.copy()
+        for k in range(n):
+            sl = [slice(None)] * a.ndim
+            sl[axis] = slice(k, k + a.shape[axis])
+            np.maximum(out, p[tuple(sl)], out=out)
+        return out
+    return one(one(L, nt, 0), nf, 1)
+
+
 def peaks(x):
     """[(frame, bin)] of the spectral landmarks: local maxima of the WHITENED log spectrum (every bin minus its own
     usual level, so a camera mic and a mixer feed of the same sound give the same peaks) over +-3 frames and +-4 bins,
@@ -45,14 +61,13 @@ def peaks(x):
         return np.zeros(0, np.int32), np.zeros(0, np.int32)
     win = np.hanning(NFFT).astype(np.float32)
     fr, bn = [], []
-    from scipy.ndimage import maximum_filter
     for c0 in range(0, n, 20000):
         c1 = min(n, c0 + 20000)
         idx = np.arange(c0, c1)[:, None] * HOP + np.arange(NFFT)[None, :]
         S = np.abs(np.fft.rfft(x[idx] * win, axis=1))[:, LO_BIN:HI_BIN].astype(np.float32)
         L = np.log(S + 1e-6)
         L -= np.median(L, axis=0, keepdims=True)              # whitening: each bin against its usual level
-        mx = maximum_filter(L, size=(7, 9), mode="nearest")
+        mx = _maxfilt(L, 7, 9)
         cand = (L >= mx) & (L > 1.0)
         if not cand.any():
             continue
