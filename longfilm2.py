@@ -756,7 +756,19 @@ def timeline(parts, marker=lambda s: s):
     return dict(items=items, markers=[[marker(m), t] for m, t in markers])
 
 
-def export_timeline(tl, infos, out_path, name, look=None, hidden=(), muted=(), labels=None):
+def export_timeline(tl, infos, out_path, name, look=None, hidden=(), muted=(), labels=None, size=None):
+    """size = (w, h) of the sequence (Multicam keeps the camera's size); default 1920 x 1080."""
+    global SEQ_W, SEQ_H
+    keep = (SEQ_W, SEQ_H)
+    if size and size[0] and size[1]:
+        SEQ_W, SEQ_H = int(size[0]), int(size[1])
+    try:
+        return _export_timeline(tl, infos, out_path, name, look, hidden, muted, labels)
+    finally:
+        SEQ_W, SEQ_H = keep
+
+
+def _export_timeline(tl, infos, out_path, name, look=None, hidden=(), muted=(), labels=None):
     """The editor's timeline -> XML (hidden video tracks = clips switched off, muted audio lanes = sound switched off)."""
     _r, sf = core._rate(SEQ_FPS)
     ents = []
@@ -1414,7 +1426,7 @@ def apply_edits(parts, keys, edits):
     return out
 
 
-def assemble(r, analyses, st, zones, marker=lambda s: s, vornic_on=True, edits=None):
+def assemble(r, analyses, st, zones, marker=lambda s: s, vornic_on=True, edits=None, ready="interleave"):
     """The parts in his order, ready for export_xml, + the party edit for the map.
     r: build() result; st: party settings; zones: Slower cuts zones (timeline seconds of the party map);
     edits: the editor's changes (apply_edits). info["keys"] = the part key of every part."""
@@ -1446,9 +1458,14 @@ def assemble(r, analyses, st, zones, marker=lambda s: s, vornic_on=True, edits=N
                     out += [(p, a, b) for a, b in cuts]
                 return out
             shots = cut(ps)
-            if part == "ready":                 # groom and bride in parallel, not one after the other
-                shots = alternate([x for x in shots if x[0]["kind"] == "groom"],
-                                  [x for x in shots if x[0]["kind"] != "groom"])
+            if part == "ready":
+                g = [x for x in shots if x[0]["kind"] == "groom"]
+                b = [x for x in shots if x[0]["kind"] != "groom"]
+                if ready == "sequential":       # owner's option: all of the side filmed first, then the other
+                    first_g = not b or (g and (g[0][0].get("t") or 0) <= (b[0][0].get("t") or 0))
+                    shots = g + b if first_g else b + g
+                else:                           # groom and bride in parallel, not one after the other
+                    shots = alternate(g, b)
             shots = cut(dps) + shots
             items, t = [], 0.0
             for p, a, b in shots:

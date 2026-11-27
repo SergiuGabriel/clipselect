@@ -23,7 +23,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QEvent, QPointF, QRectF, Qt, QThread, QTimer, QUrl, Signal
 from PySide6.QtGui import QColor, QFont, QImage, QKeySequence, QMouseEvent, QPainter, QPen, QPixmap
-from PySide6.QtWidgets import (QDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QScrollBar, QSizePolicy,
+from PySide6.QtWidgets import (QApplication, QDialog, QHBoxLayout, QLabel, QMessageBox, QPushButton, QScrollBar, QSizePolicy,
                                QSlider, QStackedLayout, QVBoxLayout, QWidget)
 
 import core
@@ -75,8 +75,9 @@ class FrameReader(QThread):
                 return
             tag, path, t = job
             hw = [f for f in core.decode_flags() if f in ("-hwaccel", "videotoolbox")]   # Mac video decoder
+            fast = ["-skip_frame", "nokey"] if tag == "scrub" else []      # while dragging: the nearest key frame
             try:
-                out = subprocess.run([_ffmpeg(), "-v", "error", "-nostdin"] + hw + ["-ss", f"{max(0.0, t):.3f}", "-i", path,
+                out = subprocess.run([_ffmpeg(), "-v", "error", "-nostdin"] + hw + fast + ["-ss", f"{max(0.0, t):.3f}", "-i", path,
                                       "-frames:v", "1", "-vf", f"scale={self.width}:-2", "-f", "image2pipe",
                                       "-vcodec", "mjpeg", "-q:v", "4", "-"],
                                      capture_output=True, timeout=30, **core._NOWIN).stdout
@@ -85,6 +86,9 @@ class FrameReader(QThread):
                 img = None
             if img is not None and not img.isNull():
                 k = (path, round(t * FPS))
+                if tag == "scrub":              # a key frame, not the exact one: shown, never cached as exact
+                    self.got.emit(tag, img)
+                    continue
                 if k not in self.cache:
                     self.cache[k] = img
                     self.order.append(k)
@@ -107,7 +111,14 @@ class ThumbReader(FrameReader):
         if key in self.asked:
             return
         self.asked.add(key)
-        self.ask(key, path, t, latest=False)
+        with self.q.mutex:                  # the newest requests first (what is on screen now); old ones dropped
+            dq = self.q.queue
+            dq.appendleft((key, path, t))
+            while len(dq) > 160:
+                old = dq.pop()
+                if old is not None:
+                    self.asked.discard(old[0])
+            self.q.not_empty.notify()
 
     def run(self):
         import hashlib
@@ -198,12 +209,21 @@ class Model:
 
     def top_at(self, t):
         """The clip seen in the monitor at time t: the highest visible video track."""
+        key = (self.rev, len(self.items), tuple(sorted(self.hidden)))
+        if getattr(self, "_top_key", None) != key:      # index by start time, rebuilt only when the edit changes
+            vids = sorted((it for it in self.items if it.get("v") and it.get("on", True) and it["v"] not in self.hidden),
+                          key=lambda it: it["start"])
+            self._top_items, self._top_starts = vids, [it["start"] for it in vids]
+            self._top_max = max((it["dur"] for it in vids), default=0.0)
+            self._top_key = key
+        import bisect
+        i = bisect.bisect_right(self._top_starts, t) - 1
         best = None
-        for it in self.items:
-            v = it.get("v")
-            if v and it.get("on", True) and v not in self.hidden and it["start"] <= t < it["start"] + it["dur"]:
-                if best is None or v > best["v"]:
-                    best = it
+        while i >= 0 and self._top_starts[i] > t - self._top_max - 1e-9:
+            it = self._top_items[i]
+            if it["start"] <= t < it["start"] + it["dur"] and (best is None or it["v"] > best["v"]):
+                best = it
+            i -= 1
         return best
 
     # ---- operations
@@ -362,6 +382,11 @@ class TimelineView(QWidget):
         self._last = None                      # the mouse during a drag (the timeline scrolls at the edges)
         self.edge = QTimer(self)
         self.edge.setInterval(30)
+        self._layer, self._layer_key, self._thumb_ver = None, None, 0
+        self._thumb_tm = QTimer(self)
+        self._thumb_tm.setSingleShot(True)
+        self._thumb_tm.setInterval(90)
+        self._thumb_tm.timeout.connect(self.update)
         self.edge.timeout.connect(self._edge_tick)
         self.thumbs = {}
         self.scaled = {}                       # (key, w, h) -> QPixmap already at the size it is drawn
@@ -477,12 +502,17 @@ class TimelineView(QWidget):
         self.update()
 
     def set_playhead(self, t, follow=True):
+        old = self.x_of(self.ph)
         self.ph = max(0.0, t)
         if follow:
             vis = (self.width() - HDR) / self.pps
             if self.ph < self.x0 or self.ph > self.x0 + vis * 0.95:
                 self.hbar.setValue(int(max(0.0, self.ph - vis * 0.1) * 10))
-        self.update()
+                return                                  # the scroll repaints everything
+        new = self.x_of(self.ph)
+        # only the two strips of the old and the new playhead are drawn again (the rest comes from the cached layer)
+        for x in (old, new):
+            self.update(int(x) - 8, 0, 17, self.height())
 
     def _gap_at(self, p):
         """(row key, a, b) of the empty space between two clips under the mouse on a track, else None."""
@@ -511,10 +541,28 @@ class TimelineView(QWidget):
         return best if abs(best - t) * self.pps <= SNAP_PX else t
 
     # ---- painting
-    def paintEvent(self, _e):
-        g = QPainter(self)
+    def paintEvent(self, e):
         W, H = self.width(), self.height()
-        g.fillRect(self.rect(), QColor("#1d1d1d"))
+        dpr = self.devicePixelRatioF()
+        key = (self.m.rev, round(self.x0, 5), round(self.pps, 6), W, H, dpr, tuple(sorted(self.sel)), self._thumb_ver,
+               tuple(sorted(self.m.hidden)), str(self.m.muted))
+        if key != self._layer_key or self._layer is None:
+            pm = self._layer
+            if pm is None or pm.width() != int(W * dpr) or pm.height() != int(H * dpr):
+                pm = QPixmap(int(W * dpr), int(H * dpr))      # same size: the old layer is drawn over again
+                pm.setDevicePixelRatio(dpr)
+            lg = QPainter(pm)
+            self._paint_static(lg, W, H)
+            lg.end()
+            self._layer, self._layer_key = pm, key
+        g = QPainter(self)
+        r = e.rect()
+        g.drawPixmap(r, self._layer, QRectF(r.x() * dpr, r.y() * dpr, r.width() * dpr, r.height() * dpr).toRect())
+        self._paint_overlay(g, W, H)
+        g.end()
+
+    def _paint_static(self, g, W, H):
+        g.fillRect(QRectF(0, 0, W, H), QColor("#1d1d1d"))
         f = QFont(g.font())
         f.setPointSizeF(8.5)
         g.setFont(f)
@@ -564,7 +612,8 @@ class TimelineView(QWidget):
                 g.setPen(QColor("#e3cf3e"))
                 g.drawLine(int(x), 14, int(x), RULER)
                 g.drawText(int(x) + 3, RULER - 2, name)
-        # selected gap / selection box / drop preview / playhead
+    def _paint_overlay(self, g, W, H):
+        """What changes all the time (playhead, selection box, drop preview, the selected gap): drawn over the layer."""
         if self.gap:
             for kind, key, y, h in self.rows():
                 if kind == self.gap[0] and key == self.gap[1]:
@@ -587,7 +636,6 @@ class TimelineView(QWidget):
             g.drawLine(int(x), 0, int(x), H)
             g.setBrush(QColor("#2d8ceb"))
             g.drawPolygon([QPointF(x - 6, 0), QPointF(x + 6, 0), QPointF(x, 8)])
-        g.end()
 
     def _clip(self, g, it, r, audio):
         r = r.intersected(QRectF(HDR, 0, self.width() - HDR, self.height()))
@@ -629,12 +677,15 @@ class TimelineView(QWidget):
         n = max(1, min(12, int(inner.width() // tw)))
         g.save()
         g.setClipRect(inner)
+        q = next((v for v in (1, 2, 5, 10, 20, 30, 60, 120, 300, 600) if v >= 0.5 * tw / self.pps), 600)
         for k in range(n):
             x = inner.x() + k * tw
             t_film = self.t_of(x + tw / 2)
             if not (it["start"] <= t_film <= it["start"] + it["dur"]):
                 t_film = it["start"] + it["dur"] / 2
-            st = round(it["src"] + (t_film - it["start"]), 0)
+            # source seconds on a fixed grid: scrolling asks for the same pictures (before, every scroll step asked
+            # for new ones and scaled new pixmaps)
+            st = float(round((it["src"] + (t_film - it["start"])) / q) * q)
             key = f"{it['path']}|{st:.1f}"
             img = self.thumbs.get(key)
             if img is None and self.thumb_reader is not None:
@@ -655,7 +706,9 @@ class TimelineView(QWidget):
 
     def got_thumb(self, key, img):
         self.thumbs[key] = img
-        self.update()
+        self._thumb_ver += 1
+        if not self._thumb_tm.isActive():          # many pictures arrive together: one repaint for all of them
+            self._thumb_tm.start()
 
     # ---- mouse
     def _header_click(self, p):
@@ -1071,6 +1124,10 @@ class Editor(QDialog):
         self.view.thumb_reader.got.connect(self.view.got_thumb)
         self.view.thumb_reader.start()
         self.view.playhead_moved.connect(self._seek)
+        self._rest = QTimer(self)                  # the exact frame once the playhead rests
+        self._rest.setSingleShot(True)
+        self._rest.setInterval(180)
+        self._rest.timeout.connect(lambda: self._show_frame_at(self.view.ph, exact=True))
         self.view.changed.connect(self._changed)
         self.playing, self.cur, self.t_start, self.ph_start = False, None, 0.0, 0.0
         self.loading, self.use_wall, self.last_pos, self.back, self.load_t, self.moved_t = False, True, 0.0, 0, 0.0, 0.0
@@ -1089,17 +1146,36 @@ class Editor(QDialog):
         self._seek(0.0)
 
     # ---- monitor
-    def _show_frame_at(self, t):
+    def _show_frame_at(self, t, exact=True):
         it = self.m.top_at(t)
         self.tc.setText(tc(t))
         if it is None:
             self.screen.setPixmap(QPixmap())
             return
-        self.frames.ask("mon", it["path"], it["src"] + (t - it["start"]))
+        st = it["src"] + (t - it["start"])
+        if exact:
+            self.frames.ask("mon", it["path"], st)
+            return
+        # dragging the playhead (owner: "lag everywhere"): at once the nearest clip picture already in memory, then the
+        # nearest key frame (fast decode), and the exact frame when the mouse rests
+        img = self.frames.cache.get((it["path"], round(st * FPS)))
+        if img is None:
+            th = self.view.thumbs
+            for d in (0, 1, -1, 2, -2, 5, -5):
+                img = th.get(f"{it['path']}|{round(st + d, 0):.1f}")
+                if img is not None:
+                    break
+        if img is not None:
+            self._paint_frame(img)
+        self.frames.ask("scrub", it["path"], st)
+        self._rest.start()
 
     def _frame(self, tag, img):
-        if tag != "mon" or self.playing and self.player is not None:
+        if tag not in ("mon", "scrub") or self.playing and self.player is not None:
             return
+        self._paint_frame(img)
+
+    def _paint_frame(self, img):
         pm = QPixmap.fromImage(img).scaled(self.screen.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
         self.screen.setPixmap(pm)
 
@@ -1108,7 +1184,8 @@ class Editor(QDialog):
             self.pause()
         self.stack.setCurrentWidget(self.screen)
         self.view.set_playhead(t, follow=False)
-        self._show_frame_at(t)
+        dragging = bool(self.view.drag) or bool(QApplication.mouseButtons() & Qt.LeftButton)
+        self._show_frame_at(t, exact=not dragging)
 
     def toggle(self):
         self.pause() if self.playing else self.play()

@@ -385,7 +385,19 @@ def sync_clip(indexes, x, preds=None, win=90.0):
     return r
 
 
+ENGINE = "graph"             # v4.4.0: "graph" = sync2 (every file with every other, like Align / Syncaila), "classic"
+
+
 def run_sync(masters, clips, progress=None, cancel=None, clocks=None, groups=None, jobs=2):
+    if ENGINE != "classic":
+        import sync2
+        info, res = sync2.run_sync(masters, clips, progress, cancel, clocks, groups, jobs)
+        run_sync.report, run_sync.suspect = sync2.run_sync.report, sync2.run_sync.suspect
+        return info, res
+    return run_sync_classic(masters, clips, progress, cancel, clocks, groups, jobs)
+
+
+def run_sync_classic(masters, clips, progress=None, cancel=None, clocks=None, groups=None, jobs=2):
     """masters, clips: lists of paths. clocks: {path: time-of-day seconds or None} (timecode / BWF / file dates),
     groups: {clip: camera folder}. Returns (masters_info, {clip_path: result}).
 
@@ -460,7 +472,7 @@ def run_sync(masters, clips, progress=None, cancel=None, clocks=None, groups=Non
             if r["conf"] == "high" and ck is not None and info[r["master"]]["clock"] is not None:
                 delta[g] = _tod_diff(ck, info[r["master"]]["clock"]) - r["offset"]   # this camera's clock error
             results[c] = r
-    run_sync.suspect = order_check(results, info, groups)
+    run_sync.suspect = run_sync_classic.suspect = order_check(results, info, groups)
     fm = lambda v: f"{int(v // 60)}m {int(v % 60):02d}s" if v >= 60 else f"{v:.0f}s"
     run_sync.report = (f"Sync took {fm(_t.time() - T0)}: reading the files {fm(t_read)}, searching {fm(t_search)}"
                        + (" (reading is limited by the disk: an external SSD or the internal drive is much faster than a HDD)"

@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.3.2), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.4.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -1162,6 +1162,40 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   27-min service takes (63496, C9768) cut by the Auto selection + the priest's 12-min shot (63507) kept whole. Now in the
   automatic mode a church clip > LONG_TAKE 120 s is thinned (longfilm2.thin): ~12 % (20-90 s) in pieces <= 6 s spread over
   its selected parts, and the priest rule never keeps such a take whole. Labelled mode unchanged.
+
+## v4.4.0 (owner: "reinvent Align for our program, keep a backup; the editor lags everywhere; editor in Multicam too;
+## getting ready interleaved or one after the other")
+- BACKUP of v4.3.2: branch backup-v4.3.2 on GitHub (tags cannot be pushed from Claude's sessions: 403). The classic engine
+  stays in the app: sync.run_sync_classic, chosen in Settings > "Sync engine" (store.app["sync_engine"] graph | classic,
+  sync.ENGINE; default graph).
+- sync2.py (Align / PluralEyes idea, our own code; Align is GPLv3, never copy it): 4 kHz audio (sync.audio_pcm) ->
+  landmarks = local maxima of the WHITENED log spectrum (every bin minus its median: a camera mic and the mixer feed give
+  the same peaks; the first version with one peak per band missed 63568 / the osmo 11 s clip / the first-look pair) over
+  +-3 frames x +-4 bins, 5 per frame, 64 ms frames -> hashes (f1, f2, dt <= 40 frames, fan-out 8) -> ALL files matched
+  at once (hash groups > 60 dropped; votes per (file pair, dt), neighbours merged, >= 5 votes and >= 2 x the next offset)
+  -> refine (GCC-PHAT, up to 3 loudest 10 s windows of the overlap, +-0.4 s, agree within 4 ms, sub-sample) -> graph
+  solve per component (weighted least squares, the worst edge out while > 40 ms) -> masters' "start" from the graph
+  (masters in one component), else clocks (master_starts) -> results like run_sync (a clip only linked to other clips:
+  fail "matched other clips but not the recorder"; a master that is also a clip = offset 0) -> sync.order_check.
+  MEASURED on his 28 Aug party (2 recorder takes + 48 clips + 6 intruders, 8 kHz opus copies, /home/claude/st28): every
+  long clip at the same place as Align and the classic engine (within 5-50 ms), + 63573 (Align missed), 63568 right
+  (classic wrong), the first-look pair 63426/C9754 matched to each other (Align too), church intruders out; 27 s vs 144 s
+  classic vs 6 s Align (Rust). tools/sync2_check.py (synthetic: 5 clips < 0.05 ms error, an island pair, an outsider) in CI.
+  Align itself: built here (patched 2 newer-std calls, /home/claude/ext/align), CLI JSON compared.
+- Editor speed (editor.py): the static timeline is drawn once into a cached layer (key = model rev, scroll, zoom, size,
+  dpr, selection, thumbs version, hidden / muted); paintEvent blits the dirty rect + overlays (playhead, box, ghosts,
+  gap); set_playhead repaints only the old / new 17 px strips; thumbnails arrive -> ONE repaint per 90 ms; clip pictures
+  on a fixed source-time grid (scrolling asks for the same pictures, not new ones each step); ThumbReader newest-first
+  (LIFO, 160 max, dropped ones can be asked again); playhead drag = picture already in memory + key-frame decode
+  (-skip_frame nokey, tag "scrub"), the exact frame 180 ms after the mouse rests; Model.top_at indexed (bisect by rev).
+  Bench (/home/claude/perf/bench.py, 3000 cuts): paint 33 -> 1 ms (fit), playback frame 5.3 -> 1.3, drag 5.8 -> 3.5.
+- Multicam editor: "Edit" / "Continue editing" button (MulticamPage.edit_film): _mc_timeline = cuts per camera on
+  director.video_order tracks (full clips without an auto edit / for check / by-time cameras), camera sound whole
+  (("cam", ci) lanes), recorder (("rec", 0)); probe cache in the blob ("probe"); p["mc_timeline"/"mc_hidden"/"mc_muted"];
+  Export XML writes it with longfilm2.export_timeline(size = first video clip's size; SEQ_W / SEQ_H set temporarily);
+  a new Auto Edit clears it.
+- Long Film v2 getting ready: p["ready_mode"] interleave (default, longfilm2.alternate) | sequential (all of the side
+  filmed first, then the other); buttons Interleaved / One after the other in the Vornic card; assemble(ready=).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

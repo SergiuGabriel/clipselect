@@ -329,6 +329,16 @@ devin recorderul. Clipurile care nu sunt pe acest calculator sunt sărite, cu av
 (de ex. 0190_1-2, 0190_3-4, 0190_MIX). Aplicația folosește una singură, ca să nu le pună una după alta. În Setări alegi care:
 <b>Automat</b> (implicit) = pista cea mai curată (cele mai puține vârfuri tăiate, apoi semnalul mai puternic), niciodată mixul;
 sau <b>Mixul</b>, <b>Pista 1</b>, <b>Pista 2</b>, <b>Pista 3</b> (în ordinea numelor). După schimbare dai din nou Sync.</p>
+<h3>Motorul de sincronizare: Nou sau Clasic (Setări)</h3>
+<p><b>Nou</b> (implicit, v4.4.0): fiecare fișier primește o amprentă de sunet (vârfurile spectrului, perechi), apoi
+<b>toate fișierele sunt potrivite între ele deodată</b>: camerele cu recorderul, dar și camerele între ele, lavalierele cu
+camerele. Fiecare potrivire e verificată pe forma de undă (până la 3 ferestre de 10 s care trebuie să dea același loc,
+la 4 ms), apoi tot grupul e așezat deodată; o potrivire care nu se împacă cu restul (peste 40 ms) e scoasă. Așa se
+sincronizează și clipurile care nu prind recorderul, prin celelalte camere, iar fișierele recorderului sunt așezate de
+camerele care filmau peste pauza dintre ele. Pe nunta din 28 august: aceleași poziții ca motorul clasic și ca Align, la
+sutimi de secundă, plus câteva clipuri găsite în plus, în 27 de secunde în loc de 2 minute și 24. Clipurile care se
+potrivesc doar între ele (de ex. first look pe două camere, fără recorder) primesc „se potrivește cu alte clipuri, dar nu
+cu recorderul”. <b>Clasic</b> = motorul de dinainte (fiecare clip căutat doar în recorder), dacă vrei să te întorci.</p>
 <h3>Verificarea ordinii (ca în Syncaila)</h3>
 <p>După sincronizare, aplicația verifică fiecare cameră după regula Syncaila: o cameră își filmează fișierele unul după altul, în
 ordinea numerelor (C9773, C9775, C9778…), și niciodată două lucruri deodată. Ceasul camerei nu contează deloc (poate fi dat peste
@@ -340,6 +350,11 @@ din greșeală, puse pe intrarea mirilor sau pe primul dans). Acestea devin „C
 <p>În tabelul camerelor, coloana <b>Pistă</b> (Track): Auto pune camera statică pe V1 (jos), camerele secundare deasupra ei și
 camera principală (cea cu mână liberă cu cel mai mult material) pe pista de sus. Alegi V1, V2... ca să muți o cameră; camera
 care avea pista aleasă trece înapoi pe Auto.</p>
+<h3>Editorul în Multicam</h3>
+<p>Butonul <b>Editează</b> (Edit) deschide editul în același editor ca la Long Film v2: fiecare cameră pe pista ei (cu
+ordinea pistelor de mai sus), dedesubt recorderul și sunetul fiecărei camere, întregi. Muți, tai, ștergi ca în Premiere;
+Salvează păstrează varianta ta, iar Export XML o scrie pe ea (la mărimea camerei, 25 fps). Un Auto Edit nou pornește din
+nou de la editul automat.</p>
 <h3>Dacă adaugi fișiere după</h3>
 <p>Dai din nou Sync, apoi Auto Edit. A doua oară se analizează doar clipurile noi.</p>
 
@@ -597,6 +612,8 @@ sunetul fișierelor întregi (cel mai clar canal, niciodată un amestec), iar î
 recorderul. În modul automat clipurile celorlalte camere filmate până la 30 de minute înainte / după first look (după ceas) sunt
 verificate după <b>sunet</b>: intră la first look doar cele al căror sunet e chiar același moment (un clip cu mireasa și
 prietenele ei, filmat cu câteva minute înainte, nu mai intră).
+<b>Pregătirile</b>: Intercalate (implicit: câte un bloc mare de mire și de mireasă, apoi pe rând câte 3-5 cadre) sau Pe rând
+(tot cel filmat primul, apoi celălalt), din cardul Vornic.
 <b>Biserica filmată în cadre lungi</b> (modul automat): dintr-o filmare de peste 2 minute a slujbei intră
 cam 12 % (20–90 s), în bucăți de până la 6 s din părțile bune, ca în filmele tale lungi.
 O cameră pe trepied (clipuri foarte lungi, de peste 10 minute de obicei: a74 la Alex și Andreea) nu e niciodată aleasă pentru
@@ -1226,6 +1243,16 @@ are not on this computer are skipped, with a warning.</p>
 0190_3-4, 0190_MIX). The app uses only one, so they are never laid one after the other. In Settings you choose which:
 <b>Automatic</b> (default) = the cleanest track (fewest clipped peaks, then the stronger signal), never the mix; or <b>The mix</b>,
 <b>Track 1</b>, <b>Track 2</b>, <b>Track 3</b> (in name order). After a change press Sync again.</p>
+<h3>Sync engine: New or Classic (Settings)</h3>
+<p><b>New</b> (default, v4.4.0): every file gets a sound fingerprint (spectral peaks, in pairs), then <b>all files are
+matched with each other at once</b>: cameras with the recorder, but also cameras with each other and lavaliers with
+cameras. Every match is checked on the waveform (up to 3 windows of 10 s that must give the same place, within 4 ms), then
+the whole group is placed at once; a match that does not agree with the rest (over 40 ms) is dropped. Clips that miss the
+recorder are synced through the other cameras, and the recorder files are placed by the cameras filming across the break
+between them. On the 28 August wedding: the same places as the classic engine and as Align, to hundredths of a second,
+plus a few more clips, in 27 seconds instead of 2 min 24. Clips that only match each other (e.g. a first look on two
+cameras, no recorder) get "matched other clips but not the recorder". <b>Classic</b> = the engine before (every clip
+searched in the recorder only), if you want to go back.</p>
 <h3>The order check (like Syncaila)</h3>
 <p>After the sync every camera is checked with Syncaila's rule: a camera films its files one after the other, in the order of their
 numbers (C9773, C9775, C9778…), and never two things at once. The camera's clock does not matter at all (it can be hours off or set
@@ -1237,6 +1264,10 @@ Auto Edit. A counter that starts again on the same card (C9999 → C0001) is und
 <p>In the cameras table, the <b>Track</b> column: Auto puts the static camera on V1 (bottom), the secondary cameras above it and the
 main camera (the handheld one with the most footage) on the top track. Pick V1, V2... to move a camera; the camera that had that
 track goes back to Auto.</p>
+<h3>The editor in Multicam</h3>
+<p>The <b>Edit</b> button opens the edit in the same editor as Long Film v2: every camera on its track (with the track order
+above), the recorder and every camera's sound whole underneath. Move, cut, delete like in Premiere; Save keeps your
+version and Export XML writes it (at the camera's size, 25 fps). A new Auto Edit starts again from the automatic edit.</p>
 <h3>If you add files later</h3>
 <p>Press Sync again, then Auto Edit. The second time only the new clips are analysed.</p>
 
@@ -1485,6 +1516,8 @@ sound of the whole files (the clearest channel, never a mix) and, in the automat
 recorder too. In the automatic mode the other cameras' clips filmed up to 30 minutes before / after the first look (by the clock)
 are checked by <b>sound</b>: only those whose sound is the very same moment join the first look (a clip of the bride with her
 friends filmed a few minutes earlier no longer does).
+<b>Getting ready</b>: Interleaved (default: a big block of groom and of bride, then turns of 3-5 shots) or One after
+the other (all of the side filmed first, then the other), in the Vornic card.
 <b>A church filmed in long takes</b> (automatic mode): of a take of the service longer than 2 minutes about
 12 % (20–90 s) goes in, in pieces of up to 6 s from its good parts, like your own long films.
 A camera on a tripod (very long clips, usually over 10 minutes: the a74 at Alex & Andreea) is never chosen for the groom, the

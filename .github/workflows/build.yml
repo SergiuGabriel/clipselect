@@ -44,6 +44,7 @@ jobs:
           python tools/daymap_check.py
           python tools/party_check.py
           python tools/order_check.py
+          python tools/sync2_check.py
           python tools/resolve_check.py
       - run: python make_icons.py
       - run: ${{ env.PYI }} $MLX_FLAGS --exclude-module torch --icon icon.icns --add-data "icon.png:." --add-data "assets:assets" --osx-bundle-identifier com.moneymakingmachine.app app.py
@@ -76,6 +77,7 @@ jobs:
           python tools/daymap_check.py
           python tools/party_check.py
           python tools/order_check.py
+          python tools/sync2_check.py
           python tools/resolve_check.py
       - run: python make_icons.py
       - run: ${{ env.PYI }} --icon icon.ico --add-data "icon.png;." --add-data "assets;assets" app.py

@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (QPlainTextEdit, QTextBrowser, QAbstractItemView, 
                                QGridLayout, QHBoxLayout, QLabel, QLineEdit, QListWidget, QListWidgetItem,
                                QMainWindow, QProgressBar, QPushButton, QScrollArea, QSlider, QStackedWidget,
                                QTabWidget, QVBoxLayout, QWidget, QSizePolicy, QTableWidget, QTableWidgetItem,
-                               QHeaderView, QCheckBox, QRadioButton)
+                               QHeaderView, QCheckBox, QRadioButton, QMessageBox)
 
 import core
 import director
@@ -51,7 +51,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v4.3.2"
+APP, VER = "MoneyMakingMachine", "v4.4.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -395,11 +395,13 @@ class Store:
         core.HWACCEL = self.app["hwaccel"]
         core.set_slots(max(2, self.app["jobs"]))
         sync.TAKE_PREF = self.app.get("rec_take", "auto")
+        sync.ENGINE = self.app.get("sync_engine", "graph")
 
     def save_app(self):
         core.HWACCEL = self.app["hwaccel"]
         core.set_slots(max(2, self.app["jobs"]))
         sync.TAKE_PREF = self.app.get("rec_take", "auto")
+        sync.ENGINE = self.app.get("sync_engine", "graph")
         (self.dir / "settings.json").write_text(json.dumps(self.app), "utf-8")
 
     def save(self):
@@ -2652,7 +2654,11 @@ class MulticamPage(QWidget):
         self._chain, self._awake = None, Awake()
         self.b_tomc = btn("Auto Edit in Multicam  →", slot=self.to_multicam)
         self.b_tomc.setToolTip("Moves this project to Multicam, where Auto Edit builds the edit (the sync is kept).")
+        self.b_edit = btn("Edit", slot=self.edit_film)
+        self.b_edit.setToolTip("Open the edit in the editor (like Premiere): every camera on its track, the recorder and "
+                               "the cameras' sound below. Export XML then writes your version.")
         hh.addWidget(self.b_xml)
+        hh.addWidget(self.b_edit)
         hh.addWidget(self.b_exp)
         hh.addWidget(self.b_tomc)
         hh.addWidget(self.b_run)
@@ -3303,6 +3309,8 @@ class MulticamPage(QWidget):
                     c["role"] = director.detect_role([an_all.get(x) for x in c["clips"]])
             if here:
                 self.status.setText("Auto edit ready. Tweak it on the right, then Export XML.")
+            if p.get("mc_timeline"):           # a new automatic edit: the editor starts from it
+                p.update(mc_timeline=None, mc_hidden=[], mc_muted=[])
             notify(f"Auto edit ready: {p['name']}", took=("mc", p["id"]))
             self._chain = None
         self.job_status, self.job_progress = "Done", 1.0
@@ -3333,6 +3341,8 @@ class MulticamPage(QWidget):
     def refresh_all(self):
         s = self.p.get("sync")
         self.b_exp.setEnabled(bool(s))
+        self.b_edit.setEnabled(bool(s))
+        self.b_edit.setText("Continue editing" if self.p.get("mc_timeline") else "Edit")
         self.m_sel.blockSignals(True)
         self.m_sel.clear()
         if s:
@@ -3510,6 +3520,96 @@ class MulticamPage(QWidget):
         self.store.save()
         self.recompute()
 
+    def _mc_timeline(self):
+        """The multicam as the editor's timeline: every camera's cuts on its own video track (static V1, main camera on
+        top, his own choices), the recorder files and every camera's sound whole underneath."""
+        s, cams = self.p["sync"], self.p["cams"]
+        starts = sync.master_starts(s["masters"])
+        res = s["clips"]
+        foot = {i: sum(res[x]["dur"] for x in c["clips"] if x in res) for i, c in enumerate(cams)}
+        order = director.video_order(cams, foot)
+        track = {ci: k + 1 for k, ci in enumerate(order)}
+        placed = [(ci, p, starts[res[p]["master"]] + res[p]["offset"]) for ci, c in enumerate(cams)
+                  if c.get("role") != "Audio" for p in c["clips"]
+                  if p in res and res[p]["conf"] != "fail" and res[p]["master"] < len(starts)]
+        T0 = min([0.0] + [g for _c, _p, g in placed])
+        lab = lambda ci: sync.CAM_LABELS[ci % len(sync.CAM_LABELS)]
+        items = []
+        cut = any(e and e.get("pieces") for e in (self.edits or []))
+        if cut:
+            for e in self.edits or []:
+                if not e:
+                    continue
+                g0 = starts[e["master"]]
+                for ci, p, a, b, s0 in e["pieces"]:
+                    if ci in track and b - a > 0.02:
+                        items.append(dict(path=p, v=track[ci], ak=None, start=g0 + s0 - T0, src=a, dur=b - a,
+                                          label=lab(ci), on=True, aon=True))
+        for ci, p, g in placed:
+            c = cams[ci]
+            whole = not cut or c.get("approx") or c.get("check")
+            if whole and ci in track:
+                items.append(dict(path=p, v=track[ci], ak=["cam", ci], start=g - T0, src=0.0, dur=res[p]["dur"],
+                                  label=lab(ci), on=True, aon=True))
+            elif cut:
+                items.append(dict(path=p, v=None, ak=["cam", ci], start=g - T0, src=0.0, dur=res[p]["dur"],
+                                  label=lab(ci), on=True, aon=True))
+        for mi, m in enumerate(s["masters"]):
+            if m.get("path"):
+                items.append(dict(path=m["path"], v=None, ak=["rec", 0], start=starts[mi] - T0, src=0.0,
+                                  dur=m["duration"], label="", on=True, aon=True))
+        return dict(items=items, markers=[])
+
+    def _mc_infos(self, tl):
+        """projectsetup.probe of every file of the timeline (cached in the project blob by size + date)."""
+        blob = self.store.load_blob(self.p["id"])
+        cache = blob.setdefault("probe", {})
+        out, changed = {}, False
+        for f in sorted({it["path"] for it in tl["items"]}):
+            k = f"{f}|{longfilm2.stamp(f)}"
+            if k not in cache:
+                try:
+                    cache[k] = projectsetup.probe(f)
+                except Exception:
+                    cache[k] = dict(video=False, dur=0.0, fps=25.0, w=1920, h=1080, ach=0, arate=48000, ctime=None, tod=None)
+                changed = True
+            out[f] = cache[k]
+        if changed:
+            self.store.save_blob(self.p["id"], blob)
+        return out
+
+    def edit_film(self):
+        if not self.p.get("sync"):
+            return
+        import editor
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            tl = self.p.get("mc_timeline") or self._mc_timeline()
+            infos = self._mc_infos(tl)
+        finally:
+            QApplication.restoreOverrideCursor()
+        names = {("rec", 0): i18n.T("Recorder")}
+        for ci, c in enumerate(self.p["cams"]):
+            names[("cam", ci)] = c["name"]
+        lane = lambda ak: names.get(tuple(ak) if ak else None, str(ak))
+
+        def keep(dlg):
+            self.p.update(mc_timeline=dlg.timeline(), mc_hidden=sorted(dlg.m.hidden), mc_muted=dlg.m.muted)
+            self.store.save()
+            notify(i18n.T("Your changes are saved."))
+        dlg = editor.Editor(self, tl, infos, PR_LABEL, lane, str(self.store.dir / "thumbs"),
+                            self.p.get("mc_hidden", []), self.p.get("mc_muted", []), on_save=keep,
+                            keys=self.store.app.get("editor_keys"),
+                            on_keys=lambda k: (self.store.app.__setitem__("editor_keys", k), self.store.save_app()))
+        dlg.setWindowTitle(i18n.T("Edit the multicam"))
+        dlg.exec()
+        dlg.deleteLater()
+        if dlg.reset:
+            self.p.update(mc_timeline=None, mc_hidden=[], mc_muted=[])
+            self.store.save()
+            notify(i18n.T("The automatic edit is back."))
+        self._sync_buttons()
+
     def export(self, target="premiere"):
         s = self.p.get("sync")
         if not s:
@@ -3518,6 +3618,21 @@ class MulticamPage(QWidget):
         d = resolve.name_for(str(Path(first).parent / f"{self.p['name']}.xml"), target)
         out, _ = QFileDialog.getSaveFileName(self, "Save XML", d, "XML (*.xml)")
         if not out:
+            return
+        if self.p.get("mc_timeline"):          # his version from the editor
+            try:
+                tl = self.p["mc_timeline"]
+                infos = self._mc_infos(tl)
+                vid = [infos[it["path"]] for it in tl["items"] if it.get("v") and infos.get(it["path"], {}).get("w")]
+                size = (vid[0]["w"], vid[0]["h"]) if vid else None     # the camera's size, like the multicam export
+                longfilm2.export_timeline(tl, infos, out, self.p["name"], hidden=self.p.get("mc_hidden", []),
+                                          muted=self.p.get("mc_muted", []), size=size)
+                for_target(out, target)
+                self.status.setText(i18n.T("Saved your edited version to {}.").format(out))
+                notify(f"XML saved: {Path(out).name}")
+            except Exception as e:
+                logging.exception("multicam editor export failed")
+                notify(f"Export failed: {e}", error=True)
             return
         try:
             r = director.export_xml(s["masters"], self.p["cams"], s["clips"], self.an, self.edits, out, self.p["name"])
@@ -3607,6 +3722,17 @@ class SettingsPage(QWidget):
         self.c_take.setCurrentIndex(keys.index(cur_t) if cur_t in keys else 0)
         self.c_take.currentIndexChanged.connect(lambda i: self.set_take(keys[i]))
         right.addWidget(self.c_take)
+        right.addSpacing(10)
+        right.addWidget(lbl("Sync engine"))
+        right.addWidget(lbl("New: every file is compared with every other one (cameras with each other too, like Align / "
+                            "Syncaila), the whole group is placed at once, ~5x faster. Classic: every clip is searched in "
+                            "the recorder only (the engine before v4.4.0).", "muted", True))
+        self.c_eng = QComboBox()
+        self.c_eng.setProperty("i18n", True)
+        self.c_eng.addItems(["New (every file with every other)", "Classic (in the recorder only)"])
+        self.c_eng.setCurrentIndex(1 if store.app.get("sync_engine", "graph") == "classic" else 0)
+        self.c_eng.currentIndexChanged.connect(lambda i: self.set_engine("classic" if i else "graph"))
+        right.addWidget(self.c_eng)
         right.addSpacing(18)
         right.addWidget(lbl("Language", "h2"))
         lr = QHBoxLayout()
@@ -3761,6 +3887,12 @@ class SettingsPage(QWidget):
     def set_hw(self, v):
         self.store.app["hwaccel"] = v
         self.store.save_app()
+
+    def set_engine(self, k):
+        self.store.app["sync_engine"] = k
+        self.store.save_app()
+        notify(i18n.T("Sync engine: {}").format(i18n.T(self.c_eng.currentText())) + ". " +
+               i18n.T("Press Sync again on the projects that should use it."))
 
     def set_take(self, k):
         self.store.app["rec_take"] = k
@@ -7674,6 +7806,17 @@ class LongFilm2Page(QWidget):
         l2.addWidget(lbl("ON: the Forest shots of 2 cameras are synced by their own sound: the main camera whole on V1, the "
                          "second camera whole on V2 (switched off), the cut version on V3. OFF: no vornic, Forest is not "
                          "used.", "muted", True))
+        l2.addSpacing(8)
+        l2.addWidget(lbl("Getting ready (groom and bride)"))
+        rr = QHBoxLayout()
+        self.b_ri = btn("Interleaved", "seg", lambda: self._ready("interleave"))
+        self.b_rs = btn("One after the other", "seg", lambda: self._ready("sequential"))
+        rr.addWidget(self.b_ri)
+        rr.addWidget(self.b_rs)
+        rr.addStretch()
+        l2.addLayout(rr)
+        l2.addWidget(lbl("Interleaved: groom and bride told in parallel (a big block of each, then turns of 3-5 shots). One "
+                         "after the other: all the shots of the side filmed first, then the other side.", "muted", True))
         l4 = card(3, "Colour")
         cr = QHBoxLayout()
         cr.addWidget(lbl("Put my look on every clip", "", True), 1)
@@ -7813,6 +7956,7 @@ class LongFilm2Page(QWidget):
             w_.setCurrentIndex(i)
             w_.blockSignals(False)
         self.sw_v.set(p.get("vornic", True))
+        self._ready_ui()
         self._show_look()
         self.colcard.load(p.get("colours") or self.store.app.get("colours"))
         self.map.set_zones(p.get("zones", []))
@@ -7993,6 +8137,25 @@ class LongFilm2Page(QWidget):
             self._remember(timeline=None, hidden=[], muted=[])
         QTimer.singleShot(0, self.recompute)
 
+    def _ready(self, mode):
+        p = self._cur()
+        if p is None:
+            return
+        if p.get("timeline") and QMessageBox.question(
+                self, "Getting ready", "The film was changed in the editor. Change the getting ready and throw away the "
+                "editor's changes?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+            return
+        self._remember(ready_mode=mode, **({"timeline": None, "hidden": [], "muted": []} if p.get("timeline") else {}))
+        self._ready_ui()
+        self.recompute()
+
+    def _ready_ui(self):
+        m = (self._cur() or {}).get("ready_mode", "interleave")
+        for b_, on in ((self.b_ri, m == "interleave"), (self.b_rs, m == "sequential")):
+            b_.setProperty("active", on)
+            b_.style().unpolish(b_)
+            b_.style().polish(b_)
+
     def _vornic(self, on):
         self._remember(vornic=on)
         if on and self.r and not self.r.get("vornic", [0, []])[1] and any(q["kind"] == "vornic" for q in self.r["pieces"]):
@@ -8093,7 +8256,8 @@ class LongFilm2Page(QWidget):
             try:
                 self.parts, self.info = longfilm2.assemble(self.r, self.an, self._dir(), p.get("zones", []),
                                                            marker=i18n.T, vornic_on=p.get("vornic", True),
-                                                           edits=p.get("edits") or None)
+                                                           edits=p.get("edits") or None,
+                                                           ready=p.get("ready_mode", "interleave"))
             except Exception as e:
                 logging.exception("long film v2 assemble failed")
                 self.status.setText(i18n.T("Error: {}").format(str(e)))

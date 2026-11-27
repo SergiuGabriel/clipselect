@@ -827,3 +827,46 @@ EXACT.update({
 TEMPLATES.update({
     "Recorder track: {}": "Pista recorderului: {}",
 })
+
+# v4.4.0
+EXACT.update({
+    "Getting ready (groom and bride)": "Pregătiri (mire și mireasă)",
+    "Interleaved": "Intercalate",
+    "One after the other": "Pe rând",
+    "Interleaved: groom and bride told in parallel (a big block of each, then turns of 3-5 shots). One after the other: "
+    "all the shots of the side filmed first, then the other side.":
+        "Intercalate: mirele și mireasa povestiți în paralel (câte un bloc mare din fiecare, apoi pe rând câte 3-5 cadre). "
+        "Pe rând: toate cadrele celui filmat primul, apoi ale celuilalt.",
+    "Getting ready": "Pregătiri",
+    "The film was changed in the editor. Change the getting ready and throw away the editor's changes?":
+        "Filmul a fost modificat în editor. Schimb pregătirile și renunț la modificările din editor?",
+    "Sync engine": "Motorul de sincronizare",
+    "New: every file is compared with every other one (cameras with each other too, like Align / Syncaila), the whole "
+    "group is placed at once, ~5x faster. Classic: every clip is searched in the recorder only (the engine before "
+    "v4.4.0).":
+        "Nou: fiecare fișier e comparat cu toate celelalte (și camerele între ele, ca Align / Syncaila), tot grupul e "
+        "așezat deodată, de ~5 ori mai repede. Clasic: fiecare clip e căutat doar în recorder (motorul de dinainte de "
+        "v4.4.0).",
+    "New (every file with every other)": "Nou (fiecare fișier cu toate celelalte)",
+    "Classic (in the recorder only)": "Clasic (doar în recorder)",
+    "Edit": "Editează",
+    "Open the edit in the editor (like Premiere): every camera on its track, the recorder and the cameras' sound below. "
+    "Export XML then writes your version.":
+        "Deschide editul în editor (ca în Premiere): fiecare cameră pe pista ei, dedesubt recorderul și sunetul camerelor. "
+        "Export XML scrie apoi varianta ta.",
+    "Edit the multicam": "Editează multicam-ul",
+    "The automatic edit is back.": "Editul automat a revenit.",
+    "Step 2 · matching every file with every other": "Pasul 2 · potrivesc fiecare fișier cu toate celelalte",
+    "Step 4 · placing the groups": "Pasul 4 · așez grupurile",
+    "no usable sound": "fără sunet folosibil",
+    "matched other clips but not the recorder": "se potrivește cu alte clipuri, dar nu cu recorderul",
+})
+TEMPLATES.update({
+    "Sync engine: {}": "Motorul de sincronizare: {}",
+    "Saved your edited version to {}.": "Varianta ta editată a fost salvată în {}.",
+    "Step 1 · listening to every file: {} of {}": "Pasul 1 · ascult fiecare fișier: {} din {}",
+    "Step 3 · checking the matches on the waveform: {} of {}": "Pasul 3 · verific potrivirile pe sunet: {} din {}",
+    "Step 1 · sync finished ({} matches between files)": "Pasul 1 · sincronizare gata ({} potriviri între fișiere)",
+    "Sync took {}: reading the files {}, matching every file with every other {} ({} matches)":
+        "Sincronizarea a durat {}: citirea fișierelor {}, potrivirea fiecărui fișier cu celelalte {} ({} potriviri)",
+})
