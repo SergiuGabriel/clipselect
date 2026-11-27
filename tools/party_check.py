@@ -34,21 +34,18 @@ assert L.camera_order_check(party2, res2, info) == 1 and res2[party2[1]["path"]]
 assert sync.master_starts(info) == [0.0]
 print("party sync rules: OK")
 
-# the clock check after the sync: church clips given by mistake matched on the party must be refused
+# Syncaila's order check after the sync: clips given by mistake (first look C9754 / C9759 on his 28 August fx3) matched on
+# the party are out of the camera's file order -> refused; the clocks do not matter (this camera's clock is years off)
 import sync  # noqa: E402
-info = [dict(path="/r/rec.wav", duration=4 * 3600, clock=19.5 * 3600)]
-res, clocks, groups = {}, {}, {}
-for i in range(6):                                   # party clips: clock error 120 s, all agree
-    c = f"/w/fx6/P{i}.MXF"
-    res[c] = dict(conf="high", offset=600.0 + i * 900, master=0, dur=60.0)
-    clocks[c] = 19.5 * 3600 + 600 + i * 900 + 120
-    groups[c] = "fx6"
-for i in range(2):                                   # church clips (17:05) matched on the first dance (21:00)
-    c = f"/w/fx6/C{i}.MXF"
-    res[c] = dict(conf="high", offset=5400.0 + i * 30, master=0, dur=300.0)
-    clocks[c] = 17.08 * 3600 + i * 400
-    groups[c] = "fx6"
-n = sync.verify_clocks(res, info, clocks, groups)
-assert n == 2 and all(res[f"/w/fx6/C{i}.MXF"]["conf"] == "low" for i in range(2)), (n, res)
-assert all(res[f"/w/fx6/P{i}.MXF"]["conf"] == "high" for i in range(6))
-print("clock check OK")
+info = [dict(path="/r/rec.wav", duration=6 * 3600, clock=None)]
+res, groups = {}, {}
+place = {"C9754": 258.8, "C9759": 83.1, "C9773": 2.9, "C9775": 3.9, "C9778": 22.6, "C9779": 84.5, "C9780": 105.9,
+         "C9781": 192.2, "C9782": 246.2, "C9783": 249.1, "C9784": 335.1, "C0001": 400.0, "C0002": 410.0}
+dur = {"C9778": 318, "C9779": 426, "C9780": 384, "C9781": 1272, "C9783": 526, "C9784": 182}
+for k, m in place.items():
+    res[f"/w/fx3/{k}.MP4"] = dict(conf="high", offset=m * 60, master=0, dur=float(dur.get(k, 20)))
+    groups[f"/w/fx3/{k}.MP4"] = "fx3"
+n = sync.order_check(res, info, groups)
+low = sorted(k for k in res if res[k]["conf"] == "low")
+assert low == ["/w/fx3/C9754.MP4", "/w/fx3/C9759.MP4"], (n, low)       # C0001 / C0002 after the wrap stay
+print("order check after the sync OK")

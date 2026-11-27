@@ -243,9 +243,9 @@ def chrono(ps, layout, infos):
 
 
 def auto_order(pieces):
-    """The parts of an automatic film in the order of the story: getting ready, first look, vornic, church, then the
+    """The parts of an automatic film in the order of the story: the drone shots first (owner), getting ready, first look, vornic, church, then the
     couple and the venue in the order they were filmed AFTER the church (a venue filmed only in the morning comes after
-    the couple), the drone where attach_drone puts it, the party last. The day itself can start anywhere (28 August:
+    the couple), the party last. The day itself can start anywhere (28 August:
     the venue's decorations were filmed first, before the groom)."""
     have = {part_of(p["kind"]) for p in pieces}
     order = [k for k in ("ready", "firstlook", "vornic", "church") if k in have]
@@ -257,35 +257,11 @@ def auto_order(pieces):
         after = [t for t in ts if c1 is None or t > c1]
         return float(np.median(after)) if after else float("inf")
     order += sorted((k for k in ("couple", "venue") if k in have), key=lambda k: (when(k), k != "couple"))
-    if "drone" in have:
-        order.append("drone")
+    if "drone" in have:                     # owner (v4.3.1): all the drone shots at the start of the timeline
+        order.insert(0, "drone")
     if "party" in have:
         order.append("party")
     return order
-
-
-DRONE_NEAR = 45 * 60                        # a drone shot opens the moment filmed closest to it (within 45 min)
-
-
-def attach_drone(pieces, order):
-    """Every drone shot OPENS the moment filmed closest to it in time (his teaser rule: the church and the venue open
-    with the drone shot recorded closest in time): p["dpart"] = ready / church / couple / venue. A drone shot next to the
-    first look / vornic opens the getting ready, next to the party the venue (else the couple); none near (or no
-    clock) = the venue / couple part, never a part of its own in the middle of the film."""
-    target = {"ready": "ready", "firstlook": "ready", "vornic": "ready", "church": "church", "couple": "couple",
-              "venue": "venue", "party": "venue"}
-    others = [(p["t"], part_of(p["kind"])) for p in pieces
-              if p["kind"] != "drone" and p.get("t") is not None and part_of(p["kind"]) in target]
-    fallback = "venue" if "venue" in order else ("couple" if "couple" in order else None)
-    for p in pieces:
-        if p["kind"] != "drone":
-            continue
-        part = None
-        if p.get("t") is not None and others:
-            d, near = min((abs(t - p["t"]), k) for t, k in others)
-            if d <= DRONE_NEAR:
-                part = target[near]
-        p["dpart"] = part if part in order else fallback
 
 
 def key_of(p, a=None, b=None):
@@ -460,45 +436,11 @@ def _natkey(f):
 
 
 def camera_order_check(party, res, info):
-    """Syncaila's rule for the party: one camera films its files ONE AFTER THE OTHER, in the order of their numbers, and
-    never two things at once. Per camera the clips are put on the common timeline (master start + offset); the longest
-    chain (by length) whose times grow with the file numbers without overlapping is kept, every other clip of that camera
-    is a wrong match (a copy of the take, a song repeated) and goes out of the multicam (conf "low"). Returns the number
-    taken out. (His friend's Denisa & Cornel: A7iv8619 / 8620 landed after 8622.)"""
-    starts = sync.master_starts(info)
-    by_cam = {}
-    for p in party:
-        r = res.get(p["path"])
-        if not r or r.get("conf") not in ("high", "medium") or r.get("master") is None:
-            continue
-        by_cam.setdefault(p["cam"], {})[p["path"]] = r
-    out = 0
-    for cam, rs in by_cam.items():
-        fs = sorted(rs, key=_natkey)
-        t0 = [starts[rs[f]["master"]] + rs[f]["offset"] for f in fs]
-        t1 = [t0[i] + (rs[f].get("dur") or 0.0) for i, f in enumerate(fs)]
-        n = len(fs)
-        # longest chain by length, then the most compact one (a wrong match lands far away); O(n^2), a few hundred clips
-        best = [(t1[i] - t0[i], 0.0, -1, t0[i]) for i in range(n)]     # (length, -span, previous, chain start)
-        for i in range(n):
-            for j in range(i):
-                if t0[i] >= t1[j] - 1.0:
-                    cand = (best[j][0] + (t1[i] - t0[i]), -(t1[i] - best[j][3]), j, best[j][3])
-                    if cand[:2] > best[i][:2]:
-                        best[i] = cand
-        if not n:
-            continue
-        i = max(range(n), key=lambda k: best[k][:2])
-        keep = set()
-        while i >= 0:
-            keep.add(fs[i])
-            i = best[i][2]
-        for f in fs:
-            if f not in keep:
-                rs[f]["conf"] = "low"
-                rs[f]["order"] = "out of the camera's order"
-                out += 1
-    return out
+    """Syncaila's rule for the party (sync.order_check): one camera films its files one after the other, in the order of
+    their numbers, never two things at once; clips out of that chain go out of the multicam (conf "low"). Returns the
+    number taken out. (His friend's Denisa & Cornel: A7iv8619 / 8620 landed after 8622.)"""
+    groups = {p["path"]: f"cam{p['cam']}" for p in party}
+    return sync.order_check({f: r for f, r in res.items() if f in groups}, info, groups)
 
 
 def party_edit(party, results, masters, analyses, cams_n, roles, st):
@@ -1374,10 +1316,6 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
     order = L["order"]
     if auto is not None:                    # the story order (owner, v4.3.0), whatever was filmed first
         order = auto_order(pieces)
-        if "drone" in order:
-            attach_drone(pieces, order)
-            if all(p.get("dpart") for p in pieces if p["kind"] == "drone"):
-                order.remove("drone")
     return dict(pieces=pieces, recorder=recorder, cams=L["cams"], layout=L["layout"], order=order, auto=auto,
                 skipped=L["skipped"], missing=missing, infos=infos, sel=sel, priests=priests,
                 firstlook=[fl_len, [(t, t0, key_of(p), a, b, ["sound"]) for t, t0, p, a, b in fl_items]],

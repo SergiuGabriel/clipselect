@@ -800,3 +800,10 @@ TEMPLATES.update({
     "its clock says it was filmed {} min earlier than this sound match: probably a clip from another moment":
         "ceasul lui spune că a fost filmat cu {} min mai devreme decât locul găsit după sunet: probabil un clip din alt moment",
 })
+
+# v4.3.1
+TEMPLATES.update({})
+EXACT.update({
+    "out of the camera's file order: probably a clip from another moment":
+        "în afara ordinii fișierelor camerei: probabil un clip din alt moment",
+})

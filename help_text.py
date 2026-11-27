@@ -324,13 +324,13 @@ sunt sincronizate pe el și apar în export pe pistele lor audio, întregi.</p>
 <p>Dacă ai sincronizat deja în Syncaila, Premiere sau DaVinci, exportă de acolo un XML (FCP7 XML) cu fiecare cameră pe pista ei și
 apasă Import XML. Pozițiile sunt preluate exact (fără să mai sincronizeze), fiecare pistă video devine o cameră, fișierele doar-audio
 devin recorderul. Clipurile care nu sunt pe acest calculator sunt sărite, cu avertisment.</p>
-<h3>Verificarea după ceas (clipuri care nu țin de petrecere)</h3>
-<p>După sincronizare, aplicația verifică fiecare cameră: o cameră are o singură eroare de ceas pentru toate clipurile ei. Pentru
-fiecare clip se calculează cât de departe e ceasul lui de locul găsit după sunet; cel mai mare grup de clipuri care se potrivesc
-(la cel mult 5 minute unul de altul) e adevărul, iar un clip care e mai departe de atât e o potrivire falsă (de exemplu clipuri
-de la biserică sau de la first look date din greșeală, puse pe intrarea mirilor sau pe primul dans). Acestea devin „Check”, cu
-motivul scris lângă („ceasul lui spune că a fost filmat cu 120 min mai devreme…”), merg pe pista „check sync” și nu intră niciodată
-în Auto Edit. Trebuie cel puțin 2 clipuri care se potrivesc în aceeași cameră.</p>
+<h3>Verificarea ordinii (ca în Syncaila)</h3>
+<p>După sincronizare, aplicația verifică fiecare cameră după regula Syncaila: o cameră își filmează fișierele unul după altul, în
+ordinea numerelor (C9773, C9775, C9778…), și niciodată două lucruri deodată. Ceasul camerei nu contează deloc (poate fi dat peste
+cap sau setat în 2023): contează doar locul găsit după sunet. Cel mai lung șir de clipuri care merg înainte în timp odată cu
+numerele lor e păstrat; un clip care iese din șir e o potrivire falsă (de exemplu clipuri de la biserică sau de la first look date
+din greșeală, puse pe intrarea mirilor sau pe primul dans). Acestea devin „Check”, cu motivul scris lângă, merg pe pista
+„check sync” și nu intră niciodată în Auto Edit. Un contor care o ia de la capăt pe același card (C9999 → C0001) e înțeles.</p>
 <h3>Pista fiecărei camere în export</h3>
 <p>În tabelul camerelor, coloana <b>Pistă</b> (Track): Auto pune camera statică pe V1 (jos), camerele secundare deasupra ei și
 camera principală (cea cu mână liberă cu cel mai mult material) pe pista de sus. Alegi V1, V2... ca să muți o cameră; camera
@@ -603,9 +603,7 @@ cu cel mult 30 de minute lângă el; sala sau casa filmate separat (clădire, de
 Un sequence în care TOATE clipurile au Iris (culoarea pe care o pune Premiere singur) e tratat ca neetichetat: momentele se găsesc
 automat.</p>
 <p><b>Ordinea filmului automat</b>: pregătiri, first look, vornic, biserică, apoi cuplul și sala în ordinea în care au fost filmate
-după biserică (o sală filmată doar dimineața vine după cuplu), petrecerea la final. <b>Drona</b> nu mai e o parte separată: fiecare
-cadru de dronă deschide momentul filmat cel mai aproape de el (până la 45 de minute: dimineața pregătirile, biserica, sala,
-cuplul; lângă petrecere = sala).</p>
+după biserică (o sală filmată doar dimineața vine după cuplu), petrecerea la final. <b>Drona</b>: toate cadrele de dronă la începutul timeline-ului.</p>
 <p><b>Pista fiecărei camere la petrecere</b>: în cardul Petrecere, Auto pune camera statică pe V1 și camera principală sus;
 alegi V1, V2... pentru fiecare cameră.</p>
 
@@ -1216,12 +1214,13 @@ to it and exported whole on their own audio tracks.</p>
 <p>If you already synced in Syncaila, Premiere or DaVinci, export an XML (FCP7 XML) with every camera on its track and press Import XML.
 The positions are taken exactly (no new sync), every video track becomes a camera, the audio-only files become the recorder. Clips that
 are not on this computer are skipped, with a warning.</p>
-<h3>The clock check (clips that do not belong to the party)</h3>
-<p>After the sync every camera is checked: a camera has ONE clock error for all its clips. For every clip the app measures how far
-its clock is from the place its sound was matched; the biggest group of clips that agree (within 5 minutes) is the truth, and a clip
-further away than that is a false match (for example church or first look clips given by mistake, matched on the couple's entrance
-or the first dance). Those become "Check" with the reason next to them ("its clock says it was filmed 120 min earlier…"), go to the
-"check sync" track and never into the Auto Edit. It needs at least 2 agreeing clips in the same camera.</p>
+<h3>The order check (like Syncaila)</h3>
+<p>After the sync every camera is checked with Syncaila's rule: a camera films its files one after the other, in the order of their
+numbers (C9773, C9775, C9778…), and never two things at once. The camera's clock does not matter at all (it can be hours off or set
+to 2023): only the place the sound found counts. The longest run of clips that move forward in time together with their numbers is
+kept; a clip outside that run is a false match (for example church or first look clips given by mistake, matched on the couple's
+entrance or the first dance). Those become "Check" with the reason next to them, go to the "check sync" track and never into the
+Auto Edit. A counter that starts again on the same card (C9999 → C0001) is understood.</p>
 <h3>The track of every camera in the export</h3>
 <p>In the cameras table, the <b>Track</b> column: Auto puts the static camera on V1 (bottom), the secondary cameras above it and the
 main camera (the handheld one with the most footage) on the top track. Pick V1, V2... to move a camera; the camera that had that
@@ -1485,9 +1484,7 @@ Once the couple have met (2 clips with both within 10 minutes), the shots of one
 A sequence where EVERY clip is Iris (the colour Premiere gives by itself) counts as unlabelled: the moments are found
 automatically.</p>
 <p><b>The order of the automatic film</b>: getting ready, first look, vornic, church, then the couple and the venue in the order they
-were filmed after the church (a venue filmed only in the morning comes after the couple), the party last. The <b>drone</b> is no
-longer a part of its own: every drone shot opens the moment filmed closest to it (within 45 minutes: getting ready in the morning,
-the church, the venue, the couple; next to the party = the venue).</p>
+were filmed after the church (a venue filmed only in the morning comes after the couple), the party last. The <b>drone</b>: every drone shot at the start of the timeline.</p>
 <p><b>The track of every party camera</b>: in the Party card, Auto puts the static camera on V1 and the main camera on top; pick V1,
 V2... for each camera.</p>
 

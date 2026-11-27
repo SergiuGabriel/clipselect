@@ -1,5 +1,4 @@
-"""CI check: the story order of an automatic Long Film v2 (longfilm2.auto_order) and the drone shots opening the
-moment filmed closest to them (attach_drone), and the video track order (director.video_order)."""
+"""CI check: the story order of an automatic Long Film v2 (longfilm2.auto_order) with the drone shots first, and the video track order (director.video_order)."""
 import os
 import sys
 
@@ -12,16 +11,11 @@ P = lambda kind, t: dict(kind=kind, t=t * 60.0, path=f"/w/{kind}{t}.mp4", a=0.0,
 ps = [P("venue", 710), P("drone", 717), P("groom", 770), P("bride", 810), P("firstlook", 870), P("church", 1000),
       P("venue", 1086), P("drone", 1092), P("couple", 1115), P("party", 1200), P("drone", 1213)]
 order = longfilm2.auto_order(ps)
-assert order == ["ready", "firstlook", "church", "venue", "couple", "drone", "party"], order
-longfilm2.attach_drone(ps, order)
-d = [p["dpart"] for p in ps if p["kind"] == "drone"]
-assert d == ["venue", "venue", "venue"], d
+assert order == ["drone", "ready", "firstlook", "church", "venue", "couple", "party"], order
 ps2 = [P("groom", 540), P("drone", 545), P("bride", 600), P("church", 720), P("drone", 760), P("couple", 830),
        P("venue", 900), P("party", 1000)]
 o2 = longfilm2.auto_order(ps2)
-assert o2[:4] == ["ready", "church", "couple", "venue"], o2
-longfilm2.attach_drone(ps2, o2)
-assert [p["dpart"] for p in ps2 if p["kind"] == "drone"] == ["ready", "church"]
+assert o2[:5] == ["drone", "ready", "church", "couple", "venue"], o2
 # video tracks: static on V1, main camera (most footage) on top, the others between; a chosen track wins
 cams = [dict(name="fx3", role="Handheld", clips=[1, 2]), dict(name="a74", role="Static", clips=[1]),
         dict(name="fx6", role="Handheld", clips=[1, 2, 3, 4]), dict(name="rec", role="Audio", clips=[1])]

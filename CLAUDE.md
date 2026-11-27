@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.3.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.3.1), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -1133,9 +1133,7 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   service take the AI saw as "party" split the church). 28 Aug: v4.2.1 rules 181/338 (bride 0/44, groom pink) -> 300/338
   (bride 44/44, groom 20/27, church 24/26); his Alex & Andreea unchanged at 154/188. tools/daymap_check scenario 3.
 - Automatic order (longfilm2.auto_order): ready, firstlook, vornic, church, couple / venue by median time AFTER the church,
-  party last. attach_drone: every drone shot opens the part filmed closest in time (<= 45 min; firstlook / vornic ->
-  ready, party -> venue; else venue / couple); p["dpart"], prepended (time order) in assemble; no drone part in the
-  middle. Labelled mode unchanged. tools/order_check.py (CI).
+  party last. (v4.3.1: drone first instead of attach_drone.) Labelled mode unchanged. tools/order_check.py (CI).
 - Sync verify (sync.verify_clocks, end of run_sync, Multicam + Long Film v2): per camera group the clock error implied by
   every synced clip; the biggest set agreeing within CLOCK_TOL 300 s (>= 2 clips, >= 40 %) is the truth, the others ->
   conf "low" + error "its clock says it was filmed N min later/earlier than this sound match..." (check sync track, never
@@ -1143,6 +1141,15 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   491 min vs 867 min for every other fx3 clip -> caught. tools/party_check "clock check".
 - NOT done here: running the full app on all 8 weddings of "11 milioane" in Premiere and DaVinci (each Build ~1.5 h on his
   Mac); the folder structures were checked (osmo 11 sept, gopro, drona, trash, lav (interviu pierdut), cealalta lav).
+
+## v4.3.1 (owner: "in Syncaila the clock does not matter, even if it says 2023"; "put the drones at the start")
+- sync.verify_clocks (v4.3.0) REPLACED by sync.order_check (end of run_sync; longfilm2.camera_order_check delegates to it):
+  per camera group, clips placed where the SOUND put them; the longest (then most compact) chain whose places grow with
+  the file numbers without overlapping (1 s tolerance) is kept, others -> conf "low", error "out of the camera's file
+  order..." (check sync track, never in the edit). Clocks are only search hints now, never a verdict. _order_key: natural
+  sort of the stem, a wrapped counter (9000+ and < 1000 on one camera) continues (< 5000 + 10000). His 28 Aug fx3 C9754 /
+  C9759 in the party are caught by the order alone (tools/party_check).
+- Automatic Long Film v2: ALL drone shots at the start of the timeline (auto_order puts "drone" first; attach_drone gone).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

@@ -460,7 +460,7 @@ def run_sync(masters, clips, progress=None, cancel=None, clocks=None, groups=Non
             if r["conf"] == "high" and ck is not None and info[r["master"]]["clock"] is not None:
                 delta[g] = _tod_diff(ck, info[r["master"]]["clock"]) - r["offset"]   # this camera's clock error
             results[c] = r
-    run_sync.suspect = verify_clocks(results, info, clocks, groups)
+    run_sync.suspect = order_check(results, info, groups)
     fm = lambda v: f"{int(v // 60)}m {int(v % 60):02d}s" if v >= 60 else f"{v:.0f}s"
     run_sync.report = (f"Sync took {fm(_t.time() - T0)}: reading the files {fm(t_read)}, searching {fm(t_search)}"
                        + (" (reading is limited by the disk: an external SSD or the internal drive is much faster than a HDD)"
@@ -470,46 +470,66 @@ def run_sync(masters, clips, progress=None, cancel=None, clocks=None, groups=Non
     return info, results
 
 
-CLOCK_TOL = 300.0          # a camera's clock error is the same for all its clips (within 5 min)
+def _order_key(names):
+    """File order of one camera: the numbers in the names (natural sort). A counter that wrapped (C9998, C9999, C0001 on
+    one card) keeps going: numbers under 5000 come after 9000+ when both are there."""
+    nums = {f: [int(t) for t in re.findall(r"\d+", Path(f).stem)] for f in names}
+    last = [v[-1] for v in nums.values() if v]
+    wrap = bool(last) and max(last) >= 9000 and min(last) < 1000
+
+    def key(f):
+        parts = [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", Path(f).stem)]
+        if wrap:
+            for i in range(len(parts) - 1, -1, -1):
+                if isinstance(parts[i], int):
+                    if parts[i] < 5000:
+                        parts[i] += 10000
+                    break
+        return parts
+    return key
 
 
-def verify_clocks(results, info, clocks, groups):
-    """The check after the sync (Syncaila's principle): every camera has ONE clock error. For each camera (group) the
-    clock error implied by each synced clip (its clock minus where the sound put it) is computed; the biggest set of
-    clips that agree within CLOCK_TOL is the truth, a clip whose sound match disagrees with it by more is a FALSE match
-    (church clips given by mistake to a party sync were matched on the entrance / the first dance) -> conf 'low' with
-    the reason, so it goes to the 'check sync' track and never into the edit. Needs >= 2 agreeing clips in the camera.
-    Returns how many clips were marked."""
+def order_check(results, info, groups):
+    """Syncaila's rule, after the sync: a camera films its files ONE AFTER THE OTHER, in the order of their numbers, and
+    never two things at once. The clocks do not matter (a camera set to 2023 or hours off syncs the same): per camera
+    the clips are put where the SOUND placed them (master start + offset), and the longest chain (by length, then the
+    most compact) whose places grow with the file numbers without overlapping is kept. Every other clip of that camera
+    is a false match (church / first look clips given by mistake, matched on the entrance or the first dance; a copy of
+    a take; a repeated song) -> conf "low" with the reason: "check sync" track, never in the edit. Manual places stay.
+    groups: {clip: camera group}. Returns how many clips were taken out."""
+    starts = master_starts(info)
     by = {}
     for c, r in results.items():
-        ck = clocks.get(c)
-        if r.get("conf") not in ("high", "medium") or r.get("manual") or ck is None:
+        if r.get("conf") not in ("high", "medium") or r.get("manual") or r.get("master") is None \
+                or r["master"] >= len(starts):
             continue
-        m = info[r["master"]] if r.get("master", 0) < len(info) else None
-        if not m or m.get("clock") is None:
+        by.setdefault(groups.get(c, ""), {})[c] = r
+    out = 0
+    for g, rs in by.items():
+        fs = sorted(rs, key=_order_key(list(rs)))
+        n = len(fs)
+        if n < 2:
             continue
-        by.setdefault(groups.get(c, ""), []).append((c, _tod_diff(ck, m["clock"]) - r["offset"],
-                                                    (2.0 if r["conf"] == "high" else 1.0) * max(1.0, r.get("dur", 1.0)) ** 0.5))
-    n = 0
-    for g, xs in by.items():
-        if len(xs) < 3:
-            continue
-        best, bw = None, 0.0
-        for _c, e, _w in xs:
-            w = sum(w2 for _c2, e2, w2 in xs if abs(_tod_diff(e2, e)) <= CLOCK_TOL)
-            if w > bw:
-                best, bw = e, w
-        agree = [c for c, e, _w in xs if abs(_tod_diff(e, best)) <= CLOCK_TOL]
-        if len(agree) < 2 or len(agree) < 0.4 * len(xs):
-            continue
-        for c, e, _w in xs:
-            d = _tod_diff(e, best)
-            if abs(d) > CLOCK_TOL:
-                r = results[c]
-                r.update(conf="low", error=f"its clock says it was filmed {abs(d) / 60:.0f} min {'later' if d > 0 else 'earlier'}"
-                         " than this sound match: probably a clip from another moment")
-                n += 1
-    return n
+        t0 = [starts[rs[f]["master"]] + rs[f]["offset"] for f in fs]
+        t1 = [t0[i] + (rs[f].get("dur") or 0.0) for i, f in enumerate(fs)]
+        best = [(t1[i] - t0[i], 0.0, -1, t0[i]) for i in range(n)]     # (length, -span, previous, chain start)
+        for i in range(n):
+            for j in range(i):
+                if t0[i] >= t1[j] - 1.0:
+                    cand = (best[j][0] + (t1[i] - t0[i]), -(t1[i] - best[j][3]), j, best[j][3])
+                    if cand[:2] > best[i][:2]:
+                        best[i] = cand
+        i = max(range(n), key=lambda k: best[k][:2])
+        keep = set()
+        while i >= 0:
+            keep.add(fs[i])
+            i = best[i][2]
+        for f in fs:
+            if f not in keep:
+                rs[f].update(conf="low", order="out of the camera's order",
+                             error="out of the camera's file order: probably a clip from another moment")
+                out += 1
+    return out
 
 
 def _tod_diff(a, b):
