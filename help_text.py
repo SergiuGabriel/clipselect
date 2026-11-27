@@ -329,6 +329,10 @@ devin recorderul. Clipurile care nu sunt pe acest calculator sunt sărite, cu av
 (de ex. 0190_1-2, 0190_3-4, 0190_MIX). Aplicația folosește una singură, ca să nu le pună una după alta. În Setări alegi care:
 <b>Automat</b> (implicit) = pista cea mai curată (cele mai puține vârfuri tăiate, apoi semnalul mai puternic), niciodată mixul;
 sau <b>Mixul</b>, <b>Pista 1</b>, <b>Pista 2</b>, <b>Pista 3</b> (în ordinea numelor). După schimbare dai din nou Sync.</p>
+<h3>Legătura cu Premiere (Setări)</h3>
+<p>Extensia din Premiere care primește filmele exportate (import în proiectul deschis + adjustment layer cu crop). Aplicația o
+instalează și o actualizează singură când pornește (pe Mac, dacă ai Premiere); Setări arată dacă e instalată și dacă rulează acum
+în Premiere, iar „Instalează din nou” o pune din nou (apoi repornești Premiere).</p>
 <h3>Motorul de sincronizare: Nou sau Clasic (Setări)</h3>
 <p><b>Nou</b> (implicit, v4.4.0): fiecare fișier primește o amprentă de sunet (vârfurile spectrului, perechi), apoi
 <b>toate fișierele sunt potrivite între ele deodată</b>: camerele cu recorderul, dar și camerele între ele, lavalierele cu
@@ -743,10 +747,16 @@ un bloc mare din partea filmată prima (cam un sfert, 4–20 cadre), un bloc mar
 <h3>Culoarea</h3>
 <p>Cardul <b>Culoare</b>: comutatorul „Pune look-ul meu pe fiecare clip”, „Crop 10 % sus și jos”, un LUT (Alege…, de exemplu din
 Documents/2025 luts) cu intensitatea lui 0–200 (ca Look din Lumetri: 100 = LUT-ul așa cum e) și, opțional, al doilea LUT cu
-intensitatea lui. Look-ul ales rămâne pentru proiectele noi. <b>Important:</b> Premiere nu poate primi un adjustment layer printr-un
-XML: am încercat în Premiere-ul tău (24 noiembrie 2026) chiar în forma în care îl exportă Premiere, și s-a importat ca „Black Video”,
-un clip negru peste tot. Așa că Lumetri (cu LUT-ul ca Look) și crop-ul sunt puse pe fiecare clip; în același test crop-ul și LUT-ul
-au apărut corect. Ca să schimbi după aceea: modifici Lumetri pe un clip, Copy, selectezi restul și Paste Attributes.</p>
+intensitatea lui. Look-ul ales rămâne pentru proiectele noi. Lumetri (cu LUT-ul ca Look) se pune pe fiecare clip; ca să schimbi
+după aceea: modifici Lumetri pe un clip, Copy, selectezi restul și Paste Attributes.</p>
+<p><b>Crop pe un adjustment layer</b> (v4.5.0, bifat implicit, doar pe Mac): un XML nu poate duce un adjustment layer (în
+Premiere-ul tău s-a importat ca „Black Video”), așa că aplicația instalează în Premiere o mică extensie, <b>legătura cu
+Premiere</b>, care pornește singură odată cu Premiere (o vezi și în Window > Extensions > MoneyMakingMachine). La Export XML →
+Premiere, aplicația îi trimite XML-ul: Premiere îl importă în <b>proiectul deschis</b>, deschide secvența și pune deasupra a tot
+un adjustment layer cu Crop 10 % sus și jos, pe toată lungimea filmului, exact ca butonul „Adjustment layer + crop 10%” din
+WarpAutomation (aceiași pași: File > New > Adjustment Layer prin meniu, apoi Crop). Primești o notificare când e gata. Dacă
+Premiere e închis, filmul așteaptă până deschizi un proiect. După prima instalare repornești Premiere o dată. Debifat: crop-ul se
+pune pe fiecare clip, ca înainte.</p>
 <p>Pagina Long Film v2 are și ea un desen: secvența din Creează proiectul, fiecare clip colorat după moment (nu după cameră),
 camera A cu toate momentele, celelalte camere, drona, recorderul (doar sunet) și clipurile fără culoare (nefolosite).</p>
 <p>Pagina Long Film are jos un desen cu ordinea: trenulețe de culori, cu numele fiecăruia deasupra și camerele dedesubt. Cu 3, 4 sau 5
@@ -1243,6 +1253,10 @@ are not on this computer are skipped, with a warning.</p>
 0190_3-4, 0190_MIX). The app uses only one, so they are never laid one after the other. In Settings you choose which:
 <b>Automatic</b> (default) = the cleanest track (fewest clipped peaks, then the stronger signal), never the mix; or <b>The mix</b>,
 <b>Track 1</b>, <b>Track 2</b>, <b>Track 3</b> (in name order). After a change press Sync again.</p>
+<h3>Premiere bridge (Settings)</h3>
+<p>The extension inside Premiere that receives the exported films (import into the open project + adjustment layer with the
+crop). The app installs and updates it by itself when it starts (on a Mac with Premiere); Settings shows whether it is installed
+and running in Premiere right now, and "Install again" puts it back (then restart Premiere).</p>
 <h3>Sync engine: New or Classic (Settings)</h3>
 <p><b>New</b> (default, v4.4.0): every file gets a sound fingerprint (spectral peaks, in pairs), then <b>all files are
 matched with each other at once</b>: cameras with the recorder, but also cameras with each other and lavaliers with
@@ -1645,10 +1659,16 @@ Radu, Alexandra & Vlad): a big block of the side filmed first (about a quarter, 
 <h3>Colour</h3>
 <p>The <b>Colour</b> card: "Put my look on every clip", "Crop 10 % at the top and at the bottom", one LUT (Choose…, e.g. from
 Documents/2025 luts) with its intensity 0-200 (like Lumetri's Look: 100 = the LUT as it is) and an optional second LUT with its own
-intensity. The chosen look stays for new projects. <b>Important:</b> Premiere cannot receive an adjustment layer through an XML: we
-tried it in your Premiere (24 November 2026), written exactly the way Premiere exports it, and it came in as "Black Video", a black
-clip over everything. So the Lumetri (with the LUT as the Look) and the crop go on every clip; in the same test the crop and the LUT
-came in correctly. To change it later: change the Lumetri of one clip, Copy, select the others and Paste Attributes.</p>
+intensity. The chosen look stays for new projects. The Lumetri (with the LUT as the Look) goes on every clip; to change it later:
+change the Lumetri of one clip, Copy, select the others and Paste Attributes.</p>
+<p><b>Crop on an adjustment layer</b> (v4.5.0, on by default, Mac only): an XML cannot carry an adjustment layer (in your
+Premiere it came in as "Black Video"), so the app installs a small extension in Premiere, the <b>Premiere bridge</b>, which starts
+by itself with Premiere (you also see it in Window > Extensions > MoneyMakingMachine). On Export XML → Premiere the app hands it
+the XML: Premiere imports it into the <b>open project</b>, opens the sequence and puts an adjustment layer with Crop 10 % top and
+bottom over everything, for the whole film, exactly like WarpAutomation's "Adjustment layer + crop 10%" button (the same steps:
+File > New > Adjustment Layer through the menu, then Crop). A notification tells you when it is done. If Premiere is closed, the
+film waits until you open a project. Restart Premiere once after the first install. Unticked: the crop goes on every clip, as
+before.</p>
 <p>The Long Film v2 page has a drawing too: the Create Project sequence, every clip labelled by its moment (not by camera), camera A
 with every moment, the other cameras, the drone, the recorder (sound only) and the clips without a colour (not used).</p>
 <p>The Long Film page has a drawing of the order at the bottom: trains of colours, the name of each above it and the cameras under it.

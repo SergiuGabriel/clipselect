@@ -45,9 +45,10 @@ jobs:
           python tools/party_check.py
           python tools/order_check.py
           python tools/sync2_check.py
+          python tools/bridge_check.py
           python tools/resolve_check.py
       - run: python make_icons.py
-      - run: ${{ env.PYI }} $MLX_FLAGS --exclude-module torch --icon icon.icns --add-data "icon.png:." --add-data "assets:assets" --osx-bundle-identifier com.moneymakingmachine.app app.py
+      - run: ${{ env.PYI }} $MLX_FLAGS --exclude-module torch --icon icon.icns --add-data "icon.png:." --add-data "assets:assets" --add-data "premiere_bridge:premiere_bridge" --osx-bundle-identifier com.moneymakingmachine.app app.py
       - name: Check bundled FFmpeg and ad-hoc sign
         run: |
           find dist/MoneyMakingMachine.app -name 'ffmpeg*' -type f
@@ -78,9 +79,10 @@ jobs:
           python tools/party_check.py
           python tools/order_check.py
           python tools/sync2_check.py
+          python tools/bridge_check.py
           python tools/resolve_check.py
       - run: python make_icons.py
-      - run: ${{ env.PYI }} --icon icon.ico --add-data "icon.png;." --add-data "assets;assets" app.py
+      - run: ${{ env.PYI }} --icon icon.ico --add-data "icon.png;." --add-data "assets;assets" --add-data "premiere_bridge;premiere_bridge" app.py
       - uses: actions/upload-artifact@v4
         with: { name: MoneyMakingMachine-Windows, path: dist/MoneyMakingMachine }
   release:

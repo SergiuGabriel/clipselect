@@ -50,8 +50,10 @@ import xmlimport
 import projectsetup
 import story
 import sync
+import bridge
+import colour
 
-APP, VER = "MoneyMakingMachine", "v4.4.0"
+APP, VER = "MoneyMakingMachine", "v4.5.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -3733,6 +3735,18 @@ class SettingsPage(QWidget):
         self.c_eng.setCurrentIndex(1 if store.app.get("sync_engine", "graph") == "classic" else 0)
         self.c_eng.currentIndexChanged.connect(lambda i: self.set_engine("classic" if i else "graph"))
         right.addWidget(self.c_eng)
+        right.addSpacing(10)
+        right.addWidget(lbl("Premiere bridge"))
+        right.addWidget(lbl("A small extension inside Premiere Pro (installed by the app, it starts by itself with Premiere): "
+                            "Export XML → Premiere can import the film into the open project and put an adjustment layer "
+                            "with the crop on top, like WarpAutomation. Restart Premiere once after it is installed.",
+                            "muted", True))
+        brr = QHBoxLayout()
+        self.l_bridge = lbl("", "muted")
+        brr.addWidget(self.l_bridge, 1)
+        brr.addWidget(btn("Install again", slot=self.reinstall_bridge))
+        right.addLayout(brr)
+        self._show_bridge()
         right.addSpacing(18)
         right.addWidget(lbl("Language", "h2"))
         lr = QHBoxLayout()
@@ -3887,6 +3901,27 @@ class SettingsPage(QWidget):
     def set_hw(self, v):
         self.store.app["hwaccel"] = v
         self.store.save_app()
+
+    def _show_bridge(self):
+        v = bridge.installed_version()
+        if sys.platform != "darwin":
+            t = i18n.T("Mac only for now.")
+        elif not v:
+            t = i18n.T("Not installed.")
+        elif bridge.alive(10):
+            t = i18n.T("Installed ({}), running in Premiere.").format(v)
+        else:
+            t = i18n.T("Installed ({}). Premiere is closed or was not restarted yet.").format(v)
+        self.l_bridge.setText(t)
+
+    def reinstall_bridge(self):
+        try:
+            bridge.install(force=True)
+            notify(i18n.T("Premiere bridge installed: restart Premiere Pro."))
+        except Exception as e:
+            logging.exception("bridge install failed")
+            notify(i18n.T("Could not install the Premiere bridge: {}").format(str(e)), error=True)
+        self._show_bridge()
 
     def set_engine(self, k):
         self.store.app["sync_engine"] = k
@@ -5823,6 +5858,56 @@ def _premiere_app():
     else:
         found = []
     return sorted(found)[-1] if found else ""
+
+
+def _bridge_ok():
+    """The Premiere bridge can be used here (Mac with Premiere installed; installed at the start of the app)."""
+    return sys.platform == "darwin" and bool(_premiere_app()) and bool(bridge.installed_version())
+
+
+_BRIDGE_JOBS = {}
+
+
+def to_premiere(xml, name, crop, status=None):
+    """Hand an exported XML to the Premiere bridge: Premiere imports it into the open project, opens the sequence and
+    puts an adjustment layer with Crop on top. The answer comes back as a notification."""
+    try:
+        jid = bridge.send(xml, name, crop)
+    except Exception as e:
+        logging.exception("bridge send failed")
+        notify(i18n.T("Could not send the XML to Premiere: {}").format(str(e)), error=True)
+        return
+    app_path = _premiere_app()
+    if app_path and sys.platform == "darwin":
+        updater.launch(["open", "-a", app_path])
+    msg = i18n.T("Sent to Premiere: it imports the film into the open project and puts the adjustment layer with the crop on top.")
+    if status is not None:
+        status.setText(msg)
+    notify(msg)
+    t0 = time.time()
+    tm = QTimer()
+    _BRIDGE_JOBS[jid] = tm
+
+    def check():
+        r = bridge.result(jid)
+        waited = time.time() - t0
+        if r is None and waited < 1800:
+            if waited > 25 and not bridge.alive(10) and not getattr(tm, "warned", False):
+                tm.warned = True
+                notify(i18n.T("Premiere has not picked up the film yet: open Premiere with your project (restart it once "
+                              "after the first install of MoneyMakingMachine)."), error=True)
+            return
+        tm.stop()
+        _BRIDGE_JOBS.pop(jid, None)
+        if r is None:
+            bridge.cancel(jid)
+            notify(i18n.T("Premiere did not take the film in 30 min: import the XML by hand."), error=True)
+        elif r.get("ok"):
+            notify(i18n.T("In Premiere: {}").format(i18n.T(r.get("msg", ""))))
+        else:
+            notify(i18n.T("Premiere: {}").format(i18n.T(r.get("msg", ""))), error=True)
+    tm.timeout.connect(check)
+    tm.start(1500)
 
 
 class CreateProjectPage(QWidget):
@@ -7829,6 +7914,12 @@ class LongFilm2Page(QWidget):
         self.cb_crop = QCheckBox("Crop 10 % at the top and at the bottom")
         self.cb_crop.toggled.connect(lambda on: self._look("crop", on))
         l4.addWidget(self.cb_crop)
+        self.cb_layer = QCheckBox("Crop on an adjustment layer (straight into the open Premiere project)")
+        self.cb_layer.toggled.connect(lambda on: self._look("layer", on))
+        l4.addWidget(self.cb_layer)
+        l4.addWidget(lbl("Like WarpAutomation's button: Export XML → Premiere imports the film into the project open in "
+                         "Premiere, opens it and puts an adjustment layer with Crop 10 % on top of everything. Off: the crop "
+                         "goes on every clip.", "muted", True))
         self.lut_rows = {}
         for k, title in (("1", "LUT"), ("2", "Second LUT (optional)")):
             l4.addWidget(lbl(title))
@@ -7842,9 +7933,8 @@ class LongFilm2Page(QWidget):
             sl.changed.connect(lambda x, k=k: self._look("int" + k, x))
             l4.addWidget(sl)
             self.lut_rows[k] = (name, sl)
-        l4.addWidget(lbl("Premiere cannot receive an adjustment layer through an XML (tested: it becomes a black clip), so "
-                         "the look (Lumetri) and the crop are put on every clip. To change it later, select the clips in "
-                         "Premiere and change the Lumetri of one, then paste its attributes.", "muted", True))
+        l4.addWidget(lbl("The look (Lumetri) goes on every clip: to change it later, change the Lumetri of one clip in "
+                         "Premiere, then paste its attributes on the others.", "muted", True))
         lc = card(4, "Clip colours")
         self.colcard = ColourCard()
         self.colcard.changed.connect(lambda c: (self.store.app.__setitem__("colours", dict(c)), self._remember(colours=c)))
@@ -8058,6 +8148,10 @@ class LongFilm2Page(QWidget):
         self.cb_crop.blockSignals(True)
         self.cb_crop.setChecked(bool(lk.get("crop", True)) if "crop" in lk else True)
         self.cb_crop.blockSignals(False)
+        self.cb_layer.blockSignals(True)
+        self.cb_layer.setChecked(bool(lk.get("layer", True)))
+        self.cb_layer.setEnabled(bool(lk.get("on")) and bool(lk.get("crop", True)) and _bridge_ok())
+        self.cb_layer.blockSignals(False)
         if "crop" not in lk and self._cur() is not None:
             (self._cur().setdefault("look", {}))["crop"] = True
         for k, (name, sl) in self.lut_rows.items():
@@ -8361,15 +8455,20 @@ class LongFilm2Page(QWidget):
                                            "XML (*.xml)")
         if not f:
             return
+        look = self._look_s()
+        layer = (target != "davinci" and look.get("on") and look.get("crop", True) and look.get("layer", True)
+                 and _bridge_ok())
+        if layer:
+            look = {**look, "crop": False}         # the crop goes on the adjustment layer, not on every clip
         try:
             if p.get("timeline"):                  # the film as he edited it in the editor
                 n, nv, na = longfilm2.export_timeline(p["timeline"], self.r["infos"], f, f"{p['name']} - Long Film v2",
-                                                      look=self._look_s(), hidden=p.get("hidden", []),
+                                                      look=look, hidden=p.get("hidden", []),
                                                       muted=p.get("muted", []),
                                                       labels=longfilm2.labels_out(p.get("colours"), target))
             else:
                 n, nv, na = longfilm2.export_xml(self.parts, self.r["infos"], [c["name"] for c in self.r["cams"]], f,
-                                                 f"{p['name']} - Long Film v2", marker=lambda s: s, look=self._look_s(),
+                                                 f"{p['name']} - Long Film v2", marker=lambda s: s, look=look,
                                                  labels=longfilm2.labels_out(p.get("colours"), target))
             for_target(f, target)
         except Exception as e:
@@ -8381,6 +8480,8 @@ class LongFilm2Page(QWidget):
                             i18n.T("Saved {} clips ({} video, {} audio tracks) to {}. DaVinci Resolve: File > Import > Timeline. "
                                    "The LUT is not in this file: put it in Resolve's Color page.").format(n, nv, na, f))
         notify(i18n.T("XML saved: {}").format(Path(f).name))
+        if layer:
+            to_premiere(f, f"{p['name']} - Long Film v2", colour.CROP, self.status)
 
 
 class StudioCard(QFrame):
@@ -8931,6 +9032,12 @@ def main():
     if ic.exists():
         app.setWindowIcon(QIcon(str(ic)))
     app.setStyleSheet(STYLE.replace("@ARROW", _arrow_png()))
+    if sys.platform == "darwin" and _premiere_app() and not os.environ.get("MMM_NO_BRIDGE"):
+        try:                                     # the Premiere bridge (adjustment layer + crop), installed / updated once
+            if bridge.install():
+                logging.info("premiere bridge %s installed", bridge.VERSION)
+        except Exception:
+            logging.exception("premiere bridge install failed")
     w = Main()
     setup_logging(w.store.dir)
     w.show()

@@ -870,3 +870,60 @@ TEMPLATES.update({
     "Sync took {}: reading the files {}, matching every file with every other {} ({} matches)":
         "Sincronizarea a durat {}: citirea fișierelor {}, potrivirea fiecărui fișier cu celelalte {} ({} potriviri)",
 })
+
+# v4.5.0: the Premiere bridge (adjustment layer + crop)
+EXACT.update({
+    "Crop on an adjustment layer (straight into the open Premiere project)":
+        "Crop pe un adjustment layer (direct în proiectul deschis în Premiere)",
+    "Like WarpAutomation's button: Export XML → Premiere imports the film into the project open in Premiere, opens it "
+    "and puts an adjustment layer with Crop 10 % on top of everything. Off: the crop goes on every clip.":
+        "Ca butonul din WarpAutomation: Export XML → Premiere importă filmul în proiectul deschis în Premiere, îl deschide "
+        "și pune deasupra a tot un adjustment layer cu Crop 10 %. Oprit: crop-ul se pune pe fiecare clip.",
+    "The look (Lumetri) goes on every clip: to change it later, change the Lumetri of one clip in Premiere, then paste "
+    "its attributes on the others.":
+        "Look-ul (Lumetri) se pune pe fiecare clip: ca să-l schimbi, modifici Lumetri pe un clip în Premiere, apoi îi "
+        "lipești atributele pe celelalte.",
+    "Premiere bridge": "Legătura cu Premiere",
+    "A small extension inside Premiere Pro (installed by the app, it starts by itself with Premiere): Export XML → "
+    "Premiere can import the film into the open project and put an adjustment layer with the crop on top, like "
+    "WarpAutomation. Restart Premiere once after it is installed.":
+        "O mică extensie în Premiere Pro (instalată de aplicație, pornește singură cu Premiere): Export XML → Premiere "
+        "poate importa filmul în proiectul deschis și pune deasupra un adjustment layer cu crop, ca WarpAutomation. "
+        "Repornește Premiere o dată după instalare.",
+    "Install again": "Instalează din nou",
+    "Mac only for now.": "Deocamdată doar pe Mac.",
+    "Not installed.": "Neinstalată.",
+    "Premiere bridge installed: restart Premiere Pro.": "Legătura cu Premiere instalată: repornește Premiere Pro.",
+    "Sent to Premiere: it imports the film into the open project and puts the adjustment layer with the crop on top.":
+        "Trimis în Premiere: importă filmul în proiectul deschis și pune deasupra adjustment layer-ul cu crop.",
+    "Premiere has not picked up the film yet: open Premiere with your project (restart it once after the first install "
+    "of MoneyMakingMachine).":
+        "Premiere nu a preluat încă filmul: deschide Premiere cu proiectul tău (repornește-l o dată după prima instalare "
+        "MoneyMakingMachine).",
+    "Premiere did not take the film in 30 min: import the XML by hand.":
+        "Premiere nu a preluat filmul în 30 min: importă XML-ul de mână.",
+    "No project is open in Premiere.": "Niciun proiect nu e deschis în Premiere.",
+    "No active sequence.": "Nicio secvență activă.",
+    "The sequence is empty.": "Secvența e goală.",
+    "Couldn't find the new adjustment layer in the Project panel.": "Nu am găsit noul adjustment layer în panoul Project.",
+    "Couldn't add an empty video track on top.": "Nu am putut adăuga o pistă video goală deasupra.",
+    "Couldn't place the adjustment layer on the timeline.": "Nu am putut pune adjustment layer-ul pe timeline.",
+    "Premiere kept File > New > Adjustment Layer greyed out.": "Premiere a ținut File > New > Adjustment Layer dezactivat.",
+    "Use WarpAutomation's Adjustment layer + crop 10% button instead.":
+        "Folosește în schimb butonul Adjustment layer + crop 10% din WarpAutomation.",
+})
+TEMPLATES.update({
+    "Installed ({}), running in Premiere.": "Instalată ({}), rulează în Premiere.",
+    "Installed ({}). Premiere is closed or was not restarted yet.":
+        "Instalată ({}). Premiere e închis sau nu a fost repornit încă.",
+    "Could not install the Premiere bridge: {}": "Nu am putut instala legătura cu Premiere: {}",
+    "Could not send the XML to Premiere: {}": "Nu am putut trimite XML-ul în Premiere: {}",
+    "In Premiere: {}": "În Premiere: {}",
+    "Premiere: {}": "Premiere: {}",
+    "Imported \"{}\". Adjustment layer on V{} with Crop {} % top / bottom.":
+        "Importat „{}”. Adjustment layer pe V{} cu Crop {} % sus / jos.",
+    "Imported \"{}\". Adjustment layer on V{} with Crop {} % top / bottom. The layer only covers {} s: drag its end to the end of the film.":
+        "Importat „{}”. Adjustment layer pe V{} cu Crop {} % sus / jos. Layer-ul acoperă doar {} s: trage-i capătul până la finalul filmului.",
+    "The XML is not on this computer: {}": "XML-ul nu e pe acest calculator: {}",
+    "Import failed: {}": "Importul a eșuat: {}",
+})

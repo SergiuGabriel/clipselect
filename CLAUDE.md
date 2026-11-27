@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.4.0), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.5.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -1196,6 +1196,30 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   a new Auto Edit clears it.
 - Long Film v2 getting ready: p["ready_mode"] interleave (default, longfilm2.alternate) | sequential (all of the side
   filmed first, then the other); buttons Interleaved / One after the other in the Vornic card; assemble(ready=).
+
+## v4.5.0: the Premiere bridge (owner: "adjustment layer + crop 10 %, exactly like my WarpAutomation panel")
+- His WarpAutomation (CEP panel made with Claude, v1.16.0 in his Downloads) does it inside Premiere: File > New >
+  Adjustment Layer clicked through System Events (osascript from Node; Premiere has no scripting call for it), Enter on the
+  dialog, then ExtendScript overwriteClip on an empty top track (qe addTracks if needed), end = last clip end, QE
+  addVideoEffect("Crop"), Top / Bottom = 10. An xmeml adjustment layer still imports as Black Video: never write one.
+- premiere_bridge/ (CEP bundle com.moneymakingmachine.bridge, VERSION in bridge.py = manifest ExtensionBundleVersion): a
+  visible panel (Window > Extensions > MoneyMakingMachine) AND an invisible worker (UI Type Custom, AutoVisible false,
+  StartOn com.adobe.csxs.events.ApplicationActivate) that STARTS BY ITSELF with Premiere (verified on his Premiere 2026).
+  Both poll ~/Library/Application Support/MoneyMakingMachine Bridge/jobs every 1.5 s; a job is claimed by renaming
+  .json -> .run; answer in done/<id>.json; "alive" file = ms timestamp. Job = {xml, name, adjust: {crop}}: importFiles
+  into the OPEN project (no project -> the job waits), open the new sequence, adjustment layer + Crop.
+- bridge.py: install() at app start on a Mac with Premiere (copies to ~/Library/Application Support/Adobe/CEP/extensions/
+  MoneyMakingMachine, PlayerDebugMode 1 for CSXS 9-14, xattr -cr; only when the version differs), send(), result(),
+  alive(). Settings "Premiere bridge" status + Install again. PyInstaller --add-data premiere_bridge. tools/bridge_check.py
+  in CI. MMM_CEP / MMM_BRIDGE env = test folders, MMM_NO_BRIDGE=1 = no install.
+- Long Film v2 Colour card: "Crop on an adjustment layer (straight into the open Premiere project)" (look["layer"],
+  default on, needs look on + crop + _bridge_ok()): Export XML → Premiere writes the XML WITHOUT the per-clip crop (Lumetri
+  stays per clip), then to_premiere() sends the job, `open -a` Premiere, polls (notify when done / failed / not picked up
+  after 25 s / 30 min). DaVinci and unticked: crop on every clip as before.
+- TESTED LIVE on his Mac (Premiere 2026, test project "MMM bridge test" in the 28 August folder): the worker started with
+  Premiere without opening the panel, the job imported ADJ_TEST_C.xml, opened the sequence, Adjustment Layer on V2 over the
+  whole sequence, Crop Top 10 % / Bottom 10 %. The device shell cannot write ~/Library (protected): files were copied there
+  with Finder (Go to Folder) for the test. A missing-media "Link Media" dialog waits for him (offline media only).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower
