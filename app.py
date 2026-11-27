@@ -51,7 +51,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v4.2.1"
+APP, VER = "MoneyMakingMachine", "v4.3.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -799,10 +799,43 @@ class SliderRow(QWidget):
 _NOTIFY = None      # set by the main window: notify(text) / notify(text, error=True) from anywhere
 
 
-def notify(text, error=False, ms=None):
-    """Pop-up notification at the top of the window: green when something finished, red when it failed."""
+_T0 = {}             # job clocks: job_mark(key) when a long process starts, notify(..., took=key) when it ends
+
+
+def job_mark(key):
+    _T0[key] = time.time()
+
+
+def dur_text(sec):
+    """1 h 05 min / 12 min 30 s / 45 s (translated)."""
+    sec = int(round(max(0, sec)))
+    h, m, s = sec // 3600, sec % 3600 // 60, sec % 60
+    if h:
+        return i18n.T("{} h {} min").format(h, f"{m:02d}")
+    if m:
+        return i18n.T("{} min {} s").format(m, f"{s:02d}")
+    return i18n.T("{} s").format(s)
+
+
+def notify(text, error=False, ms=None, took=None):
+    """Pop-up notification at the top of the window: green when something finished, red when it failed.
+    took = the key given to job_mark when the process started: the message then says how long the whole process took
+    (and on a Mac a system notification stays in the Notification Center when it took more than a minute)."""
+    extra = ""
+    if took is not None and took in _T0:
+        sec = time.time() - _T0.pop(took)
+        extra = i18n.T("took {}").format(dur_text(sec))
+        logging.info("%s (%s)", text, extra)
+        ms = max(ms or 0, 15000)
+        if sec > 60 and sys.platform == "darwin" and not os.environ.get("MMM_NO_SYSNOTE"):
+            try:
+                import updater
+                t = (i18n.T(text) + " · " + extra).replace("\\", "").replace('"', "'")
+                updater.launch(["osascript", "-e", f'display notification "{t}" with title "{APP}"'])
+            except Exception:
+                logging.exception("system notification")
     if _NOTIFY:
-        _NOTIFY(text, error, ms)
+        _NOTIFY(text, error, ms, extra)
 
 
 class Toast(QLabel):
@@ -817,12 +850,14 @@ class Toast(QLabel):
         self.timer.setSingleShot(True)
         self.timer.timeout.connect(lambda: self._slide(self.pos(), QPoint(self.x(), -self.height() - 4), hide=True))
 
-    def show_msg(self, text, ms=3000, error=False):
+    def show_msg(self, text, ms=3000, error=False, extra=""):
         self.setStyleSheet(f"background:{'#c0392b' if error else '#1f8f4e'};color:white;font-weight:700;font-size:13px;"
                            "border-radius:8px;padding:10px 18px")
         text = i18n.T(text)
         if len(text) > 110:
             text = text[:107] + "…"
+        if extra:
+            text += "  ·  " + extra
         self.setText(("✕  " if error else "✓  ") + text)
         self.adjustSize()
         x = (self.parent().width() - self.width()) // 2
@@ -2718,8 +2753,9 @@ class MulticamPage(QWidget):
         hv_.addWidget(legend)
         hv_.addStretch()
         self.tabs.addTab(t1, "Sync Map")
-        self.cam_t = QTableWidget(0, 5)
-        self.cam_t.setHorizontalHeaderLabels(["Camera (double-click to rename)", "Role", "Clips", "Footage", "In the edit"])
+        self.cam_t = QTableWidget(0, 6)
+        self.cam_t.setHorizontalHeaderLabels(["Camera (double-click to rename)", "Role", "Clips", "Footage", "In the edit",
+                                              "Track"])
         self.cam_t.verticalHeader().hide()
         self.cam_t.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.cam_t.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
@@ -3125,8 +3161,10 @@ class MulticamPage(QWidget):
         if busy and not mine:
             self.status.setText(f"Another job is running ({self._job_p['name']}). See Analysis Queue.")
 
-    def _start(self, worker, button, p=None):
+    def _start(self, worker, button, p=None, keep_clock=False):
         self._job_p, self.job_status, self.job_progress = p or self.p, "Starting…", 0.0
+        if not keep_clock:
+            job_mark(("mc", self._job_p["id"]))
         self.pp.start()
         self.worker = worker
         worker.progress.connect(self.on_progress)
@@ -3178,7 +3216,8 @@ class MulticamPage(QWidget):
         s = p.get("sync")
         todo = [x for c in p["cams"] if c["role"] != "Audio" and not c.get("approx") and not c.get("check") for x in c["clips"]]
         self._start(MCWorker("analyze", None, self.store.load_blob(p["id"]), todo, self.store.app["jobs"],
-                             masters=s["masters"]), self.b_auto, p)
+                             masters=s["masters"]), self.b_auto, p,
+                    keep_clock=self._chain is p)
 
     def on_progress(self, text, f):
         self.job_status, self.job_progress = text, f
@@ -3216,7 +3255,7 @@ class MulticamPage(QWidget):
                         if miss else "")
                 self.status.setText(f"XML imported: {len(r['results'])} clips on {len(r['cams'])} cameras. "
                                     "Press Auto Edit to build the edit, or Export XML." + warn)
-            notify(f"XML imported: {len(r['results'])} clips on {len(r['cams'])} cameras")
+            notify(f"XML imported: {len(r['results'])} clips on {len(r['cams'])} cameras", took=("mc", p["id"]))
             if r.get("missing"):
                 notify(f"{len(r['missing'])} file(s) from the XML were not found", error=True)
         elif "results" in r:   # sync finished
@@ -3234,7 +3273,7 @@ class MulticamPage(QWidget):
                 self.store.save()
                 if self.worker:
                     self.worker.wait(5000)
-                notify(f"Sync finished: {ok} of {len(r['results'])} clips synced")
+                notify(f"Sync finished: {ok} of {len(r['results'])} clips synced", took=("mc", p["id"]))
                 if here:
                     self.refresh_files()
                     self.recompute()
@@ -3246,7 +3285,7 @@ class MulticamPage(QWidget):
                                 f"or press Auto Edit to let the program build the edit (this analyses the video and takes longer).")
             if here:
                 self.status.setText(msg)
-            notify(f"Sync finished: {ok} of {len(r['results'])} clips synced")
+            notify(f"Sync finished: {ok} of {len(r['results'])} clips synced", took=("mc", p["id"]))
         else:                 # analysis finished
             for i, mm in (r.get("music") or {}).items():
                 if i < len(p["sync"]["masters"]):
@@ -3262,7 +3301,7 @@ class MulticamPage(QWidget):
                     c["role"] = director.detect_role([an_all.get(x) for x in c["clips"]])
             if here:
                 self.status.setText("Auto edit ready. Tweak it on the right, then Export XML.")
-            notify(f"Auto edit ready: {p['name']}")
+            notify(f"Auto edit ready: {p['name']}", took=("mc", p["id"]))
             self._chain = None
         self.job_status, self.job_progress = "Done", 1.0
         self._finish()
@@ -3370,6 +3409,7 @@ class MulticamPage(QWidget):
                 x = QTableWidgetItem(txt)
                 x.setFlags(x.flags() & ~Qt.ItemIsEditable)
                 self.cam_t.setItem(ci, col, x)
+            self.cam_t.setCellWidget(ci, 5, self._track_combo(ci))
         self.cam_t.resizeColumnToContents(1)
         for r_ in range(self.cam_t.rowCount()):
             self.cam_t.setRowHeight(r_, 34)
@@ -3379,6 +3419,40 @@ class MulticamPage(QWidget):
         cam.update(role=role, user=True)
         self.store.save()
         self.recompute()
+
+    def _track_combo(self, ci):
+        """Video track of this camera in the export: Auto = static on V1, main camera on top (director.video_order)."""
+        cams = self.p["cams"]
+        cam = cams[ci]
+        cb = QComboBox()
+        if cam["role"] == "Audio":
+            cb.addItem("–")
+            cb.setEnabled(False)
+            return cb
+        s = self.p.get("sync")
+        foot = {i: sum(s["clips"][x]["dur"] for x in c["clips"] if x in s["clips"]) for i, c in enumerate(cams)} if s else {}
+        order = director.video_order(cams, foot)
+        n = len(order)
+        cb.addItem(i18n.T("Auto (V{})").format(order.index(ci) + 1 if ci in order else 1))
+        cb.addItems([f"V{k}" for k in range(1, n + 1)])
+        t = cam.get("track")
+        cb.setCurrentIndex(t if isinstance(t, int) and 1 <= t <= n else 0)
+        cb.setMinimumWidth(96)
+        cb.setStyleSheet("QComboBox{padding:2px 8px;border-radius:3px}")
+        cb.setToolTip("The video track of this camera in Export XML. Auto: the static camera on V1, the main camera on top.")
+        cb.currentIndexChanged.connect(lambda k, c=cam: self.set_track(c, k))
+        return cb
+
+    def set_track(self, cam, k):
+        if k:
+            for c in self.p["cams"]:                    # one camera per track: the one that had it goes back to Auto
+                if c is not cam and c.get("track") == k:
+                    c.pop("track", None)
+            cam["track"] = k
+        else:
+            cam.pop("track", None)
+        self.store.save()
+        QTimer.singleShot(0, self.refresh_cams)
 
     def cam_renamed(self, item):
         if item.column() != 0:
@@ -3412,7 +3486,7 @@ class MulticamPage(QWidget):
             cells = [camname, Path(path).name, (Path(mp).name if mp else "XML timeline") if ok else "–",
                      fmt_t(res["offset"]) if ok else "–", f"{int(res['dur'] // 60)}:{res['dur'] % 60:04.1f}",
                      f"{res['drift_ppm']:+.0f} ppm" if res["n"] >= 3 and ok else "–",
-                     CONF_NAME[res["conf"]] + (" (manual)" if res.get("manual") else "") + (f" · {res['error']}" if res.get("error") else ""),
+                     i18n.T(CONF_NAME[res["conf"]]) + (" (manual)" if res.get("manual") else "") + (f" · {i18n.T(res['error'])}" if res.get("error") else ""),
                      f"{self.p.get('infos', {}).get(path, {}).get('fps', 0):g}"]
             for c, t in enumerate(cells):
                 it = QTableWidgetItem(t)
@@ -5361,6 +5435,7 @@ class LongFilmPage(QWidget):
                                               self.parts_lbl.setText(f'<span style="color:{C["POOR"]}">{i18n.T("Error: {}").format(i18n.T(m))}</span>'),
                                               notify(f"Error: {m}", error=True) if m != "Cancelled" else None))
         self.runner.finished.connect(self._buttons)     # done/failed run while the thread is still running
+        job_mark("lf")
         self.runner.start()
         self._buttons()
 
@@ -5484,7 +5559,7 @@ class LongFilmPage(QWidget):
         parts, self.layout_, self.tz, nv = r
         self.bp_edit = None
         self._show(parts, self.layout_)
-        notify("Long film ready")
+        notify("Long film ready", took="lf")
 
     def _built_bp(self, e, b):
         self.bp_edit, self.bp_used = e, b
@@ -5498,7 +5573,7 @@ class LongFilmPage(QWidget):
         if holes:
             txt += (f'<br><span style="color:{C["FAIR"]}">' + i18n.T("{} cuts have no footage left of their colour (marker): label more clips.").format(len(holes)) + "</span>")
         self.parts_lbl.setText(txt)
-        notify("Long film ready")
+        notify("Long film ready", took="lf")
         logging.info("long film blueprint %s: %d shots, %d holes", b["name"], len(e["shots"]), len(holes))
 
     def export(self, target="premiere"):
@@ -5835,6 +5910,7 @@ class CreateProjectPage(QWidget):
         self.worker.done.connect(lambda infos, cams=cams, extra=extra: self._done(cams, infos, extra))
         self.worker.failed.connect(self._failed)
         self.worker.finished.connect(self._ui)          # done/failed run while the thread is still running
+        job_mark("project")
         self.worker.start()
         self._ui()
 
@@ -5897,7 +5973,7 @@ class CreateProjectPage(QWidget):
         self.b_show.show()
         self.b_open.setVisible(bool(_premiere_app()) and target() == "premiere")
         notify(i18n.T("Project ready: {} clips in {} bins and the sequence \"{}\". Open it in Premiere Pro.").format(
-            r["clips"], len(r["cameras"]) + sum(1 for _n, fs in sound_bins if fs), name))
+            r["clips"], len(r["cameras"]) + sum(1 for _n, fs in sound_bins if fs), name), took="project")
         logging.info("create project %s: %s clips, %s unreadable", out, r["clips"], len(bad))
 
     def _done_custom(self, cams, infos, extra, base, project):
@@ -5940,7 +6016,7 @@ class CreateProjectPage(QWidget):
         self.b_show.show()
         self.b_open.setVisible(bool(_premiere_app()) and target() == "premiere")
         notify(i18n.T("Project ready: {} clips in {} bins and the sequence \"{}\", synced by timecode. Open it in Premiere Pro.")
-               .format(r["clips"], nb, name))
+               .format(r["clips"], nb, name), took="project")
         logging.info("create project timecode %s: %s clips", out, r["clips"])
 
     def _davinci_copy(self, out):
@@ -6451,6 +6527,7 @@ class OffloadPage(QWidget):
         self._backup_root = root
         self.pp.start(i18n.T("Backup of {}…").format(root.name))
         self.pp.allow_cancel(self.cancel)
+        job_mark("backup")
         self.bworker.start()
         self._buttons()
         logging.info("backup of %s to %s", root, dest)
@@ -6469,7 +6546,7 @@ class OffloadPage(QWidget):
             notify(i18n.T("Backup finished with problems: {} files failed").format(r["failed"]), error=True)
             line = f'<span style="color:{C["POOR"]}">' + i18n.T("Backup finished with problems: {} files failed").format(r["failed"]) + "</span>"
         else:
-            notify(i18n.T("Backup done and checked: {} files in {}").format(r["files"], str(dest)))
+            notify(i18n.T("Backup done and checked: {} files in {}").format(r["files"], str(dest)), took="backup")
             line = (f'<b style="color:{C["GOOD"]}">✓</b> ' + i18n.T("Backup: {} files, {} GB · {} checked, {} already there").format(
                 r["files"], f"{r['bytes'] / 1e9:.1f}", r["verified"], r["already"]) + f" → {escape(str(dest))}")
         self._backup_line = line
@@ -6540,6 +6617,7 @@ class OffloadPage(QWidget):
             self.workers.append(w)
         self.pp.start(i18n.T("Copying {} cards…").format(len(jobs)))
         self.pp.allow_cancel(self.cancel)
+        job_mark("offload")
         for k, w in enumerate(self.workers):
             if not self.state[k]["check"]:
                 w.start()                                  # a backup card is checked when its twin's copy is finished
@@ -6588,7 +6666,7 @@ class OffloadPage(QWidget):
             notify(f"Offload finished with problems: {failed} files failed", error=True)
         else:
             n = sum((s["result"] or {}).get("files", 0) for s in self.state.values() if not s["check"])
-            notify(f"Every card copied and checked: {n} files")
+            notify(f"Every card copied and checked: {n} files", took="offload")
             if self.opts["project"].isChecked() and hasattr(self.window(), "auto_project"):
                 root = str(self._root())
                 QTimer.singleShot(1200, lambda: self.window().auto_project(root))
@@ -7293,6 +7371,7 @@ class TranscribePage(QWidget):
         self.pp.start(i18n.T("Transcribing {} files…").format(len(todo)))
         self.pp.allow_cancel(lambda: setattr(self, "_stop", True))
         self.worker.finished.connect(self._buttons)     # 'ended' runs while the thread is still running
+        job_mark("transcribe")
         self.worker.start()
         self._buttons()
 
@@ -7417,7 +7496,7 @@ class TranscribePage(QWidget):
             notify(f"Transcription stopped: {why}", error=True)
         elif not why:
             bad = sum(1 for f in self._files() if f.get("error"))
-            notify("Transcription finished" + (f": {bad} files failed" if bad else ""), error=bool(bad))
+            notify("Transcription finished" + (f": {bad} files failed" if bad else ""), error=bool(bad), took="transcribe")
         self._buttons()
 
     def copy(self):
@@ -7629,6 +7708,13 @@ class LongFilm2Page(QWidget):
         self.c_build.addItems(["Hold one shot until the drop", "Cut faster and faster"])
         self.c_build.currentIndexChanged.connect(lambda i: self.set_d("buildup", "hold" if i == 0 else "accelerate"))
         l3.addWidget(self.c_build)
+        l3.addWidget(lbl("Video track of every party camera (Auto: the static camera on V1, the main camera on top)",
+                         "muted", True))
+        self.trk_box = QWidget()
+        self.trk_grid = QGridLayout(self.trk_box)
+        self.trk_grid.setContentsMargins(0, 0, 0, 0)
+        self.trk_grid.setSpacing(6)
+        l3.addWidget(self.trk_box)
         l3.addWidget(btn("Back to my party settings", "link", self.reset_d), 0, Qt.AlignLeft)
         left.addStretch()
         sc.setWidget(lw)
@@ -7842,8 +7928,49 @@ class LongFilm2Page(QWidget):
         self.timer.start()
 
     def reset_d(self):
-        self._remember(dir={})
+        keep = {k: v for k, v in ((self._cur() or {}).get("dir") or {}).items() if k == "tracks"}
+        self._remember(dir=keep)
         self.open_project()
+
+    def _tracks_ui(self):
+        """One drop-down per party camera: Auto or V1..Vn (p["dir"]["tracks"] = {camera name: track})."""
+        while self.trk_grid.count():
+            w = self.trk_grid.takeAt(0).widget()
+            if w:
+                w.deleteLater()
+        tr = (self.info or {}).get("tracks") or {}
+        user = ((self._cur() or {}).get("dir") or {}).get("tracks") or {}
+        n = len(tr)
+        for row, (name, t) in enumerate(sorted(tr.items(), key=lambda x: -x[1])):
+            self.trk_grid.addWidget(QLabel(name), row, 0)
+            cb = QComboBox()
+            cb.addItem(i18n.T("Auto (V{})").format(t))
+            cb.addItems([f"V{k}" for k in range(1, n + 1)])
+            u = user.get(name)
+            cb.setCurrentIndex(u if isinstance(u, int) and 1 <= u <= n else 0)
+            cb.currentIndexChanged.connect(lambda k, nm=name: self._set_track(nm, k))
+            self.trk_grid.addWidget(cb, row, 1)
+        self.trk_box.setVisible(n > 0)
+
+    def _set_track(self, name, k):
+        p = self._cur()
+        if p is None:
+            return
+        from PySide6.QtWidgets import QMessageBox
+        if p.get("timeline") and QMessageBox.question(
+                self, "Video tracks", "The film was changed in the editor. Use the new tracks and throw away the "
+                "editor's changes?", QMessageBox.Yes | QMessageBox.No, QMessageBox.No) != QMessageBox.Yes:
+            QTimer.singleShot(0, self._tracks_ui)
+            return
+        d = p.setdefault("dir", {})
+        u = {a: b for a, b in (d.get("tracks") or {}).items() if a != name and (not k or b != k)}
+        if k:
+            u[name] = k
+        d["tracks"] = u
+        self.store.save_app()
+        if p.get("timeline"):
+            self._remember(timeline=None, hidden=[], muted=[])
+        QTimer.singleShot(0, self.recompute)
 
     def _vornic(self, on):
         self._remember(vornic=on)
@@ -7892,6 +8019,7 @@ class LongFilm2Page(QWidget):
         self.worker.failed.connect(self._failed)
         self.worker.finished.connect(self._buttons)
         self.worker.finished.connect(self._awake.off)
+        job_mark(("lf2", p["id"]))
         self.worker.start()
         self._buttons()
 
@@ -7920,7 +8048,7 @@ class LongFilm2Page(QWidget):
             self.recompute()
         if r.get("missing"):
             notify(i18n.T("{} clips not found on this computer: connect the disk with the footage.").format(len(r["missing"])), error=True)
-        notify(i18n.T("Long Film v2 ready: {}").format(p["name"]))
+        notify(i18n.T("Long Film v2 ready: {}").format(p["name"]), took=("lf2", p["id"]))
 
     def _after_build(self):
         """Build + Edit the film: the editor opens by itself when the Build ended well."""
@@ -7952,6 +8080,7 @@ class LongFilm2Page(QWidget):
         self._buttons()
 
     def _fill(self):
+        self._tracks_ui()
         rows = [(n, len(its), ln) for n, ln, its, _rec in self.parts]
         self.table.setRowCount(len(rows))
         self.table.setFixedHeight(self.table.horizontalHeader().height() + 32 * max(1, len(rows)) + 6)
@@ -8031,6 +8160,7 @@ class LongFilm2Page(QWidget):
                             keys=self.store.app.get("editor_keys"),
                             on_keys=lambda k: (self.store.app.__setitem__("editor_keys", k), self.store.save_app()))
         dlg.exec()
+        dlg.deleteLater()                          # the player and the readers let go of the footage (disk eject)
         if dlg.reset:
             self._remember(timeline=None, hidden=[], muted=[], edits={})
             notify(i18n.T("The automatic film is back."))
@@ -8304,7 +8434,7 @@ class Main(QMainWindow):
                                    lambda p: [name_of(p.get("footage")), f"{i18n.T('Updated')} {nice_date(p.get('when', ''))}"])
         self.toast = Toast(self)
         global _NOTIFY
-        _NOTIFY = lambda text, error=False, ms=None: self.toast.show_msg(text, ms, error)
+        _NOTIFY = lambda text, error=False, ms=None, extra="": self.toast.show_msg(text, ms, error, extra)
         self._drops = [enable_drops(pg, pg._drop) for pg in (self.proj, self.mc, self.teaser, self.long, self.offload,
                                                               self.transcribe, self.cproject, self.long2)]
         dd = _Drops(self.offload._drop_dest, self.offload)  # the destination area takes the destination folder
@@ -8504,6 +8634,7 @@ class Main(QMainWindow):
         self.worker = w
         self.queue.set_job(f'Analyzing "{p["name"]}" ({len(paths)} videos)')
         self.proj.queue_lbl.setText(f'Analyzing "{p["name"]}"\n{len(paths)} videos')
+        job_mark(("fs", p["id"]))
         w.start()
         self.show_page(self.anl)
 
@@ -8532,7 +8663,8 @@ class Main(QMainWindow):
         self.store.save()
         failed = len(job.get("paths", [])) - len(job["an"]) if job.get("paths") else 0
         if not job["cancelled"]:
-            notify(f"Analysis finished: {len(job['an'])} clips" + (f", {failed} failed" if failed > 0 else ""), error=failed > 0)
+            notify(f"Analysis finished: {len(job['an'])} clips" + (f", {failed} failed" if failed > 0 else ""), error=failed > 0,
+                   took=("fs", job["p"]["id"]))
         if self.proj.p is job["p"]:
             self.proj.refresh_history()
             self.proj.refresh_preview()

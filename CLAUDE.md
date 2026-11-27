@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.2.1), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.3.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -1107,6 +1107,42 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   longest (then most compact) chain whose times grow with the file numbers without overlapping is kept, the rest ->
   conf "low" (not in the multicam). tools/party_check.py (CI) + an end-to-end synthetic test (/tmp/dup: two takes as
   _3-4 + _MIX copies, 4 A7iv clips -> 2 masters, every clip at its true place, 0 out of order).
+
+## v4.3.0 (his list: SSD eject, how long it took, tracks per camera, 28 August labels, false party syncs)
+- Disk eject: the Long Film v2 editor's QMediaPlayer kept the last played file open (dialog parented, never deleted) ->
+  "albastru couldn't be ejected because MoneyMakingMachine is using it". done() sets the source to QUrl() and the page
+  deleteLater()s the dialog. Rule: never keep a media file open after a dialog closes.
+- notify(text, took=key) + job_mark(key) at the start: "· took 1 h 05 min" (dur_text) on Long Film v2 Build / Build+Edit,
+  Multicam Sync / Auto Edit / Sync + Auto Edit (one clock for the chain) / Import XML, Long Film, footage analysis, Card
+  Offload, Backup, Create Project, Transcribe; toast 15 s; > 60 s on a Mac also osascript "display notification"
+  (Notification Center; MMM_NO_SYSNOTE=1 in tests). Every new long process: job_mark at start, took= at the end.
+- Video tracks: director.video_order(cams, foot) = static camera(s) on V1, secondaries above (check / by-time cams lowest),
+  the MAIN camera (handheld, most footage) on top; c["track"] (1-based) chosen by him wins. Multicam: "Track" column
+  (Auto (Vn) / V1..Vn, one camera per track, kept by sync.auto_cameras across re-syncs), used by director.export_xml.
+  Long Film v2 party: longfilm2.party_tracks (same rule, p["dir"]["tracks"] = {camera name: track}, drop-downs in the
+  Party card; changing them with an editor version asks before dropping it). First look / vornic stacks unchanged.
+- 28 August (Ciprian & Bianca, whole day at one villa; measured on his footage: 338 clips, real faces from 5 frames on
+  his Mac, AI = CLIP stand-in on one frame): his "selectie" was ALL Iris (Premiere's default) -> load() now treats an
+  all-Iris sequence (>= 10 clips) as unlabelled. scenes.py: second judgement WHO (bride / groom / both / none) in
+  sc["_who"], cache key "scene2|" (old caches re-judged). daymap: couple_faces = top faces of the WHOLE day, bride = the
+  one the AI sees in a dress (old first-scene rule kept when the AI agrees with it: lean(bride) >= 0.1 and lean(groom)
+  <= -0.1); morning clip without a face match -> side_of (who >= 0.4 / both >= 0.7), else the Blue / Rose filmed within
+  NEAR_SIDE 30 min (same camera first), else Yellow when nobody is there (venue / house filmed apart), else the old
+  scene side; after the couple met (2 Teal within 10 min) single bride / groom shots before the church = Teal; after
+  the church side_of -> Purple. _church_by_ai: the gap is measured to the end of ANY clip since the run began (a 27-min
+  service take the AI saw as "party" split the church). 28 Aug: v4.2.1 rules 181/338 (bride 0/44, groom pink) -> 300/338
+  (bride 44/44, groom 20/27, church 24/26); his Alex & Andreea unchanged at 154/188. tools/daymap_check scenario 3.
+- Automatic order (longfilm2.auto_order): ready, firstlook, vornic, church, couple / venue by median time AFTER the church,
+  party last. attach_drone: every drone shot opens the part filmed closest in time (<= 45 min; firstlook / vornic ->
+  ready, party -> venue; else venue / couple); p["dpart"], prepended (time order) in assemble; no drone part in the
+  middle. Labelled mode unchanged. tools/order_check.py (CI).
+- Sync verify (sync.verify_clocks, end of run_sync, Multicam + Long Film v2): per camera group the clock error implied by
+  every synced clip; the biggest set agreeing within CLOCK_TOL 300 s (>= 2 clips, >= 40 %) is the truth, the others ->
+  conf "low" + error "its clock says it was filmed N min later/earlier than this sound match..." (check sync track, never
+  in the edit). His multicam 4.2.1 28 Aug: fx3 C9754 / C9759 (first look clips) sat in the party with clock errors 309 /
+  491 min vs 867 min for every other fx3 clip -> caught. tools/party_check "clock check".
+- NOT done here: running the full app on all 8 weddings of "11 milioane" in Premiere and DaVinci (each Build ~1.5 h on his
+  Mac); the folder structures were checked (osmo 11 sept, gopro, drona, trash, lav (interviu pierdut), cealalta lav).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

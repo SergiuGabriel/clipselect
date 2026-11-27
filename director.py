@@ -651,6 +651,38 @@ def seq_fps(cams=None, results=None, analyses=None):
     return SEQ_FPS
 
 
+def video_order(cams, foot=None):
+    """Which camera goes on which video track, bottom (V1) to top. Default (owner, v4.3.0): the STATIC camera(s) on
+    V1, the secondary cameras above them, the MAIN camera (the handheld one with the most footage) on the top track.
+    A camera with c["track"] (1 = V1, chosen by the editor) keeps that place; the others fill the free places in the
+    default order. Returns camera indexes (cams without picture: role Audio, left out)."""
+    vis = [i for i, c in enumerate(cams) if c.get("role") != "Audio"]
+    foot = foot or {}
+
+    def size(i):
+        return foot.get(i, len(cams[i].get("clips", [])))
+    stat = sorted((i for i in vis if cams[i].get("role") == "Static"), key=lambda i: -size(i))
+    hand = [i for i in vis if cams[i].get("role") != "Static"]
+    # secondary cameras: those not checked / by time first (bottom), then by footage (less below)
+    sec = sorted(hand, key=lambda i: (not (cams[i].get("check") or cams[i].get("approx")), size(i)))
+    main = [i for i in hand if not cams[i].get("check") and not cams[i].get("approx")]
+    if main:
+        m = max(main, key=size)
+        sec = [i for i in sec if i != m] + [m]
+    auto = stat + sec
+    n = len(auto)
+    fixed = {}
+    for i in auto:
+        t = cams[i].get("track")
+        if isinstance(t, int) and 1 <= t <= n and t - 1 not in fixed:
+            fixed[t - 1] = i
+    rest = [i for i in auto if i not in fixed.values()]
+    out = []
+    for k in range(n):
+        out.append(fixed[k] if k in fixed else rest.pop(0))
+    return out
+
+
 def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=None):
     starts = starts or sync.master_starts(masters)
     ids = dict(clip=0, file=0)
@@ -762,9 +794,9 @@ def export_xml(masters, cams, results, analyses, edits, out_path, name, starts=N
         if f[1] > f[0]:
             cuts[ci].append((g, p, a, b, tuple(f)))
     has_edit = any(cuts.values())
-    for ci, cam in enumerate(cams):
-        if cam.get("role") == "Audio":
-            continue
+    foot = {ci: sum(dur(p) for c, p, g in placed if c == ci) for ci in range(len(cams))}
+    for ci in video_order(cams, foot):
+        cam = cams[ci]
         if has_edit and not cam.get("approx") and not cam.get("check"):
             its = [item(p, a, b, g, lab(ci), f"{cam['name']} · {Path(p).stem}{flag(p)}", frames=f) for g, p, a, b, f in cuts[ci]]
         else:

@@ -33,3 +33,22 @@ res2 = {party2[0]["path"]: dict(conf="high", master=0, offset=0, dur=600),
 assert L.camera_order_check(party2, res2, info) == 1 and res2[party2[1]["path"]]["conf"] == "low"
 assert sync.master_starts(info) == [0.0]
 print("party sync rules: OK")
+
+# the clock check after the sync: church clips given by mistake matched on the party must be refused
+import sync  # noqa: E402
+info = [dict(path="/r/rec.wav", duration=4 * 3600, clock=19.5 * 3600)]
+res, clocks, groups = {}, {}, {}
+for i in range(6):                                   # party clips: clock error 120 s, all agree
+    c = f"/w/fx6/P{i}.MXF"
+    res[c] = dict(conf="high", offset=600.0 + i * 900, master=0, dur=60.0)
+    clocks[c] = 19.5 * 3600 + 600 + i * 900 + 120
+    groups[c] = "fx6"
+for i in range(2):                                   # church clips (17:05) matched on the first dance (21:00)
+    c = f"/w/fx6/C{i}.MXF"
+    res[c] = dict(conf="high", offset=5400.0 + i * 30, master=0, dur=300.0)
+    clocks[c] = 17.08 * 3600 + i * 400
+    groups[c] = "fx6"
+n = sync.verify_clocks(res, info, clocks, groups)
+assert n == 2 and all(res[f"/w/fx6/C{i}.MXF"]["conf"] == "low" for i in range(2)), (n, res)
+assert all(res[f"/w/fx6/P{i}.MXF"]["conf"] == "high" for i in range(6))
+print("clock check OK")

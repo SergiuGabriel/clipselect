@@ -35,6 +35,8 @@ SPEECH_FRAC = 0.8            # vornic: a continuous take with this share of spee
 VORNIC_TAKE = 120.0          # ... of at least 2 min, that another camera films at the same time:
 VORNIC_BOTH = 60.0           #     a take of 2 min too, overlapping >= 1 min (measured on his Alex & Andreea: 4 / 4)
 VORNIC_OTHER = 30.0          #     or other clips >= 30 s inside it when the AI sees someone giving a speech
+NEAR_SIDE = 30 * 60          # a detail / room goes with the groom / bride filmed within 30 min of it
+NEAR_VENUE = NEAR_SIDE       # (a shorter limit for venue-looking rooms cost 4 bride clips at Alex & Andreea)
 PARTY_RUN = (4, 6)           # AI: 4 of 6 clips in a row are the party -> the couple / venue part is over
 SAME = 0.363                 # faces.SAME
 DRONE_RE = re.compile(r"(?i)(drona|drone|mavic|dji|avata|mini ?\d|air ?\d)")
@@ -82,6 +84,65 @@ def top_person(clips, faces, exclude=None):
         if sc > score:
             best, score = f, sc
     return best if score[0] >= 2 else None
+
+
+def who_of(sc):
+    """The AI's WHO judgement of a clip (scenes.WHO): {bride, groom, both, none}, {} when there is none."""
+    return (sc or {}).get("_who") or {}
+
+
+def couple_faces(keys, faces, ai, groom0=None, bride0=None):
+    """The groom and the bride over the WHOLE day: the faces seen in the most clips (the couple is filmed at every
+    moment), told apart by what the AI sees in the clips where each face is: a white dress / veil = the bride, a suit =
+    the groom. Works whatever was filmed first (28 August: the venue's decorators came first, the old 'first scene =
+    groom' rule made the groom pink). Returns (groom, bride) unit features; the old ones when the AI cannot tell."""
+    cands, ex = [], None
+    pool = [k for k in keys if faces.get(k)]
+    for _ in range(4):
+        f = top_person(pool, faces, exclude=None)
+        if f is None:
+            break
+        cands.append(f)
+        pool = [k for k in pool if not has(f, faces.get(k, []))]
+    scored = []
+    for f in cands:
+        seen = [k for k in keys if has(f, faces.get(k, [])) and who_of(ai.get(k))]
+        if len(seen) < 3:
+            continue
+        w = [who_of(ai[k]) for k in seen]
+        bride = float(np.mean([x.get("bride", 0.0) for x in w]))
+        groom = float(np.mean([x.get("groom", 0.0) for x in w]))
+        scored.append((f, bride - groom, len(seen)))
+    if len(scored) < 2:
+        return groom0, bride0
+    if groom0 is not None and bride0 is not None:     # the first scene / next scenes rule, checked by the AI: kept when
+        def lean(f):                                  # the AI sees the dress on its bride and the suit on its groom
+            w = [who_of(ai[k]) for k in keys if has(f, faces.get(k, [])) and who_of(ai.get(k))]
+            return float(np.mean([x.get("bride", 0.0) - x.get("groom", 0.0) for x in w])) if len(w) >= 3 else None
+        lb, lg = lean(bride0), lean(groom0)
+        if lb is not None and lg is not None and lb >= 0.1 and lg <= -0.1:
+            return groom0, bride0
+    scored.sort(key=lambda x: -x[2])
+    top = scored[:3]
+    b = max(top, key=lambda x: x[1])
+    g = min((x for x in top if x is not b), key=lambda x: x[1])
+    if b[1] - g[1] < 0.15:                  # the AI does not really see a dress on one and a suit on the other
+        return groom0, bride0
+    return g[0], b[0]
+
+
+def side_of(sc):
+    """Blue / Rose / Teal from the AI's WHO judgement alone (no face match), None when it does not see the couple."""
+    w = who_of(sc)
+    if not w:
+        return None
+    if w.get("both", 0.0) >= 0.7:
+        return "Teal"
+    if w.get("bride", 0.0) >= 0.4 and w.get("bride", 0.0) > w.get("groom", 0.0):
+        return "Rose"
+    if w.get("groom", 0.0) >= 0.4 and w.get("groom", 0.0) > w.get("bride", 0.0):
+        return "Blue"
+    return None
 
 
 def has(person, feats):
@@ -136,19 +197,27 @@ def _church_by_ai(rest, clips, ai):
             return False
         best = max((c for c in sc if not c.startswith("_")), key=lambda c: sc[c])
         return best == "church" or sc.get("church", 0.0) >= AI_CHURCH
-    runs, cur, other = [], [], 0
+    runs, cur, other, last = [], [], 0, None
     for k in rest:
+        # the gap is measured to the end of ANY clip seen since the run began: a 27-min take of the service that the
+        # AI does not see as church (28 August) must not split the church in two
+        end = clips[k]["t0"] + clips[k]["dur"]
         if churchy(k):
-            if cur and (other > 3 or clips[k]["t0"] - max(clips[x]["t0"] + clips[x]["dur"] for x in cur) > CHURCH_GAP):
+            if cur and (other > 3 or clips[k]["t0"] - last > CHURCH_GAP):
                 runs.append(cur)
                 cur = []
+            if not cur:
+                last = end
             cur.append(k)
             other = 0
+            last = max(last, end)
         elif cur:
             other += 1
             if other > 3:
                 runs.append(cur)
                 cur, other = [], 0
+            else:
+                last = max(last, end)
     if cur:
         runs.append(cur)
     runs = [r for r in runs if len(r) >= 3]
@@ -219,7 +288,10 @@ def classify(clips, faces, ai=None, speech=None):
         bride = top_person([k for s in morning[1:] for k in s], faces, exclude=groom)
     elif morning:
         bride = top_person(morning[0], faces, exclude=groom)
-    info.update(groom=groom is not None, bride=bride is not None)
+    has_who = use_ai and sum(1 for k in rest if who_of(ai.get(k))) >= 0.5 * len(rest)
+    if has_who:
+        groom, bride = couple_faces(rest, faces, ai, groom, bride)
+    info.update(groom=groom is not None, bride=bride is not None, who=has_who)
     # the vornic: with the sound measured, a MOMENT of speech without music (one clip or several, any length) that
     # lasts >= 1 min and that the AI sees as someone speaking to people (house or yard) when it is there; without the
     # sound measurement the old rule (a long morning clip)
@@ -229,6 +301,7 @@ def classify(clips, faces, ai=None, speech=None):
         vk = _vornic(morning, clips, speech, ai)
         info["vornic_by"] = "speech"
     # morning: groom / bride by face, else by the scene (first = groom), the vornic, both together = first look
+    loose = []
     for si, s in enumerate(morning):
         g = sum(has(groom, faces.get(k, [])) for k in s)
         b = sum(has(bride, faces.get(k, [])) for k in s)
@@ -243,8 +316,38 @@ def classify(clips, faces, ai=None, speech=None):
                 lab[k] = "Blue"
             elif has(bride, fs):
                 lab[k] = "Rose"
+            elif has_who and side_of(ai.get(k)):
+                lab[k] = side_of(ai.get(k))
+            elif has_who:
+                loose.append((k, side))     # details, rooms: they go with the side filmed around them
             else:
                 lab[k] = side
+    cam = lambda k: Path(clips[k]["path"]).parent.name
+    sides = [x for x in lab if lab[x] in ("Blue", "Rose")]
+    for k, side in loose:
+        near = sorted((abs(t0(x) - t0(k)), lab[x]) for x in sides if cam(x) == cam(k)) or [(1e9, None)]
+        near_any = sorted((abs(t0(x) - t0(k)), lab[x]) for x in sides) or [(1e9, None)]
+        venue = scenes_top(ai.get(k)) == "venue" and who_of(ai.get(k)).get("none", 0.0) >= 0.5
+        lim = NEAR_VENUE if venue else NEAR_SIDE
+        if near[0][0] <= lim:               # the same camera was filming the groom / the bride a few minutes away
+            lab[k] = near[0][1]
+        elif near_any[0][0] <= lim:
+            lab[k] = near_any[0][1]
+        elif venue or (not faces.get(k) and who_of(ai.get(k)).get("none", 0.0) >= 0.8
+                       and scenes_top(ai.get(k)) not in ("ready", "speech")):
+            lab[k] = "Yellow"               # the venue filmed apart from the groom / bride (28 August: building, decor)
+        else:
+            lab[k] = side
+    if has_who:
+        # the first look: once the groom and the bride have met (2 clips with both of them within 10 min), the shots of
+        # one of them before the church are that moment too (her reaction, his back to her), not getting ready
+        both = [k for s in morning for k in s if lab.get(k) == "Teal"]
+        start = next((k for i, k in enumerate(both[:-1]) if t0(both[i + 1]) - t0(k) <= 10 * 60), None)
+        if start is not None:
+            for s in morning:
+                for k in s:
+                    if t0(k) >= t0(start) and lab.get(k) in ("Blue", "Rose"):
+                        lab[k] = "Teal"
     for k in sc[ci] if ci < len(sc) else []:
         lab[k] = "Brown"
     if ci < len(sc) and sc[ci]:
@@ -272,7 +375,9 @@ def classify(clips, faces, ai=None, speech=None):
                     lab[k] = "Iris"
                     continue
                 fs = faces.get(k)
-                if not fs:
+                if has_who and side_of(sk) and not (fs and not (has(groom, fs) or has(bride, fs)) and tk == "party"):
+                    lab[k] = "Purple"               # the AI sees the bride / groom (faces too small for the match)
+                elif not fs:
                     lab[k] = "Yellow"
                 elif has(groom, fs) or has(bride, fs):
                     lab[k] = "Purple"

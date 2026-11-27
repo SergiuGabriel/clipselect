@@ -138,3 +138,59 @@ assert sum(lab[k] == "Forest" for k in clips) == 4, "the vornic (a take + 3 shor
 assert sum(lab[k] == "Purple" for k in clips) <= 12, "the party became couple shots"
 assert ok >= 0.9 * len(clips)
 print("daymap check 2 OK")
+
+# 3. a whole day at one villa (his 28 August): the venue and its decorators filmed FIRST, then the groom, the bride,
+#    the first look, a church with a 27-min take the AI does not see as church, couple + venue, party. The AI's WHO
+#    judgement (dress / suit) tells the groom from the bride; the old "first scene = groom" made the groom pink.
+clips, faces, want = {}, {}, {}
+n = [0]
+
+
+def W(b=0.0, g=0.0, both=0.0):
+    return {"bride": b, "groom": g, "both": both, "none": max(0.0, 1 - b - g - both)}
+
+
+AI = {}
+D = rng.normal(size=128)                                  # the decorator: a face in the first scene
+
+
+def add3(t, dur, label, who, sc, w, cam="fx6"):
+    add(t, dur, label, (), cam)
+    k = list(clips)[-1]
+    faces[k] = [near(G) if x == "g" else near(B) if x == "b" else daymap._unit(D + 0.02 * rng.normal(size=128))
+                if x == "d" else other() for x in who]
+    AI[k] = dict(judge({"ready": "Blue", "venue": "Yellow", "church": "Brown", "couple": "Purple", "party": "Iris",
+                        "speech": "Forest"}[sc], 0.6), _who=w)
+
+
+for i in range(10):                                       # 11:50 the villa, the tables, the decorator
+    add3(710 + i * 2, 6, "Yellow", ("d",) if i in (4, 5, 6) else (), "venue", W())
+for i in range(14):                                       # 12:50 the groom dressing (his face in half of them)
+    add3(770 + i * 2.5, 8, "Blue", ("g",) if i % 2 == 0 else (), "ready", W(g=0.6) if i % 3 else W())
+for i in range(14):                                       # 13:30 the bride
+    add3(810 + i * 3, 10, "Rose", ("b",) if i % 2 == 0 else (), "ready", W(b=0.7) if i % 3 else W())
+for i in range(8):                                        # 14:30 first look: together, then her alone, him alone
+    add3(870 + i * 2, 12, "Teal", ("g", "b") if i < 3 else (("b",) if i % 2 else ("g",)), "couple",
+         W(both=0.8) if i < 3 else (W(b=0.6) if i % 2 else W(g=0.6)))
+add3(980, 1600, "Brown", ("o",), "party", W())               # the 27-min take, AI unsure
+for i in range(6):
+    add3(970 + i * 2, 6, "Brown", (), "church", W())
+for i in range(6):
+    add3(1008 + i * 4, 40, "Brown", ("o",), "church", W())
+for i in range(6):                                        # 18:05 the tables at sunset
+    add3(1085 + i, 6, "Yellow", (), "venue", W())
+for i in range(10):                                       # 18:30 couple session
+    add3(1110 + i * 4, 10, "Purple", ("g", "b") if i % 2 else (), "couple", W(both=0.8))
+for i in range(12):                                       # 19:30 party
+    add3(1170 + i * 8, 60, "Iris", ("o", "o", "o"), "party", W())
+lab, info = daymap.classify(clips, faces, AI)
+ok = sum(lab[k] == want[k] for k in clips)
+bad = [(k, want[k], lab[k]) for k in clips if lab[k] != want[k]]
+print(f"daymap, whole day at one villa, venue first: {ok} of {len(clips)} right · {info}")
+for b in bad:
+    print("  wrong:", b)
+assert all(lab[k] != "Rose" for k in clips if want[k] == "Blue"), "a groom clip became the bride"
+assert all(lab[k] != "Blue" for k in clips if want[k] == "Rose"), "a bride clip became the groom"
+assert sum(lab[k] == "Brown" for k in clips) == 13, "the church was split by the long take"
+assert ok >= 0.9 * len(clips)
+print("daymap check 3 OK")

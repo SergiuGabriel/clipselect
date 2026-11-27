@@ -147,7 +147,13 @@ def load(xml_path, kinds=None):
                               w=info["w"], h=info["h"], fps=info["fps"], fdur=real))
     if not clips:
         raise ValueError("No video clips found in this XML.")
-    auto = not any(c["kind"] for c in clips)
+    labs = {c["label"] for c in clips}
+    # Premiere gives every video clip "Iris" by itself: a sequence where EVERY clip is Iris was never labelled
+    # (his 28 August "selectie": 309 clips, all Iris) -> the moments are found automatically, not 309 party clips
+    auto = not any(c["kind"] for c in clips) or (labs == {"Iris"} and len(clips) >= 10)
+    if auto:
+        for c in clips:
+            c["kind"] = None
     if auto:                                # no colours: every clip once, the moments are found by daymap in build()
         seen_c, uniq = set(), []
         for c in sorted(clips, key=lambda c: (c["st"], c["track"])):
@@ -234,6 +240,52 @@ def chrono(ps, layout, infos):
         td = [c + 86400 if c < projectsetup.SYNC_DAY else c for c in td]
         return [p for _c, p in sorted(zip(td, ps), key=lambda x: (x[0] + x[1]["a"], x[1]["st"]))]
     return sorted(ps, key=lambda p: (p["cam"], p["st"]))
+
+
+def auto_order(pieces):
+    """The parts of an automatic film in the order of the story: getting ready, first look, vornic, church, then the
+    couple and the venue in the order they were filmed AFTER the church (a venue filmed only in the morning comes after
+    the couple), the drone where attach_drone puts it, the party last. The day itself can start anywhere (28 August:
+    the venue's decorations were filmed first, before the groom)."""
+    have = {part_of(p["kind"]) for p in pieces}
+    order = [k for k in ("ready", "firstlook", "vornic", "church") if k in have]
+    ch = [p["t"] for p in pieces if p["kind"] == "church" and p.get("t") is not None]
+    c1 = max(ch) if ch else None
+
+    def when(part):
+        ts = [p["t"] for p in pieces if part_of(p["kind"]) == part and p.get("t") is not None]
+        after = [t for t in ts if c1 is None or t > c1]
+        return float(np.median(after)) if after else float("inf")
+    order += sorted((k for k in ("couple", "venue") if k in have), key=lambda k: (when(k), k != "couple"))
+    if "drone" in have:
+        order.append("drone")
+    if "party" in have:
+        order.append("party")
+    return order
+
+
+DRONE_NEAR = 45 * 60                        # a drone shot opens the moment filmed closest to it (within 45 min)
+
+
+def attach_drone(pieces, order):
+    """Every drone shot OPENS the moment filmed closest to it in time (his teaser rule: the church and the venue open
+    with the drone shot recorded closest in time): p["dpart"] = ready / church / couple / venue. A drone shot next to the
+    first look / vornic opens the getting ready, next to the party the venue (else the couple); none near (or no
+    clock) = the venue / couple part, never a part of its own in the middle of the film."""
+    target = {"ready": "ready", "firstlook": "ready", "vornic": "ready", "church": "church", "couple": "couple",
+              "venue": "venue", "party": "venue"}
+    others = [(p["t"], part_of(p["kind"])) for p in pieces
+              if p["kind"] != "drone" and p.get("t") is not None and part_of(p["kind"]) in target]
+    fallback = "venue" if "venue" in order else ("couple" if "couple" in order else None)
+    for p in pieces:
+        if p["kind"] != "drone":
+            continue
+        part = None
+        if p.get("t") is not None and others:
+            d, near = min((abs(t - p["t"]), k) for t, k in others)
+            if d <= DRONE_NEAR:
+                part = target[near]
+        p["dpart"] = part if part in order else fallback
 
 
 def key_of(p, a=None, b=None):
@@ -468,7 +520,21 @@ def party_edit(party, results, masters, analyses, cams_n, roles, st):
     return edits, dcams, by_key
 
 
-def party_layout(edits, by_key, masters, rec_paths=None, results=None, extras=()):
+def party_tracks(party, roles, names, user=None):
+    """Video track of every party camera: static camera on V1, the main camera (most party footage) on top
+    (director.video_order); user = {camera name: track} chosen on the page wins. Returns {cam index: track}."""
+    cs = sorted({p["cam"] for p in party})
+    foot = {}
+    for p in party:
+        foot[p["cam"]] = foot.get(p["cam"], 0.0) + (p["b"] - p["a"])
+    user = user or {}
+    pseudo = [dict(role=roles.get(c, "Handheld"), clips=[], name=names[c] if c < len(names) else str(c),
+                   track=user.get(names[c] if c < len(names) else str(c))) for c in cs]
+    order = director.video_order(pseudo, {i: foot.get(c, 0.0) for i, c in enumerate(cs)})
+    return {cs[i]: k + 1 for k, i in enumerate(order)}
+
+
+def party_layout(edits, by_key, masters, rec_paths=None, results=None, extras=(), tmap=None):
     """The party part, laid out like the Multicam export: every camera's cuts on its own video track (camera index + 1,
     picture only), every camera's sound WHOLE (each labelled party range uncut) on that camera's audio tracks, the main
     recorder and every extra sound source (second recorder, lavaliers) uncut under the party.
@@ -502,8 +568,9 @@ def party_layout(edits, by_key, masters, rec_paths=None, results=None, extras=()
             if lo - 1e-6 <= t <= hi + 1e-6:
                 return new + t - lo
         return None
-    items = [(p["cam"] + 1, where(t0), p, a, b) for t0, _t1, p, a, b in sorted(cuts, key=lambda c: c[0])]
-    ncam = max(p["cam"] for p in by_key.values()) + 1 if by_key else 1
+    tr = (lambda c: tmap.get(c, c + 1)) if tmap else (lambda c: c + 1)
+    items = [(tr(p["cam"]), where(t0), p, a, b) for t0, _t1, p, a, b in sorted(cuts, key=lambda c: c[0])]
+    ncam = max([tr(p["cam"]) for p in by_key.values()] or [1])
     for e in edits or []:                   # the alternative angle: the second best camera, ABOVE, switched off
         if not e or not e.get("alt"):
             continue
@@ -754,7 +821,7 @@ def folder_xml(root, progress=None, cancel=None, jobs=4):
     root = Path(root)
     cams = projectsetup.find_cameras(root)
     slots = projectsetup.default_slots(cams)
-    cams = [c for c, s_ in projectsetup.by_slot(cams, slots) if s_ != "sound"]
+    cams = [c for c, s_ in projectsetup.by_slot(cams, slots) if s_ not in ("sound", "out")]   # never the trash folder
     snd = [dict(c, files=_one_per_take(c["files"])) for c in projectsetup.sound_files(root)]
     if not cams:
         raise ValueError("No camera folders with video in this folder.")
@@ -1305,15 +1372,12 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
         psync = dict(masters=info, results=res, extras=extras)
     prog("Done", 1.0)
     order = L["order"]
-    if auto is not None:                    # the parts in the order of the day, the party last
-        order = []
-        for p in sorted(pieces, key=lambda p: p.get("t", 0.0)):
-            k = part_of(p["kind"])
-            if k not in order:
-                order.append(k)
-        if "party" in order:
-            order.remove("party")
-            order.append("party")
+    if auto is not None:                    # the story order (owner, v4.3.0), whatever was filmed first
+        order = auto_order(pieces)
+        if "drone" in order:
+            attach_drone(pieces, order)
+            if all(p.get("dpart") for p in pieces if p["kind"] == "drone"):
+                order.remove("drone")
     return dict(pieces=pieces, recorder=recorder, cams=L["cams"], layout=L["layout"], order=order, auto=auto,
                 skipped=L["skipped"], missing=missing, infos=infos, sel=sel, priests=priests,
                 firstlook=[fl_len, [(t, t0, key_of(p), a, b, ["sound"]) for t, t0, p, a, b in fl_items]],
@@ -1395,15 +1459,23 @@ def assemble(r, analyses, st, zones, marker=lambda s: s, vornic_on=True, edits=N
     for part in r["order"]:
         name = marker(PART_NAMES[part])
         if part in SELECT:
-            ps = chrono([p for p in r["pieces"] if part_of(p["kind"]) == part], r["layout"], r["infos"])
-            shots = []
-            for p in ps:
-                k = key_of(p)
-                cuts = [(p["a"], p["b"])] if k in r["priests"] else r["sel"].get(k, [])
-                shots += [(p, a, b) for a, b in cuts]
+            ps = chrono([p for p in r["pieces"] if part_of(p["kind"]) == part and not p.get("dpart")],
+                        r["layout"], r["infos"])
+            # drone shots that open this moment (automatic mode: attach_drone), in their own time order
+            dps = chrono([p for p in r["pieces"] if p.get("dpart") == part], r["layout"], r["infos"])
+
+            def cut(ps):
+                out = []
+                for p in ps:
+                    k = key_of(p)
+                    cuts = [(p["a"], p["b"])] if k in r["priests"] else r["sel"].get(k, [])
+                    out += [(p, a, b) for a, b in cuts]
+                return out
+            shots = cut(ps)
             if part == "ready":                 # groom and bride in parallel, not one after the other
                 shots = alternate([x for x in shots if x[0]["kind"] == "groom"],
                                   [x for x in shots if x[0]["kind"] != "groom"])
+            shots = cut(dps) + shots
             items, t = [], 0.0
             for p, a, b in shots:
                 items.append((1, t, p, a, b, {"sound"}))
@@ -1425,10 +1497,13 @@ def assemble(r, analyses, st, zones, marker=lambda s: s, vornic_on=True, edits=N
             roles = roles_of(party, analyses)
             edits, dcams, bk = party_edit(party, ps["results"], ps["masters"], analyses, len(r["cams"]), roles,
                                           {**director.DEFAULTS, **st, "zones": zones})
+            names = [c["name"] if isinstance(c, dict) else str(c) for c in r["cams"]]
+            tmap = party_tracks(party, roles, names, st.get("tracks"))
             ln, items, rec = party_layout(edits, bk, ps["masters"], {x["path"] for x in r["recorder"]},
-                                          ps["results"], ps.get("extras") or ())
+                                          ps["results"], ps.get("extras") or (), tmap)
             parts.append((name, ln, [it if len(it) > 5 else (*it, set()) for it in items], rec))
-            info.update(edits=edits, dcams=dcams, roles=roles)
+            info.update(edits=edits, dcams=dcams, roles=roles, tracks={names[c] if c < len(names) else str(c): t
+                                                                       for c, t in tmap.items()})
             stat[part] = (len(items), ln)
     keys = [k for k in r["order"] if k in stat]
     if user_edits:

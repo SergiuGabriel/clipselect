@@ -1396,6 +1396,7 @@ class Editor(QDialog):
         self.timer.stop()
         if self.player is not None:
             self.player.stop()
+            self.player.setSource(QUrl())        # let go of the file: else the footage disk cannot be ejected
         for rd in (self.frames, self.view.thumb_reader):
             rd.stop()
             rd.wait(3000)

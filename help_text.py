@@ -324,6 +324,17 @@ sunt sincronizate pe el și apar în export pe pistele lor audio, întregi.</p>
 <p>Dacă ai sincronizat deja în Syncaila, Premiere sau DaVinci, exportă de acolo un XML (FCP7 XML) cu fiecare cameră pe pista ei și
 apasă Import XML. Pozițiile sunt preluate exact (fără să mai sincronizeze), fiecare pistă video devine o cameră, fișierele doar-audio
 devin recorderul. Clipurile care nu sunt pe acest calculator sunt sărite, cu avertisment.</p>
+<h3>Verificarea după ceas (clipuri care nu țin de petrecere)</h3>
+<p>După sincronizare, aplicația verifică fiecare cameră: o cameră are o singură eroare de ceas pentru toate clipurile ei. Pentru
+fiecare clip se calculează cât de departe e ceasul lui de locul găsit după sunet; cel mai mare grup de clipuri care se potrivesc
+(la cel mult 5 minute unul de altul) e adevărul, iar un clip care e mai departe de atât e o potrivire falsă (de exemplu clipuri
+de la biserică sau de la first look date din greșeală, puse pe intrarea mirilor sau pe primul dans). Acestea devin „Check”, cu
+motivul scris lângă („ceasul lui spune că a fost filmat cu 120 min mai devreme…”), merg pe pista „check sync” și nu intră niciodată
+în Auto Edit. Trebuie cel puțin 2 clipuri care se potrivesc în aceeași cameră.</p>
+<h3>Pista fiecărei camere în export</h3>
+<p>În tabelul camerelor, coloana <b>Pistă</b> (Track): Auto pune camera statică pe V1 (jos), camerele secundare deasupra ei și
+camera principală (cea cu mână liberă cu cel mai mult material) pe pista de sus. Alegi V1, V2... ca să muți o cameră; camera
+care avea pista aleasă trece înapoi pe Auto.</p>
 <h3>Dacă adaugi fișiere după</h3>
 <p>Dai din nou Sync, apoi Auto Edit. A doua oară se analizează doar clipurile noi.</p>
 
@@ -583,6 +594,20 @@ verificate după <b>sunet</b>: intră la first look doar cele al căror sunet e 
 prietenele ei, filmat cu câteva minute înainte, nu mai intră).
 O cameră pe trepied (clipuri foarte lungi, de peste 10 minute de obicei: a74 la Alex și Andreea) nu e niciodată aleasă pentru
 mire, mireasă, cuplu sau sală: doar biserica și petrecerea.</p>
+<p><b>Mirele și mireasa, oricum ar începe ziua</b> (v4.3.0): AI-ul se uită și la <b>cine</b> e în cadru: rochie albă / voal =
+mireasa, costum = mirele, amândoi, sau nimeni din cuplu (detalii, camere, decor, clădiri, invitați). Fețele văzute în cele mai
+multe clipuri din toată ziua sunt mirii, iar AI-ul spune care e mireasa și care e mirele (la 28 august s-au filmat întâi sala și
+decoratoarele, iar regula veche „prima scenă = mirele” făcea mirele roz). Un detaliu sau o cameră merge la mirele / mireasa filmați
+cu cel mult 30 de minute lângă el; sala sau casa filmate separat (clădire, decor, mese) devin Sală. După ce mirii s-au văzut
+(2 clipuri cu amândoi în 10 minute), cadrele cu unul singur dinainte de biserică sunt tot first look-ul.
+Un sequence în care TOATE clipurile au Iris (culoarea pe care o pune Premiere singur) e tratat ca neetichetat: momentele se găsesc
+automat.</p>
+<p><b>Ordinea filmului automat</b>: pregătiri, first look, vornic, biserică, apoi cuplul și sala în ordinea în care au fost filmate
+după biserică (o sală filmată doar dimineața vine după cuplu), petrecerea la final. <b>Drona</b> nu mai e o parte separată: fiecare
+cadru de dronă deschide momentul filmat cel mai aproape de el (până la 45 de minute: dimineața pregătirile, biserica, sala,
+cuplul; lângă petrecere = sala).</p>
+<p><b>Pista fiecărei camere la petrecere</b>: în cardul Petrecere, Auto pune camera statică pe V1 și camera principală sus;
+alegi V1, V2... pentru fiecare cameră.</p>
 
 <h2>Cum trebuie să arate selecția</h2>
 <p>Ce trebuie să aibă XML-ul pe care îl dai fiecărei funcții. Culorile sunt etichetele (labels) din Premiere: Rose mireasa,
@@ -866,6 +891,9 @@ ar dubla camera.</li>
 Start) sau folosești Import XML din Syncaila.</li>
 <li><b>Formate</b>: orice citește FFmpeg (MXF, MP4, MOV, MKV, AVI etc.). BRAW (Blackmagic) și R3D (RED) nu sunt suportate.</li>
 <li><b>Toate sequence-urile finale sunt la 25 fps.</b></li>
+<li><b>Cât a durat</b>: la final, notificarea spune cât a durat tot procesul (Build, Sync, Auto Edit, analiza, descărcarea
+cardurilor, transcrierea...). Pe Mac, dacă a durat peste un minut, rămâne și în Centrul de notificări.</li>
+<li><b>Scoaterea discului</b>: editorul Long Film v2 eliberează fișierele când îl închizi, ca SSD-ul să poată fi scos (Eject).</li>
 <li><b>Proiectele se salvează singure</b> pe calculator. Ștergerea unui proiect nu șterge clipurile tale.</li>
 </ul>
 
@@ -1188,6 +1216,16 @@ to it and exported whole on their own audio tracks.</p>
 <p>If you already synced in Syncaila, Premiere or DaVinci, export an XML (FCP7 XML) with every camera on its track and press Import XML.
 The positions are taken exactly (no new sync), every video track becomes a camera, the audio-only files become the recorder. Clips that
 are not on this computer are skipped, with a warning.</p>
+<h3>The clock check (clips that do not belong to the party)</h3>
+<p>After the sync every camera is checked: a camera has ONE clock error for all its clips. For every clip the app measures how far
+its clock is from the place its sound was matched; the biggest group of clips that agree (within 5 minutes) is the truth, and a clip
+further away than that is a false match (for example church or first look clips given by mistake, matched on the couple's entrance
+or the first dance). Those become "Check" with the reason next to them ("its clock says it was filmed 120 min earlier…"), go to the
+"check sync" track and never into the Auto Edit. It needs at least 2 agreeing clips in the same camera.</p>
+<h3>The track of every camera in the export</h3>
+<p>In the cameras table, the <b>Track</b> column: Auto puts the static camera on V1 (bottom), the secondary cameras above it and the
+main camera (the handheld one with the most footage) on the top track. Pick V1, V2... to move a camera; the camera that had that
+track goes back to Auto.</p>
 <h3>If you add files later</h3>
 <p>Press Sync again, then Auto Edit. The second time only the new clips are analysed.</p>
 
@@ -1438,6 +1476,20 @@ are checked by <b>sound</b>: only those whose sound is the very same moment join
 friends filmed a few minutes earlier no longer does).
 A camera on a tripod (very long clips, usually over 10 minutes: the a74 at Alex & Andreea) is never chosen for the groom, the
 bride, the couple or the venue: only the church and the party.</p>
+<p><b>The groom and the bride, however the day starts</b> (v4.3.0): the AI also looks at <b>who</b> is in the picture: a white dress
+/ veil = the bride, a suit = the groom, both, or nobody of the couple (details, rooms, decorations, buildings, guests). The faces seen
+in the most clips of the whole day are the couple, and the AI tells which one is the bride and which the groom (on 28 August the
+venue and its decorators were filmed first and the old "first scene = groom" rule made the groom pink). A detail or a room goes with
+the groom / bride filmed within 30 minutes of it; the venue or the house filmed apart (building, decorations, tables) becomes Venue.
+Once the couple have met (2 clips with both within 10 minutes), the shots of one of them before the church are the first look too.
+A sequence where EVERY clip is Iris (the colour Premiere gives by itself) counts as unlabelled: the moments are found
+automatically.</p>
+<p><b>The order of the automatic film</b>: getting ready, first look, vornic, church, then the couple and the venue in the order they
+were filmed after the church (a venue filmed only in the morning comes after the couple), the party last. The <b>drone</b> is no
+longer a part of its own: every drone shot opens the moment filmed closest to it (within 45 minutes: getting ready in the morning,
+the church, the venue, the couple; next to the party = the venue).</p>
+<p><b>The track of every party camera</b>: in the Party card, Auto puts the static camera on V1 and the main camera on top; pick V1,
+V2... for each camera.</p>
 
 <h2>What your selects need</h2>
 <p>What the XML you give each feature must have. The colours are your Premiere labels: Rose bride, Blue groom, Purple couple,
@@ -1721,6 +1773,10 @@ would double the camera.</li>
 on Start) or use Import XML from Syncaila.</li>
 <li><b>Formats</b>: anything FFmpeg reads (MXF, MP4, MOV, MKV, AVI etc.). BRAW (Blackmagic) and R3D (RED) are not supported.</li>
 <li><b>All final sequences are 25 fps.</b></li>
+<li><b>How long it took</b>: at the end the notification says how long the whole process took (Build, Sync, Auto Edit, the
+analysis, the card offload, the transcription...). On a Mac, when it took more than a minute, it also stays in the Notification
+Center.</li>
+<li><b>Ejecting the disk</b>: the Long Film v2 editor lets go of the files when you close it, so the SSD can be ejected.</li>
 <li><b>Projects save themselves</b> on your computer. Deleting a project does not delete your clips.</li>
 </ul>
 

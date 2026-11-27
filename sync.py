@@ -460,6 +460,7 @@ def run_sync(masters, clips, progress=None, cancel=None, clocks=None, groups=Non
             if r["conf"] == "high" and ck is not None and info[r["master"]]["clock"] is not None:
                 delta[g] = _tod_diff(ck, info[r["master"]]["clock"]) - r["offset"]   # this camera's clock error
             results[c] = r
+    run_sync.suspect = verify_clocks(results, info, clocks, groups)
     fm = lambda v: f"{int(v // 60)}m {int(v % 60):02d}s" if v >= 60 else f"{v:.0f}s"
     run_sync.report = (f"Sync took {fm(_t.time() - T0)}: reading the files {fm(t_read)}, searching {fm(t_search)}"
                        + (" (reading is limited by the disk: an external SSD or the internal drive is much faster than a HDD)"
@@ -467,6 +468,48 @@ def run_sync(masters, clips, progress=None, cancel=None, clocks=None, groups=Non
     if progress:
         progress(f"Step 1 · sync finished ({full} full searches, {len(order) - full} timecode-guided)", 1.0)
     return info, results
+
+
+CLOCK_TOL = 300.0          # a camera's clock error is the same for all its clips (within 5 min)
+
+
+def verify_clocks(results, info, clocks, groups):
+    """The check after the sync (Syncaila's principle): every camera has ONE clock error. For each camera (group) the
+    clock error implied by each synced clip (its clock minus where the sound put it) is computed; the biggest set of
+    clips that agree within CLOCK_TOL is the truth, a clip whose sound match disagrees with it by more is a FALSE match
+    (church clips given by mistake to a party sync were matched on the entrance / the first dance) -> conf 'low' with
+    the reason, so it goes to the 'check sync' track and never into the edit. Needs >= 2 agreeing clips in the camera.
+    Returns how many clips were marked."""
+    by = {}
+    for c, r in results.items():
+        ck = clocks.get(c)
+        if r.get("conf") not in ("high", "medium") or r.get("manual") or ck is None:
+            continue
+        m = info[r["master"]] if r.get("master", 0) < len(info) else None
+        if not m or m.get("clock") is None:
+            continue
+        by.setdefault(groups.get(c, ""), []).append((c, _tod_diff(ck, m["clock"]) - r["offset"],
+                                                    (2.0 if r["conf"] == "high" else 1.0) * max(1.0, r.get("dur", 1.0)) ** 0.5))
+    n = 0
+    for g, xs in by.items():
+        if len(xs) < 3:
+            continue
+        best, bw = None, 0.0
+        for _c, e, _w in xs:
+            w = sum(w2 for _c2, e2, w2 in xs if abs(_tod_diff(e2, e)) <= CLOCK_TOL)
+            if w > bw:
+                best, bw = e, w
+        agree = [c for c, e, _w in xs if abs(_tod_diff(e, best)) <= CLOCK_TOL]
+        if len(agree) < 2 or len(agree) < 0.4 * len(xs):
+            continue
+        for c, e, _w in xs:
+            d = _tod_diff(e, best)
+            if abs(d) > CLOCK_TOL:
+                r = results[c]
+                r.update(conf="low", error=f"its clock says it was filmed {abs(d) / 60:.0f} min {'later' if d > 0 else 'earlier'}"
+                         " than this sound match: probably a clip from another moment")
+                n += 1
+    return n
 
 
 def _tod_diff(a, b):
@@ -794,13 +837,16 @@ def auto_cameras(files, infos, results, old_cams=None):
         if n:
             c["name"] = f"{c['name']} ({n + 1})"
     if old_cams:     # keep what the user edited
-        owner = {p: oc for oc in old_cams if oc.get("user") for p in oc["clips"]}
+        owner = {p: oc for oc in old_cams if oc.get("user") or oc.get("track") for p in oc["clips"]}
         for c in cams:
             hits = [owner[p] for p in c["clips"] if p in owner]
             if hits:
                 oc = max(set(map(id, hits)), key=lambda i: sum(id(h) == i for h in hits))
                 oc = next(h for h in hits if id(h) == oc)
-                c.update(name=oc["name"], role=oc["role"], user=True)
+                if oc.get("user"):
+                    c.update(name=oc["name"], role=oc["role"], user=True)
+                if oc.get("track"):
+                    c["track"] = oc["track"]           # the video track he chose for this camera
     return cams
 
 

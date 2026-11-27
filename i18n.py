@@ -780,3 +780,23 @@ TEMPLATES.update({
     "Checking the vornic on the other cameras: {} of {}": "Verific vornicul pe celelalte camere: {} din {}",
     "Writing the clips for DaVinci: {} of {}": "Scriu clipurile pentru DaVinci: {} din {}",
 })
+
+# v4.3.0
+EXACT.update({
+    "Track": "Pistă",
+    "The video track of this camera in Export XML. Auto: the static camera on V1, the main camera on top.":
+        "Pista video a acestei camere în Export XML. Auto: camera statică pe V1, camera principală deasupra.",
+    "Video track of every party camera (Auto: the static camera on V1, the main camera on top)":
+        "Pista video a fiecărei camere de la petrecere (Auto: camera statică pe V1, camera principală deasupra)",
+    "Video tracks": "Piste video",
+    "The film was changed in the editor. Use the new tracks and throw away the editor's changes?":
+        "Filmul a fost modificat în editor. Folosesc noile piste și renunț la modificările din editor?",
+})
+TEMPLATES.update({
+    "took {}": "a durat {}",
+    "Auto (V{})": "Auto (V{})",
+    "its clock says it was filmed {} min later than this sound match: probably a clip from another moment":
+        "ceasul lui spune că a fost filmat cu {} min mai târziu decât locul găsit după sunet: probabil un clip din alt moment",
+    "its clock says it was filmed {} min earlier than this sound match: probably a clip from another moment":
+        "ceasul lui spune că a fost filmat cu {} min mai devreme decât locul găsit după sunet: probabil un clip din alt moment",
+})
