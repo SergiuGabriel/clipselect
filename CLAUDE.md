@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.3.1), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.3.2), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -1150,6 +1150,18 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   sort of the stem, a wrapped counter (9000+ and < 1000 on one camera) continues (< 5000 + 10000). His 28 Aug fx3 C9754 /
   C9759 in the party are caught by the order alone (tools/party_check).
 - Automatic Long Film v2: ALL drone shots at the start of the timeline (auto_order puts "drone" first; attach_drone gone).
+
+## v4.3.2 (owner: "the mix should not be the winner, a track; he uses auto, a friend manual"; first real v4.3.1 Build)
+- Recorder takes with several files: sync.pick_track(g) by sync.TAKE_PREF = store.app["rec_take"] (Settings > "Recorder
+  with several tracks": Automatic (the cleanest track) / The mix / Track 1 / 2 / 3, in name order, MIX / LR not counted).
+  auto = fewest clipped samples (|x| >= 32000 in 5 x 20 s at 16 kHz mono, _clean_score cached), then the stronger
+  level; never the mix unless only the mix exists. Used everywhere one_per_take is (Multicam classify, Long Film v2).
+- The first REAL run of v4.3.1 on his Mac (28 Aug, automatic mode from the wedding folder, real SigLIP 2 + faces, 1 h 20 min
+  Build): drone first, groom / bride shots 185 of 199 right (Blue 91, Rose 108), first look 80/80, church 334/334 Brown,
+  venue 31/43, couple 51/75 (the misses are empty rooms during the couple session, Yellow). BUT the church was 53 min: two
+  27-min service takes (63496, C9768) cut by the Auto selection + the priest's 12-min shot (63507) kept whole. Now in the
+  automatic mode a church clip > LONG_TAKE 120 s is thinned (longfilm2.thin): ~12 % (20-90 s) in pieces <= 6 s spread over
+  its selected parts, and the priest rule never keeps such a take whole. Labelled mode unchanged.
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

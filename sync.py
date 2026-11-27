@@ -727,7 +727,7 @@ TAKE_RE = re.compile(r"(?i)^(.+?)[_-](\d{1,2}(?:-\d{1,2})?|MIX|LR|L|R|ST|Tr\d{1,
 
 def one_per_take(files, dur=lambda f: None, start=lambda f: None):
     """A recorder writes one take as several files: Tascam 260823_0195_3 / _4 / _MIX, Tascam X8 260711_0190_3-4 / _MIX,
-    Zoom ZOOM0001_Tr1 / _LR. Keep ONE per take (the MIX / LR when there is one, else the first), or the copies of one take
+    Zoom ZOOM0001_Tr1 / _LR. Keep ONE per take (the track chosen by TAKE_PREF: by default the cleanest track, never the mix), or the copies of one take
     are laid one after the other as if they followed (a friend's Denisa & Cornel: 0190_3-4, 0190_MIX, 0191_3-4,
     0191_MIX in a row -> the party synced into the wrong half). Files of one name group are one take only when they have
     the same length (+-2 s) and a name says it is a track (MIX, LR, L, R, Tr1, 3-4...) or they started together (+-2 s);
@@ -756,9 +756,65 @@ def one_per_take(files, dur=lambda f: None, start=lambda f: None):
                 if not (track or together):
                     out.extend(g)
                     continue
-            mix = [f for f in g if re.search(r"(?i)[_-](mix|lr|trlr)$", Path(f).stem)]
-            out.append(mix[0] if mix else g[0])
+            out.append(pick_track(g))
     return sorted(out)
+
+
+# Which file of a take with several tracks is used (owner, v4.3.2): Tascam / Zoom record a SAFE track (auto level) and a
+# MANUAL one and also write their MIX. He uses the auto track, a friend the manual one -> never the mix by default.
+# "auto" = the cleanest track (fewest clipped samples, then the stronger signal); "mix"; "1" / "2" / "3" = the 1st, 2nd,
+# 3rd track in name order (MIX / LR not counted). Set by the app from store.app["rec_take"].
+TAKE_PREF = "auto"
+MIX_RE = re.compile(r"(?i)[_-](mix|lr|trlr)$")
+_CLEAN = {}
+
+
+def _clean_score(f):
+    """(share of clipped samples, -level dB) of 5 short pieces of the file: lower = better."""
+    if f in _CLEAN:
+        return _CLEAN[f]
+    try:
+        d = float(core.probe(f).duration or 0.0)
+    except Exception:
+        d = 0.0
+    clip = tot = 0
+    sq = 0.0
+    for k in range(5):
+        t = max(0.0, d * (k + 0.5) / 5 - 10)
+        try:
+            p = subprocess.run([core.ffmpeg_exe(), "-v", "error", "-nostdin", "-ss", f"{t:.2f}", "-t", "20", "-i", str(f),
+                                "-ac", "1", "-ar", "16000", "-f", "s16le", "-"], capture_output=True, timeout=60,
+                               **core._NOWIN)
+        except Exception:
+            continue
+        x = np.frombuffer(p.stdout[: len(p.stdout) // 2 * 2], np.int16).astype(np.float32)
+        if not len(x):
+            continue
+        clip += int((np.abs(x) >= 32000).sum())
+        tot += len(x)
+        sq += float((x * x).sum())
+    if not tot:
+        _CLEAN[f] = (1.0, 0.0)
+    else:
+        _CLEAN[f] = (round(clip / tot, 5), -10 * np.log10(sq / tot / 32768.0 ** 2 + 1e-12))
+    return _CLEAN[f]
+
+
+def pick_track(g, pref=None):
+    """The file of one take to use (see TAKE_PREF)."""
+    pref = pref or TAKE_PREF
+    g = sorted(g)
+    mix = [f for f in g if MIX_RE.search(Path(f).stem)]
+    tracks = [f for f in g if f not in mix]
+    if pref == "mix" and mix:
+        return mix[0]
+    if not tracks:
+        return mix[0] if mix else g[0]
+    if pref in ("1", "2", "3", "4"):
+        return tracks[min(int(pref), len(tracks)) - 1]
+    if len(tracks) == 1:
+        return tracks[0]
+    return min(tracks, key=lambda f: (_clean_score(f)[0] > 1e-4, _clean_score(f)[0], _clean_score(f)[1]))
 
 
 def classify(files, infos):

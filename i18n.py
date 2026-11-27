@@ -807,3 +807,23 @@ EXACT.update({
     "out of the camera's file order: probably a clip from another moment":
         "în afara ordinii fișierelor camerei: probabil un clip din alt moment",
 })
+
+# v4.3.2
+EXACT.update({
+    "Recorder with several tracks": "Recorder cu mai multe piste",
+    "A Tascam / Zoom writes every take as several files: a safe (auto) track, a manual track and their mix. Only one of "
+    "them is used for the sync and the export. Automatic = the cleanest track (no clipping, the stronger signal), never "
+    "the mix.":
+        "Un Tascam / Zoom scrie fiecare înregistrare în mai multe fișiere: o pistă safe (auto), una reglată manual și mixul "
+        "lor. Pentru sync și export se folosește doar una. Automat = pista cea mai curată (fără distorsiuni, semnalul mai "
+        "puternic), niciodată mixul.",
+    "Automatic (the cleanest track)": "Automat (pista cea mai curată)",
+    "The mix": "Mixul",
+    "Track 1": "Pista 1",
+    "Track 2": "Pista 2",
+    "Track 3": "Pista 3",
+    "Press Sync again on the projects that should use it.": "Dă din nou Sync la proiectele care trebuie să o folosească.",
+})
+TEMPLATES.update({
+    "Recorder track: {}": "Pista recorderului: {}",
+})

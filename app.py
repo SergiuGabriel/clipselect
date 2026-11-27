@@ -51,7 +51,7 @@ import projectsetup
 import story
 import sync
 
-APP, VER = "MoneyMakingMachine", "v4.3.1"
+APP, VER = "MoneyMakingMachine", "v4.3.2"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -394,10 +394,12 @@ class Store:
             pass
         core.HWACCEL = self.app["hwaccel"]
         core.set_slots(max(2, self.app["jobs"]))
+        sync.TAKE_PREF = self.app.get("rec_take", "auto")
 
     def save_app(self):
         core.HWACCEL = self.app["hwaccel"]
         core.set_slots(max(2, self.app["jobs"]))
+        sync.TAKE_PREF = self.app.get("rec_take", "auto")
         (self.dir / "settings.json").write_text(json.dumps(self.app), "utf-8")
 
     def save(self):
@@ -3592,6 +3594,19 @@ class SettingsPage(QWidget):
         self.sw_hw.toggled.connect(self.set_hw)
         hw.addWidget(self.sw_hw)
         right.addLayout(hw)
+        right.addSpacing(10)
+        right.addWidget(lbl("Recorder with several tracks"))
+        right.addWidget(lbl("A Tascam / Zoom writes every take as several files: a safe (auto) track, a manual track and "
+                            "their mix. Only one of them is used for the sync and the export. Automatic = the cleanest track "
+                            "(no clipping, the stronger signal), never the mix.", "muted", True))
+        self.c_take = QComboBox()
+        self.c_take.setProperty("i18n", True)
+        self.c_take.addItems(["Automatic (the cleanest track)", "The mix", "Track 1", "Track 2", "Track 3"])
+        keys = ["auto", "mix", "1", "2", "3"]
+        cur_t = store.app.get("rec_take", "auto")
+        self.c_take.setCurrentIndex(keys.index(cur_t) if cur_t in keys else 0)
+        self.c_take.currentIndexChanged.connect(lambda i: self.set_take(keys[i]))
+        right.addWidget(self.c_take)
         right.addSpacing(18)
         right.addWidget(lbl("Language", "h2"))
         lr = QHBoxLayout()
@@ -3746,6 +3761,12 @@ class SettingsPage(QWidget):
     def set_hw(self, v):
         self.store.app["hwaccel"] = v
         self.store.save_app()
+
+    def set_take(self, k):
+        self.store.app["rec_take"] = k
+        self.store.save_app()
+        notify(i18n.T("Recorder track: {}").format(i18n.T(self.c_take.currentText())) + ". " +
+               i18n.T("Press Sync again on the projects that should use it."))
 
     def showEvent(self, e):
         self.refresh()

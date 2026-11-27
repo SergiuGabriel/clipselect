@@ -264,6 +264,34 @@ def auto_order(pieces):
     return order
 
 
+LONG_TAKE = 120.0                           # automatic mode: a church clip longer than this is a take of the service
+THIN_SHARE, THIN_MIN, THIN_MAX, THIN_PIECE = 0.12, 20.0, 90.0, 6.0
+
+
+def thin(cuts, length):
+    """A long take of the church (automatic mode; 28 August: two 27-min takes + the priest's 12-min shot made a 53-min
+    church): about 12 % of the take (20-90 s) in pieces of up to 6 s spread evenly over its good (selected) parts, like
+    his own long films (a few 6 s pieces of every long church clip)."""
+    good = sum(b - a for a, b in cuts)
+    want = min(THIN_MAX, max(THIN_MIN, THIN_SHARE * length))
+    if good <= want:
+        return list(cuts)
+    n = max(1, int(round(want / THIN_PIECE)))
+    out, step = [], good / n
+    for i in range(n):
+        t = step * (i + 0.5) - THIN_PIECE / 2
+        acc = 0.0
+        for a, b in cuts:
+            if acc + (b - a) > t:
+                s0 = a + max(0.0, t - acc)
+                e0 = min(b, s0 + THIN_PIECE)
+                if e0 - s0 >= 1.0 and (not out or s0 >= out[-1][1]):
+                    out.append((s0, e0))
+                break
+            acc += b - a
+    return out or list(cuts)
+
+
 def key_of(p, a=None, b=None):
     a = p["a"] if a is None else a
     b = p["b"] if b is None else b
@@ -1402,11 +1430,19 @@ def assemble(r, analyses, st, zones, marker=lambda s: s, vornic_on=True, edits=N
             # drone shots that open this moment (automatic mode: attach_drone), in their own time order
             dps = chrono([p for p in r["pieces"] if p.get("dpart") == part], r["layout"], r["infos"])
 
+            auto_mode = r.get("auto") is not None
+
             def cut(ps):
                 out = []
                 for p in ps:
                     k = key_of(p)
-                    cuts = [(p["a"], p["b"])] if k in r["priests"] else r["sel"].get(k, [])
+                    long_take = auto_mode and part == "church" and p["b"] - p["a"] > LONG_TAKE
+                    if k in r["priests"] and not long_take:
+                        cuts = [(p["a"], p["b"])]
+                    else:
+                        cuts = r["sel"].get(k, [])
+                        if long_take:               # a whole service filmed in one take: a few pieces of it
+                            cuts = thin(cuts, p["b"] - p["a"])
                     out += [(p, a, b) for a, b in cuts]
                 return out
             shots = cut(ps)

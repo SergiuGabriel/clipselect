@@ -324,6 +324,11 @@ sunt sincronizate pe el și apar în export pe pistele lor audio, întregi.</p>
 <p>Dacă ai sincronizat deja în Syncaila, Premiere sau DaVinci, exportă de acolo un XML (FCP7 XML) cu fiecare cameră pe pista ei și
 apasă Import XML. Pozițiile sunt preluate exact (fără să mai sincronizeze), fiecare pistă video devine o cameră, fișierele doar-audio
 devin recorderul. Clipurile care nu sunt pe acest calculator sunt sărite, cu avertisment.</p>
+<h3>Recorder cu mai multe piste (Setări)</h3>
+<p>Un Tascam / Zoom scrie fiecare înregistrare în mai multe fișiere: o pistă safe (auto), una reglată manual și mixul lor
+(de ex. 0190_1-2, 0190_3-4, 0190_MIX). Aplicația folosește una singură, ca să nu le pună una după alta. În Setări alegi care:
+<b>Automat</b> (implicit) = pista cea mai curată (cele mai puține vârfuri tăiate, apoi semnalul mai puternic), niciodată mixul;
+sau <b>Mixul</b>, <b>Pista 1</b>, <b>Pista 2</b>, <b>Pista 3</b> (în ordinea numelor). După schimbare dai din nou Sync.</p>
 <h3>Verificarea ordinii (ca în Syncaila)</h3>
 <p>După sincronizare, aplicația verifică fiecare cameră după regula Syncaila: o cameră își filmează fișierele unul după altul, în
 ordinea numerelor (C9773, C9775, C9778…), și niciodată două lucruri deodată. Ceasul camerei nu contează deloc (poate fi dat peste
@@ -592,6 +597,8 @@ sunetul fișierelor întregi (cel mai clar canal, niciodată un amestec), iar î
 recorderul. În modul automat clipurile celorlalte camere filmate până la 30 de minute înainte / după first look (după ceas) sunt
 verificate după <b>sunet</b>: intră la first look doar cele al căror sunet e chiar același moment (un clip cu mireasa și
 prietenele ei, filmat cu câteva minute înainte, nu mai intră).
+<b>Biserica filmată în cadre lungi</b> (modul automat): dintr-o filmare de peste 2 minute a slujbei intră
+cam 12 % (20–90 s), în bucăți de până la 6 s din părțile bune, ca în filmele tale lungi.
 O cameră pe trepied (clipuri foarte lungi, de peste 10 minute de obicei: a74 la Alex și Andreea) nu e niciodată aleasă pentru
 mire, mireasă, cuplu sau sală: doar biserica și petrecerea.</p>
 <p><b>Mirele și mireasa, oricum ar începe ziua</b> (v4.3.0): AI-ul se uită și la <b>cine</b> e în cadru: rochie albă / voal =
@@ -1214,6 +1221,11 @@ to it and exported whole on their own audio tracks.</p>
 <p>If you already synced in Syncaila, Premiere or DaVinci, export an XML (FCP7 XML) with every camera on its track and press Import XML.
 The positions are taken exactly (no new sync), every video track becomes a camera, the audio-only files become the recorder. Clips that
 are not on this computer are skipped, with a warning.</p>
+<h3>Recorder with several tracks (Settings)</h3>
+<p>A Tascam / Zoom writes every take as several files: a safe (auto) track, a manual one and their mix (e.g. 0190_1-2,
+0190_3-4, 0190_MIX). The app uses only one, so they are never laid one after the other. In Settings you choose which:
+<b>Automatic</b> (default) = the cleanest track (fewest clipped peaks, then the stronger signal), never the mix; or <b>The mix</b>,
+<b>Track 1</b>, <b>Track 2</b>, <b>Track 3</b> (in name order). After a change press Sync again.</p>
 <h3>The order check (like Syncaila)</h3>
 <p>After the sync every camera is checked with Syncaila's rule: a camera films its files one after the other, in the order of their
 numbers (C9773, C9775, C9778…), and never two things at once. The camera's clock does not matter at all (it can be hours off or set
@@ -1473,6 +1485,8 @@ sound of the whole files (the clearest channel, never a mix) and, in the automat
 recorder too. In the automatic mode the other cameras' clips filmed up to 30 minutes before / after the first look (by the clock)
 are checked by <b>sound</b>: only those whose sound is the very same moment join the first look (a clip of the bride with her
 friends filmed a few minutes earlier no longer does).
+<b>A church filmed in long takes</b> (automatic mode): of a take of the service longer than 2 minutes about
+12 % (20–90 s) goes in, in pieces of up to 6 s from its good parts, like your own long films.
 A camera on a tripod (very long clips, usually over 10 minutes: the a74 at Alex & Andreea) is never chosen for the groom, the
 bride, the couple or the venue: only the church and the party.</p>
 <p><b>The groom and the bride, however the day starts</b> (v4.3.0): the AI also looks at <b>who</b> is in the picture: a white dress

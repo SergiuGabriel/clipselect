@@ -12,7 +12,16 @@ fs = ["/w/Tascam/260711_0190_3-4.wav", "/w/Tascam/260711_0190_MIX.wav", "/w/Tasc
       "/w/Tascam/260711_0191_MIX.wav"]
 inf = {fs[0]: dict(dur=14897), fs[1]: dict(dur=14897), fs[2]: dict(dur=12760), fs[3]: dict(dur=12760)}
 one = L._one_per_take(fs, inf)
-assert one == [fs[1], fs[3]], one
+assert one == [fs[0], fs[2]], one                    # a TRACK by default (owner: his auto track, never the mix)
+sync.TAKE_PREF = "mix"
+assert L._one_per_take(fs, inf) == [fs[1], fs[3]]
+three = ["/w/T/0190_1-2.wav", "/w/T/0190_3-4.wav", "/w/T/0190_MIX.wav"]
+i3 = {f: dict(dur=100) for f in three}
+sync.TAKE_PREF = "2"
+assert L._one_per_take(three, i3) == [three[1]]
+sync.TAKE_PREF = "1"
+assert L._one_per_take(three, i3) == [three[0]]
+sync.TAKE_PREF = "auto"
 lav = ["/w/lav/Lav_01.wav", "/w/lav/Lav_02.wav"]
 assert L._one_per_take(lav, {lav[0]: dict(dur=60, ctime=1), lav[1]: dict(dur=60, ctime=900)}) == lav
 
