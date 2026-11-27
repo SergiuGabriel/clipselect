@@ -53,7 +53,7 @@ import sync
 import bridge
 import colour
 
-APP, VER = "MoneyMakingMachine", "v4.5.1"
+APP, VER = "MoneyMakingMachine", "v4.6.0"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -676,13 +676,14 @@ class DropZone(QFrame):
         self.setAcceptDrops(True)
         self.setCursor(Qt.PointingHandCursor)
         v = QVBoxLayout(self)
-        v.setAlignment(Qt.AlignCenter)
         self.t1 = lbl("Drop more videos here" if compact else "Drag & drop a folder or videos here", "h2" if not compact else "")
         self.t1.setAlignment(Qt.AlignCenter)
         self.t2 = lbl("or click to browse" if compact else "or click to browse · MP4, MOV, MXF, AVI, MKV and any other format FFmpeg reads", "muted", True)
         self.t2.setAlignment(Qt.AlignCenter)
+        v.addStretch()                          # stretches, not AlignCenter: a wrapped label then gets its full height
         v.addWidget(self.t1)
         v.addWidget(self.t2)
+        v.addStretch()
         if compact:
             self.setFixedHeight(64)
 
@@ -832,11 +833,11 @@ def job_mark(key):
 
 
 def dur_text(sec):
-    """1 h 05 min / 12 min 30 s / 45 s (translated)."""
+    """1 h 05 min 12 s / 12 min 30 s / 45 s (translated; owner wants the seconds too)."""
     sec = int(round(max(0, sec)))
     h, m, s = sec // 3600, sec % 3600 // 60, sec % 60
     if h:
-        return i18n.T("{} h {} min").format(h, f"{m:02d}")
+        return i18n.T("{} h {} min {} s").format(h, f"{m:02d}", f"{s:02d}")
     if m:
         return i18n.T("{} min {} s").format(m, f"{s:02d}")
     return i18n.T("{} s").format(s)
@@ -2717,6 +2718,10 @@ class MulticamPage(QWidget):
         lv.addWidget(self.list, 1)
         lv.addWidget(self.count)
         lv.addWidget(self.small)
+        lv.addSpacing(6)
+        lv.addWidget(lbl("SYNC", "section"))
+        self.syncopt = SyncOptions(store)
+        lv.addWidget(self.syncopt)
         body.addWidget(left)
 
         # center: tabs
@@ -3466,7 +3471,7 @@ class MulticamPage(QWidget):
         foot = {i: sum(s["clips"][x]["dur"] for x in c["clips"] if x in s["clips"]) for i, c in enumerate(cams)} if s else {}
         order = director.video_order(cams, foot)
         n = len(order)
-        cb.addItem(i18n.T("Auto (V{})").format(order.index(ci) + 1 if ci in order else 1))
+        cb.addItem(i18n.T("V{} · auto").format(order.index(ci) + 1 if ci in order else 1))
         cb.addItems([f"V{k}" for k in range(1, n + 1)])
         t = cam.get("track")
         cb.setCurrentIndex(t if isinstance(t, int) and 1 <= t <= n else 0)
@@ -3732,30 +3737,6 @@ class SettingsPage(QWidget):
         hw.addWidget(self.sw_hw)
         right.addLayout(hw)
         right.addSpacing(10)
-        right.addWidget(lbl("Recorder with several tracks"))
-        right.addWidget(lbl("A Tascam / Zoom writes every take as several files: a safe (auto) track, a manual track and "
-                            "their mix. Only one of them is used for the sync and the export. Automatic = the cleanest track "
-                            "(no clipping, the stronger signal), never the mix.", "muted", True))
-        self.c_take = QComboBox()
-        self.c_take.setProperty("i18n", True)
-        self.c_take.addItems(["Automatic (the cleanest track)", "The mix", "Track 1", "Track 2", "Track 3"])
-        keys = ["auto", "mix", "1", "2", "3"]
-        cur_t = store.app.get("rec_take", "auto")
-        self.c_take.setCurrentIndex(keys.index(cur_t) if cur_t in keys else 0)
-        self.c_take.currentIndexChanged.connect(lambda i: self.set_take(keys[i]))
-        right.addWidget(self.c_take)
-        right.addSpacing(10)
-        right.addWidget(lbl("Sync engine"))
-        right.addWidget(lbl("New: every file is compared with every other one (cameras with each other too, like Align / "
-                            "Syncaila), the whole group is placed at once, ~5x faster. Classic: every clip is searched in "
-                            "the recorder only (the engine before v4.4.0).", "muted", True))
-        self.c_eng = QComboBox()
-        self.c_eng.setProperty("i18n", True)
-        self.c_eng.addItems(["New (every file with every other)", "Classic (in the recorder only)"])
-        self.c_eng.setCurrentIndex(1 if store.app.get("sync_engine", "graph") == "classic" else 0)
-        self.c_eng.currentIndexChanged.connect(lambda i: self.set_engine("classic" if i else "graph"))
-        right.addWidget(self.c_eng)
-        right.addSpacing(10)
         right.addWidget(lbl("Premiere bridge"))
         right.addWidget(lbl("A small extension inside Premiere Pro (installed by the app, it starts by itself with Premiere): "
                             "Export XML → Premiere can import the film into the open project and put an adjustment layer "
@@ -3943,25 +3924,16 @@ class SettingsPage(QWidget):
             notify(i18n.T("Could not install the Premiere bridge: {}").format(str(e)), error=True)
         self._show_bridge()
 
-    def set_engine(self, k):
-        self.store.app["sync_engine"] = k
-        self.store.save_app()
-        notify(i18n.T("Sync engine: {}").format(i18n.T(self.c_eng.currentText())) + ". " +
-               i18n.T("Press Sync again on the projects that should use it."))
-
-    def set_take(self, k):
-        self.store.app["rec_take"] = k
-        self.store.save_app()
-        notify(i18n.T("Recorder track: {}").format(i18n.T(self.c_take.currentText())) + ". " +
-               i18n.T("Press Sync again on the projects that should use it."))
-
     def showEvent(self, e):
         self.refresh()
         self.timer.start()
         super().showEvent(e)
 
     def hideEvent(self, e):
-        self.timer.stop()
+        try:
+            self.timer.stop()
+        except RuntimeError:                    # the app is closing: the timer is already gone
+            pass
         super().hideEvent(e)
 
     def refresh(self):
@@ -7812,9 +7784,16 @@ class _LF2Worker(QThread):
 
 
 class LongFilm2Page(QWidget):
-    """Long Film v2 (BETA): the long film from the labelled sequence of Create Project, every colour its own way."""
+    """Long Film (v4.6.0: the old v2, no BETA any more): the long film from the wedding folder (automatic) or from the
+    labelled sequence of Create Project, every colour its own way."""
     back = Signal()
     DROPS = [1, 2, 4, 8, 16]
+    KEY = "long2"                    # store.app["<KEY>_projects"] / "<KEY>_current"
+    BETA = False
+    DESC = ("The long film from the wedding folder or from the sequence of Create Project. With your colours every colour "
+            "is handled its own way; without colours the AI looks at every clip and finds the moments of the day itself "
+            "(getting ready, first look, civil ceremony, church, couple, venue, party). Then Edit the film to correct it. "
+            "One 25 fps 1920x1080 sequence.")
 
     def __init__(self, store):
         super().__init__()
@@ -7829,6 +7808,7 @@ class LongFilm2Page(QWidget):
         badge = QLabel("BETA")
         badge.setStyleSheet(f"background:{C['POOR']};color:white;font-size:10px;font-weight:800;border-radius:9px;padding:2px 8px")
         top.addWidget(badge)
+        badge.setVisible(self.BETA)
         top.addStretch()
         self.b_edit = btn("Edit the film", slot=self.edit_film)
         self.b_exp = ExportPair(self.export)
@@ -7841,10 +7821,7 @@ class LongFilm2Page(QWidget):
         top.addWidget(self.b_build)
         top.addWidget(self.b_be)
         v.addLayout(top)
-        v.addWidget(lbl("The long film from the wedding folder or from the sequence of Create Project. With your colours "
-                        "every colour is handled its own way; without colours the moments of the day are found "
-                        "automatically (time, faces, the church's long clips, the recorder). Then Edit the film to correct "
-                        "it. One 25 fps 1920x1080 sequence.", "muted", True))
+        v.addWidget(lbl(self.DESC, "muted", True))
         v.addSpacing(8)
         body = QHBoxLayout()
         body.setSpacing(18)
@@ -7856,6 +7833,7 @@ class LongFilm2Page(QWidget):
         left = QVBoxLayout(lw)
         left.setContentsMargins(0, 0, 8, 0)
         left.setSpacing(10)
+        self._left, self._cards = left, {}
 
         def card(n, title):
             f = QFrame()
@@ -7873,7 +7851,9 @@ class LongFilm2Page(QWidget):
             h.addStretch()
             l.addLayout(h)
             left.addWidget(f)
+            self._cards[title] = (f, num)
             return l
+        self._card = card
         l1 = card(1, "Your wedding")
         l1.addWidget(lbl("<b>Automatic:</b> choose the wedding folder (the one Card Offload made). The app makes the "
                          "sequence itself (every camera + the recorder and the lavalieres) and finds the moments: getting "
@@ -7982,12 +7962,16 @@ class LongFilm2Page(QWidget):
         self.c_build.addItems(["Hold one shot until the drop", "Cut faster and faster"])
         self.c_build.currentIndexChanged.connect(lambda i: self.set_d("buildup", "hold" if i == 0 else "accelerate"))
         l3.addWidget(self.c_build)
+        self.syncopt = SyncOptions(store)
+        l3.addWidget(self.syncopt)
         l3.addWidget(lbl("Video track of every party camera (Auto: the static camera on V1, the main camera on top)",
                          "muted", True))
-        self.trk_box = QWidget()
-        self.trk_grid = QGridLayout(self.trk_box)
-        self.trk_grid.setContentsMargins(0, 0, 0, 0)
-        self.trk_grid.setSpacing(6)
+        self.trk_box = QFrame()
+        self.trk_box.setObjectName("trkbox")
+        self.trk_box.setStyleSheet(f"QFrame#trkbox{{background:{C['BG']};border:1px solid {C['BORDER']};border-radius:6px}}")
+        self.trk_grid = QVBoxLayout(self.trk_box)
+        self.trk_grid.setContentsMargins(0, 2, 0, 2)
+        self.trk_grid.setSpacing(0)
         l3.addWidget(self.trk_box)
         l3.addWidget(btn("Back to my party settings", "link", self.reset_d), 0, Qt.AlignLeft)
         left.addStretch()
@@ -8012,10 +7996,12 @@ class LongFilm2Page(QWidget):
         self.pp = ProgressPanel()
         right.addWidget(self.pp)
         right.addSpacing(6)
-        right.addWidget(lbl("PARTY", "section"))
-        right.addWidget(lbl("Slower cuts (the hora): drag on the map to mark a zone; there the cuts follow your hora settings "
-                            "(longer shots, not on the bars). Drag an edge to move it, right-click or Delete to remove it.",
-                            "muted", True))
+        self._party_w = [lbl("PARTY", "section"),
+                         lbl("Slower cuts (the hora): drag on the map to mark a zone; there the cuts follow your hora settings "
+                             "(longer shots, not on the bars). Drag an edge to move it, right-click or Delete to remove it.",
+                             "muted", True)]
+        for w_ in self._party_w:
+            right.addWidget(w_)
         self.map = SyncMap()
         self.map.zones_changed.connect(self._zones)
         right.addWidget(self.map)
@@ -8036,8 +8022,8 @@ class LongFilm2Page(QWidget):
 
     # ---- project
     def _cur(self):
-        pid = self.store.app.get("long2_current")
-        return next((p for p in self.store.app.setdefault("long2_projects", []) if p["id"] == pid), None)
+        pid = self.store.app.get(f"{self.KEY}_current")
+        return next((p for p in self.store.app.setdefault(f"{self.KEY}_projects", []) if p["id"] == pid), None)
 
     def _remember(self, **kw):
         p = self._cur()
@@ -8221,14 +8207,8 @@ class LongFilm2Page(QWidget):
         user = ((self._cur() or {}).get("dir") or {}).get("tracks") or {}
         n = len(tr)
         for row, (name, t) in enumerate(sorted(tr.items(), key=lambda x: -x[1])):
-            self.trk_grid.addWidget(QLabel(name), row, 0)
-            cb = QComboBox()
-            cb.addItem(i18n.T("Auto (V{})").format(t))
-            cb.addItems([f"V{k}" for k in range(1, n + 1)])
-            u = user.get(name)
-            cb.setCurrentIndex(u if isinstance(u, int) and 1 <= u <= n else 0)
-            cb.currentIndexChanged.connect(lambda k, nm=name: self._set_track(nm, k))
-            self.trk_grid.addWidget(cb, row, 1)
+            self.trk_grid.addWidget(track_row(name, t, n, user.get(name), lambda k, nm=name: self._set_track(nm, k),
+                                              first=row == 0))
         self.trk_box.setVisible(n > 0)
 
     def _set_track(self, name, k):
@@ -8346,7 +8326,7 @@ class LongFilm2Page(QWidget):
             self.recompute()
         if r.get("missing"):
             notify(i18n.T("{} clips not found on this computer: connect the disk with the footage.").format(len(r["missing"])), error=True)
-        notify(i18n.T("Long Film v2 ready: {}").format(p["name"]), took=("lf2", p["id"]))
+        notify(i18n.T("Long Film ready: {}").format(p["name"]), took=("lf2", p["id"]))
 
     def _after_build(self):
         """Build + Edit the film: the editor opens by itself when the Build ended well."""
@@ -8360,7 +8340,7 @@ class LongFilm2Page(QWidget):
         self.pp.allow_cancel(None)
         self.status.setText(i18n.T("Stopped: ") + i18n.T(m))
         if m != "Cancelled":
-            notify(i18n.T("Long Film v2 failed: {}").format(i18n.T(m)), error=True)
+            notify(i18n.T("Long Film failed: {}").format(i18n.T(m)), error=True)
 
     # ---- the film
     def recompute(self):
@@ -8471,7 +8451,7 @@ class LongFilm2Page(QWidget):
             return
         d = Path(p["footage"]) if p.get("footage") and Path(p["footage"]).is_dir() else \
             (Path(p["footage"]).parent if p.get("footage") else Path.home())
-        f, _ = QFileDialog.getSaveFileName(self, "Export XML", resolve.name_for(str(d / f"{p['name']} - Long Film v2.xml"), target),
+        f, _ = QFileDialog.getSaveFileName(self, "Export XML", resolve.name_for(str(d / f"{p['name']} - Long Film.xml"), target),
                                            "XML (*.xml)")
         if not f:
             return
@@ -8482,13 +8462,13 @@ class LongFilm2Page(QWidget):
             look = {**look, "crop": False}         # the crop goes on the adjustment layer, not on every clip
         try:
             if p.get("timeline"):                  # the film as he edited it in the editor
-                n, nv, na = longfilm2.export_timeline(p["timeline"], self.r["infos"], f, f"{p['name']} - Long Film v2",
+                n, nv, na = longfilm2.export_timeline(p["timeline"], self.r["infos"], f, f"{p['name']} - Long Film",
                                                       look=look, hidden=p.get("hidden", []),
                                                       muted=p.get("muted", []),
                                                       labels=longfilm2.labels_out(p.get("colours"), target))
             else:
                 n, nv, na = longfilm2.export_xml(self.parts, self.r["infos"], [c["name"] for c in self.r["cams"]], f,
-                                                 f"{p['name']} - Long Film v2", marker=lambda s: s, look=look,
+                                                 f"{p['name']} - Long Film", marker=lambda s: s, look=look,
                                                  labels=longfilm2.labels_out(p.get("colours"), target))
             for_target(f, target)
         except Exception as e:
@@ -8501,7 +8481,251 @@ class LongFilm2Page(QWidget):
                                    "The LUT is not in this file: put it in Resolve's Color page.").format(n, nv, na, f))
         notify(i18n.T("XML saved: {}").format(Path(f).name))
         if layer:
-            to_premiere(f, f"{p['name']} - Long Film v2", colour.CROP, self.status)
+            to_premiere(f, f"{p['name']} - Long Film", colour.CROP, self.status)
+
+
+class LongFilmBPPage(LongFilm2Page):
+    """Long Film Blueprint (BETA): one of his finished long films is the template (cuts, music, sound effects, pacing);
+    every cut is refilled with a shot of the same moment of this wedding. The wedding is read like Long Film (folder
+    or labelled XML, moments found by the day model when there are no colours)."""
+    KEY = "longbp"
+    BETA = True
+    DESC = ("One of your finished long films is the template: its cuts, music, sound effects and pacing stay, and every "
+            "cut is refilled with a shot of the same moment from this wedding (the wedding folder or your labelled "
+            "sequence, read like Long Film). Build, then Export XML.")
+    CAT = {"groom": "groom", "bride": "bride", "firstlook": "couple", "couple": "couple", "church": "church",
+           "civil": "church", "venue": "venue", "drone": "drone", "party": "party", "vornic": "vornic"}
+
+    def __init__(self, store):
+        self.bp_edit = None
+        super().__init__(store)
+        l = self._card(2, "Your finished film (the blueprint)")
+        f = self._cards["Your finished film (the blueprint)"][0]
+        self._left.removeWidget(f)
+        self.bpbox = BlueprintBox(store, "long", "")
+        self.bpbox.b_auto.hide()
+        self.bpbox.b_bp.hide()
+        self.bpbox.changed.connect(self.recompute)
+        l.addWidget(self.bpbox)
+        self._left.insertWidget(1, f)
+        for title in ("Vornic", "Party · Auto Director", "Colour", "Clip colours"):
+            if title in self._cards:
+                self._cards[title][0].hide()
+        self.b_edit.hide()
+        self.b_be.hide()
+        for w_ in self._party_w + [self.map, self.stats]:     # the party comes from the blueprint's own cuts
+            w_.hide()
+
+    def open_project(self):
+        super().open_project()
+        p = self._cur()
+        if p is not None:
+            p["mode"] = "blueprint"
+            self.bpbox.load(p)
+
+    def _pool(self):
+        """The pieces the blueprint can take: every selected (good) part of the clips, by moment, on the day's clock."""
+        r = self.r or {}
+        infos = r.get("infos") or {}
+        sel = r.get("sel") or {}
+        out = []
+        for i, p in enumerate(r.get("pieces") or []):
+            cat = self.CAT.get(p.get("kind"))
+            if not cat:
+                continue
+            inf = infos.get(p["path"]) or {}
+            rngs = sel.get(longfilm2.key_of(p)) or ([(p["a"], p["b"])] if longfilm2.part_of(p["kind"]) not in longfilm2.SELECT
+                                                   else [])
+            for a, b in rngs:
+                if b - a < 0.5:
+                    continue
+                for c in ((cat, "location") if cat in ("groom", "bride") else (cat,)):
+                    # his older films: Teal = shots of the getting-ready place -> taken from the getting ready
+                    # (the pool never uses one moment twice, whatever the category)
+                    out.append(dict(path=p["path"], a=a, b=b, cat=c, label=teaser.LABEL_OF.get(cat),
+                                    order=i * 10 + len(out),
+                                    clock=(p.get("t") + a - p["a"]) if p.get("t") is not None else None,
+                                    fps=inf.get("fps", 25.0), fdur=inf.get("dur", b) or b, w=inf.get("w", 1920),
+                                    h=inf.get("h", 1080)))
+        if out and any(x["clock"] is None for x in out):
+            for x in out:
+                x["clock"] = None
+        return out
+
+    def recompute(self):
+        p = self._cur() or {}
+        self.parts, self.info, self.bp_edit = [], {}, None
+        b = self.bpbox.current() if p else None
+        if self.r and b:
+            try:
+                self.bp_edit = blueprint.build(self._pool(), b, seed=1)
+                by = {}
+                for t0, t1, q in self.bp_edit["shots"]:
+                    n, ln = by.get(q["cat"], (0, 0.0))
+                    by[q["cat"]] = (n + 1, ln + t1 - t0)
+                self.parts = [(i18n.T(teaser.CAT_NAME.get(c, c)), ln, [None] * n, []) for c, (n, ln) in by.items()]
+            except Exception as e:
+                logging.exception("long film blueprint failed")
+                self.status.setText(i18n.T("Error: {}").format(str(e)))
+        self._fill()
+        if self.r and not b:
+            self.status.setText(i18n.T("Add one of your finished long films (XML) as the blueprint."))
+        elif self.bp_edit is not None:
+            gaps = sum(1 for g in self.bp_edit["gaps"] if g[2] != "interview")
+            self.status.setText(i18n.T("Ready: your film refilled with this wedding, {} shots.").format(
+                len(self.bp_edit["shots"])) + ("  " + i18n.T("{} places without footage (marked in the XML).").format(gaps)
+                                               if gaps else ""))
+        self._buttons()
+
+    def _buttons(self):
+        super()._buttons()
+        self.b_exp.setEnabled(self.bp_edit is not None and not self._busy())
+
+    def export(self, target="premiere"):
+        p = self._cur()
+        b = self.bpbox.current()
+        if not p or self.bp_edit is None or not b:
+            return
+        d = Path(p["footage"]) if p.get("footage") and Path(p["footage"]).is_dir() else \
+            (Path(p["footage"]).parent if p.get("footage") else Path.home())
+        f, _ = QFileDialog.getSaveFileName(self, "Export XML", resolve.name_for(str(d / f"{p['name']} - Long Film Blueprint.xml"),
+                                                                              target), "XML (*.xml)")
+        if not f:
+            return
+        try:
+            n = blueprint.export_xml(self.bp_edit, b, f, f"{p['name']} - Long Film Blueprint")
+            for_target(f, target)
+        except Exception as e:
+            logging.exception("long film blueprint export failed")
+            notify(i18n.T("Export failed: {}").format(str(e)), error=True)
+            return
+        self.status.setText(i18n.T("Saved {} clips to {}.").format(n, f))
+        notify(i18n.T("XML saved: {}").format(Path(f).name))
+
+
+class SyncOptions(QWidget):
+    """The two sync choices, shown where the sync happens (Synchronize / Multicam, Long Film's party), not in Settings:
+    which track of a recorder take with several files, and the sync engine (New = recommended). Saved for all projects."""
+    TAKES = ["auto", "mix", "1", "2", "3"]
+
+    def __init__(self, store):
+        super().__init__()
+        self.store = store
+        g = QGridLayout(self)
+        g.setContentsMargins(0, 0, 0, 0)
+        g.setHorizontalSpacing(10)
+        g.setVerticalSpacing(6)
+        g.addWidget(lbl("Sync engine", "muted"), 0, 0)
+        self.c_eng = QComboBox()
+        self.c_eng.setProperty("i18n", True)
+        self.c_eng.addItems(["New (recommended)", "Classic"])
+        self.c_eng.setToolTip(i18n.T("New: every file is compared with every other one (cameras with each other too, like "
+                                     "Align / Syncaila), the whole group is placed at once, ~5x faster and it finds more "
+                                     "clips. Classic: every clip is searched in the recorder only (the engine before v4.4.0)."))
+        g.addWidget(self.c_eng, 1, 0)
+        g.addWidget(lbl("Recorder with several tracks", "muted"), 2, 0)
+        self.c_take = QComboBox()
+        self.c_take.setProperty("i18n", True)
+        self.c_take.addItems(["Automatic (the cleanest track)", "The mix", "Track 1", "Track 2", "Track 3"])
+        self.c_take.setToolTip(i18n.T("A Tascam / Zoom writes every take as several files: a safe (auto) track, a manual "
+                                      "track and their mix. Only one of them is used for the sync and the export. "
+                                      "Automatic = the cleanest track (no clipping, the stronger signal), never the mix."))
+        g.addWidget(self.c_take, 3, 0)
+        g.setColumnStretch(0, 1)
+        self._load()
+        self.c_eng.currentIndexChanged.connect(self._eng)
+        self.c_take.currentIndexChanged.connect(self._take)
+
+    def _load(self):
+        for w, v in ((self.c_eng, 1 if self.store.app.get("sync_engine", "graph") == "classic" else 0),
+                     (self.c_take, self.TAKES.index(self.store.app.get("rec_take", "auto"))
+                      if self.store.app.get("rec_take", "auto") in self.TAKES else 0)):
+            w.blockSignals(True)
+            w.setCurrentIndex(v)
+            w.blockSignals(False)
+
+    def showEvent(self, e):
+        self._load()                         # the other page may have changed it
+        super().showEvent(e)
+
+    def _eng(self, i):
+        self.store.app["sync_engine"] = "classic" if i else "graph"
+        self.store.save_app()
+        notify(i18n.T("Sync engine: {}").format(i18n.T(self.c_eng.currentText())) + ". " +
+               i18n.T("Press Sync again on the projects that should use it."))
+
+    def _take(self, i):
+        self.store.app["rec_take"] = self.TAKES[i]
+        self.store.save_app()
+        notify(i18n.T("Recorder track: {}").format(i18n.T(self.c_take.currentText())) + ". " +
+               i18n.T("Press Sync again on the projects that should use it."))
+
+
+def cam_title(name):
+    """'fx6 · #_SERJFX#.MXF' -> ('fx6', 'SERJFX · MXF'): the camera folder, then what its files look like (no # signs)."""
+    head, _, pat = str(name).partition(" · ")
+    if not pat:
+        return head, ""
+    stem, _, ext = pat.rpartition(".")
+    words = [w for w in re.split(r"[#_\-\s]+", stem) if w]
+    return head, " · ".join(words + ([ext.upper()] if ext else []))
+
+
+def track_row(name, auto_track, n, chosen, on_change, first=False):
+    """One camera in the video-track list: the camera name (big), its files (small, grey), a small V1..Vn list whose
+    first item is 'V3 · auto' (what Auto gives now)."""
+    w = QWidget()
+    h = QHBoxLayout(w)
+    h.setContentsMargins(12, 7, 10, 7)
+    h.setSpacing(10)
+    if not first:
+        w.setStyleSheet(f"border-top:1px solid {C['BORDER']}")
+    t, sub = cam_title(name)
+    col = QVBoxLayout()
+    col.setSpacing(0)
+    a = QLabel(t)
+    a.setStyleSheet("font-weight:600;color:#ececec;border:none")
+    col.addWidget(a)
+    if sub:
+        b = QLabel(sub)
+        b.setStyleSheet(f"font-size:10px;color:{C['MUTED']};border:none")
+        col.addWidget(b)
+    h.addLayout(col, 1)
+    cb = QComboBox()
+    cb.addItem(i18n.T("V{} · auto").format(auto_track))
+    cb.addItems([f"V{k}" for k in range(1, n + 1)])
+    cb.setCurrentIndex(chosen if isinstance(chosen, int) and 1 <= chosen <= n else 0)
+    cb.setFixedWidth(104)
+    cb.setStyleSheet("QComboBox{padding:2px 8px;border-radius:4px}")
+    cb.setToolTip(i18n.T("The video track of this camera in Export XML. Auto: the static camera on V1, the main camera on top."))
+    cb.currentIndexChanged.connect(on_change)
+    h.addWidget(cb, 0, Qt.AlignVCenter)
+    return w
+
+
+class ElideLabel(QLabel):
+    """One line that is cut with "…" to the width it gets (a long file name never makes its card wider)."""
+
+    def __init__(self, text=""):
+        super().__init__()
+        self._full = text
+        self.setToolTip(text)
+        self.setMinimumWidth(10)
+        from PySide6.QtWidgets import QSizePolicy
+        self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
+        self._show()
+
+    def setFull(self, text):
+        self._full = text
+        self.setToolTip(text)
+        self._show()
+
+    def _show(self):
+        super().setText(self.fontMetrics().elidedText(i18n.T(self._full), Qt.ElideRight, max(10, self.width())))
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        self._show()
 
 
 class StudioCard(QFrame):
@@ -8526,13 +8750,16 @@ class StudioCard(QFrame):
         d.setFixedSize(22, 22)
         top.addWidget(d)
         v.addLayout(top)
-        name = QLabel()
+        name = ElideLabel(p["name"])
         name.setStyleSheet("font-size:13px;font-weight:700;color:#ececec")
-        name.setText(name.fontMetrics().elidedText(p["name"], Qt.ElideRight, 230))
         v.addWidget(name)
         for t in lines:
-            v.addWidget(lbl(t, "muted"))
+            e = ElideLabel(t)
+            e.setProperty("class", "muted")
+            e.setStyleSheet(f"color:{C['MUTED']}")
+            v.addWidget(e)
         v.addStretch()
+        self.setMinimumWidth(200)
 
     def ask_delete(self):
         from PySide6.QtWidgets import QMessageBox
@@ -8566,6 +8793,7 @@ class StudioHub(QWidget):
         gv.addWidget(self.empty)
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         gv.addWidget(self.scroll, 1)
         self.stack.addWidget(g)
         self.stack.addWidget(studio)
@@ -8586,8 +8814,8 @@ class StudioHub(QWidget):
             c = StudioCard(p, self.badge, self.colour, self.lines(p))
             c.opened.connect(self.open)
             c.deleted.connect(self.delete)
-            gl.addWidget(c, i // 4, i % 4)
-        for col in range(4):
+            gl.addWidget(c, i // 3, i % 3)          # owner: 3 per row, then the next row (never a side scroll)
+        for col in range(3):
             gl.setColumnStretch(col, 1)
         self.scroll.setWidget(w)
 
@@ -8678,8 +8906,9 @@ class Main(QMainWindow):
                     "dash": btn("Selection", "nav", lambda: self.go("dash")),
                     "syncdash": btn("Synchronize", "nav", lambda: self.go("syncdash")),
                     "mcdash": btn("Multicam", "nav", lambda: self.go("mcdash")),
-                    "long": btn("Long Film", "nav", lambda: self.go("long")),
-                    "long2": btn("Long Film v2", "nav", lambda: self.go("long2")),
+                    "long": btn("Long Film (old)", "nav", lambda: self.go("long")),
+                    "long2": btn("Long Film", "nav", lambda: self.go("long2")),
+                    "longbp": btn("Long Film Blueprint", "nav", lambda: self.go("longbp")),
                     "teaser": btn("Teaser Studio", "nav", lambda: self.go("teaser")),
                     "transcribe": btn("Transcribe", "nav", lambda: self.go("transcribe")),
                     "queue": btn("Analysis Queue", "nav", lambda: self.go("queue")),
@@ -8687,11 +8916,12 @@ class Main(QMainWindow):
                     "info": btn("Info / How to use", "nav", lambda: self.go("info"))}
         for b in self.nav.values():
             sv.addWidget(b)
-        for key in ("teaser", "long", "long2"):     # owner: no NEW on Card Offload / Transcribe / Create Project any more
+        self.nav["long"].hide()     # v4.6.0 (owner): the old Long Film is hidden; its projects stay in the data
+        for key in ("teaser", "longbp"):     # owner: no NEW on Card Offload / Transcribe / Create Project any more
             nb = QHBoxLayout(self.nav[key])
             nb.setContentsMargins(0, 0, 8, 0)
             nb.addStretch()
-            new = QLabel("BETA" if key == "long2" else "NEW")
+            new = QLabel("BETA" if key == "longbp" else "NEW")
             new.setStyleSheet(f"background:{C['POOR']};color:white;font-size:8px;font-weight:800;border-radius:5px;padding:0px 4px")
             new.setAttribute(Qt.WA_TransparentForMouseEvents)
             new.setFixedSize(30, 14)
@@ -8736,20 +8966,23 @@ class Main(QMainWindow):
                                              (i18n.T("with vornic") + " · " if p.get("vornic") else "") +
                                              f"{i18n.T('Updated')} {nice_date(p.get('when', ''))}"])
         self.long2 = LongFilm2Page(self.store)
-        self.long2_hub = StudioHub(self.store, self.long2, "Long Film v2", "long2", "LONG FILM V2", "#2e9e6a",
+        self.long2_hub = StudioHub(self.store, self.long2, "Long Film", "long2", "LONG FILM", "#2e9e6a",
                                    lambda p: [name_of(p.get("footage")), f"{i18n.T('Updated')} {nice_date(p.get('when', ''))}"])
+        self.longbp = LongFilmBPPage(self.store)
+        self.longbp_hub = StudioHub(self.store, self.longbp, "Long Film Blueprint", "longbp", "BLUEPRINT", "#c2410c",
+                                    lambda p: [name_of(p.get("footage")), f"{i18n.T('Updated')} {nice_date(p.get('when', ''))}"])
         self.toast = Toast(self)
         global _NOTIFY
         _NOTIFY = lambda text, error=False, ms=None, extra="": self.toast.show_msg(text, ms, error, extra)
         self._drops = [enable_drops(pg, pg._drop) for pg in (self.proj, self.mc, self.teaser, self.long, self.offload,
-                                                              self.transcribe, self.cproject, self.long2)]
+                                                              self.transcribe, self.cproject, self.long2, self.longbp)]
         dd = _Drops(self.offload._drop_dest, self.offload)  # the destination area takes the destination folder
         for w_ in (self.offload.dest_lbl, self.offload.where):
             w_.installEventFilter(dd)
         self._drops.append(dd)
         self.res.export_done = lambda name: (self.toast.show_msg(f"XML saved: {name}"), logging.info("footage export %s", name))
         self.teaser.notify.connect(self.toast.show_msg)
-        for w in (self.dash, self.mcdash, self.syncdash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser_hub, self.long_hub, self.long2_hub, self.offload, self.transcribe, self.cproject):
+        for w in (self.dash, self.mcdash, self.syncdash, self.proj, self.anl, self.res, self.queue, self.mc, self.settings, self.info, self.teaser_hub, self.long_hub, self.long2_hub, self.longbp_hub, self.offload, self.transcribe, self.cproject):
             self.stack.addWidget(w)
         for d_ in (self.dash, self.mcdash, self.syncdash):
             d_.new_project.connect(lambda k=d_.kind: self.new_project(k))
@@ -8783,9 +9016,11 @@ class Main(QMainWindow):
             jobs["teaser"] = ("Teaser Studio", self.teaser.pp.title.text(), self.teaser.pp.bar.value() / 1000)
         lr = getattr(self.long, "runner", None)
         if lr and lr.isRunning():
-            jobs["long"] = ("Long Film", self.long.pp.title.text(), self.long.pp.bar.value() / 1000)
+            jobs["long"] = ("Long Film (old)", self.long.pp.title.text(), self.long.pp.bar.value() / 1000)
         if self.long2._busy():
-            jobs["long2"] = ("Long Film v2", self.long2.pp.title.text(), self.long2.pp.bar.value() / 1000)
+            jobs["long2"] = ("Long Film", self.long2.pp.title.text(), self.long2.pp.bar.value() / 1000)
+        if self.longbp._busy():
+            jobs["longbp"] = ("Long Film Blueprint", self.longbp.pp.title.text(), self.longbp.pp.bar.value() / 1000)
         if self.offload._busy():
             jobs["offload"] = ("Card Offload", self.offload.pp.title.text(), self.offload.pp.bar.value() / 1000)
         if self.cproject._busy():
@@ -8807,6 +9042,9 @@ class Main(QMainWindow):
         elif k == "long2":
             self.long2_hub.stack.setCurrentIndex(1)
             self.show_page(self.long2_hub)
+        elif k == "longbp":
+            self.longbp_hub.stack.setCurrentIndex(1)
+            self.show_page(self.longbp_hub)
         elif k in ("offload", "project", "transcribe"):
             self.go(k)
         else:
@@ -8825,9 +9063,10 @@ class Main(QMainWindow):
             self.offload._stop = True
             for w_ in self.offload.workers:
                 w_.wait(10000)
-        if self.long2._busy():
-            self.long2.worker._stop = True
-            self.long2.worker.wait(10000)
+        for pg in (self.long2, self.longbp):
+            if pg._busy():
+                pg.worker._stop = True
+                pg.worker.wait(10000)
         for pg in (self.teaser, self.long):
             r = getattr(pg, "runner", None)
             if r and r.isRunning():
@@ -8848,7 +9087,7 @@ class Main(QMainWindow):
         for k, b in self.nav.items():
             b.setProperty("active", (k == "dash" and w in (self.dash, self.proj, self.res)) or
                           (k == "mcdash" and (w is self.mcdash or (w is self.mc and not (self.mc.p or {}).get("sync_only")))) or
-                          (k == "syncdash" and (w is self.syncdash or (w is self.mc and bool((self.mc.p or {}).get("sync_only"))))) or (k == "long2" and w is getattr(self, "long2_hub", None)) or (k == "queue" and w in (self.queue, self.anl))
+                          (k == "syncdash" and (w is self.syncdash or (w is self.mc and bool((self.mc.p or {}).get("sync_only"))))) or (k == "long2" and w is getattr(self, "long2_hub", None)) or (k == "longbp" and w is getattr(self, "longbp_hub", None)) or (k == "queue" and w in (self.queue, self.anl))
                           or (k == "settings" and w is self.settings) or (k == "info" and w is self.info) or (k == "teaser" and w is self.teaser_hub) or (k == "long" and w is self.long_hub)
                           or (k == "offload" and w is self.offload) or (k == "transcribe" and w is self.transcribe)
                           or (k == "project" and w is self.cproject))
@@ -8879,6 +9118,9 @@ class Main(QMainWindow):
         elif where == "long2":
             self.long2_hub.show_grid()
             self.show_page(self.long2_hub)
+        elif where == "longbp":
+            self.longbp_hub.show_grid()
+            self.show_page(self.longbp_hub)
         elif where == "settings":
             self.show_page(self.settings)
         elif where == "info":

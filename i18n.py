@@ -795,6 +795,7 @@ EXACT.update({
 TEMPLATES.update({
     "took {}": "a durat {}",
     "Auto (V{})": "Auto (V{})",
+    "V{} · auto": "V{} · auto",
     "its clock says it was filmed {} min later than this sound match: probably a clip from another moment":
         "ceasul lui spune că a fost filmat cu {} min mai târziu decât locul găsit după sunet: probabil un clip din alt moment",
     "its clock says it was filmed {} min earlier than this sound match: probably a clip from another moment":
@@ -926,4 +927,53 @@ TEMPLATES.update({
         "Importat „{}”. Adjustment layer pe V{} cu Crop {} % sus / jos. Layer-ul acoperă doar {} s: trage-i capătul până la finalul filmului.",
     "The XML is not on this computer: {}": "XML-ul nu e pe acest calculator: {}",
     "Import failed: {}": "Importul a eșuat: {}",
+})
+
+# v4.6.0
+EXACT.update({
+    "New (recommended)": "Nou (recomandat)",
+    "Classic": "Clasic",
+    "SYNC": "SINCRONIZARE",
+    "New: every file is compared with every other one (cameras with each other too, like Align / Syncaila), the whole "
+    "group is placed at once, ~5x faster and it finds more clips. Classic: every clip is searched in the recorder only "
+    "(the engine before v4.4.0).":
+        "Nou: fiecare fișier e comparat cu toate celelalte (și camerele între ele, ca Align / Syncaila), tot grupul e "
+        "așezat deodată, de ~5 ori mai rapid și găsește mai multe clipuri. Clasic: fiecare clip e căutat doar în "
+        "recorder (motorul de dinainte de v4.4.0).",
+})
+TEMPLATES.update({
+    "{} h {} min {} s": "{} h {} min {} s",
+})
+
+# v4.6.0: Long Film (the old v2) + Long Film Blueprint
+EXACT.update({
+    "Long Film (old)": "Long Film (vechi)",
+    "Long Film Blueprint": "Long Film Blueprint",
+    "BLUEPRINT": "BLUEPRINT",
+    "Your finished film (the blueprint)": "Filmul tău terminat (blueprint-ul)",
+    "Add one of your finished long films (XML) as the blueprint.": "Adaugă unul din filmele tale lungi terminate (XML) ca blueprint.",
+    "Civil ceremony": "Cununia civilă",
+})
+TEMPLATES.update({
+    "Long Film ready: {}": "Long Film gata: {}",
+    "Long Film failed: {}": "Long Film a eșuat: {}",
+    "Saved {} clips to {}.": "Am salvat {} clipuri în {}.",
+    "Ready: your film refilled with this wedding, {} shots.": "Gata: filmul tău reumplut cu nunta asta, {} cadre.",
+    "{} places without footage (marked in the XML).": "{} locuri fără filmări (marcate în XML).",
+})
+EXACT.update({
+    "The long film from the wedding folder or from the sequence of Create Project. With your colours every colour "
+    "is handled its own way; without colours the AI looks at every clip and finds the moments of the day itself "
+    "(getting ready, first look, civil ceremony, church, couple, venue, party). Then Edit the film to correct it. "
+    "One 25 fps 1920x1080 sequence.":
+    "Filmul lung din folderul nunții sau din sequence-ul făcut de Create Project. Cu culorile tale, fiecare culoare e "
+    "tratată în felul ei; fără culori, AI-ul se uită la fiecare clip și găsește singur momentele zilei (pregătiri, "
+    "first look, cununia civilă, biserica, cuplul, sala, petrecerea). Apoi corectezi filmul în editor. Un singur "
+    "sequence 25 fps 1920x1080.",
+    "One of your finished long films is the template: its cuts, music, sound effects and pacing stay, and every "
+    "cut is refilled with a shot of the same moment from this wedding (the wedding folder or your labelled "
+    "sequence, read like Long Film). Build, then Export XML.":
+    "Unul din filmele tale lungi terminate e șablonul: tăieturile, muzica, efectele sonore și ritmul rămân, iar fiecare "
+    "tăietură e umplută cu un cadru din același moment al nunții ăsteia (folderul nunții sau sequence-ul tău etichetat, "
+    "citit ca în Long Film). Construiește, apoi Export XML.",
 })

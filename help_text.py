@@ -10,8 +10,8 @@ RO = """
 <li><b>Creează proiectul</b>: pune toate filmările pe un timeline, cum le așezi tu pentru selecție, gata de importat în Premiere.</li>
 <li><b>Selection</b>: <b>Footage Selection</b> alege singur cadrele bune din clipuri.</li>
 <li><b>Multicam</b>: sincronizează camerele cu recorderul de la mixer și face montajul petrecerii.</li>
-<li><b>Long Film</b>: filmul lung până la petrecere, pre-montat din selecțiile tale.</li>
-<li><b>Long Film v2</b> (BETA): filmul lung întreg din secvența făcută de Creează proiectul, după ce ai etichetat cadrele pe culori.</li>
+<li><b>Long Film</b>: filmul lung întreg, din folderul nunții (momentele le găsește AI-ul) sau din secvența ta etichetată.</li>
+<li><b>Long Film Blueprint</b> (BETA): unul din filmele tale lungi terminate, umplut cu cadrele nunții noi.</li>
 <li><b>Teaser Studio</b>: shortmovie-ul (teaser, pregătiri, biserică, sală, petrecere) pe muzica ta.</li>
 <li><b>Transcriere</b>: interviurile devin text; din interviurile mirilor, Claude face o singură poveste.</li>
 </ol>
@@ -267,7 +267,7 @@ canale, ca MXF-ul de FX6, folosesc canalul 1). Culorile clipurilor: roșu / galb
 recorder, lavaliere), apeși <b>Sync</b> și exporți: toate camerele și recorderul pe un singur timeline, clipurile întregi. Dacă vrei
 apoi și montajul, <b>Auto Edit în Multicam →</b> mută proiectul în Multicam cu sincronizarea păstrată.</p>
 <p><b>Lucrez în: Premiere Pro | DaVinci Resolve</b> (sus în dreapta, în toată aplicația): alegi o dată programul în care lucrezi,
-aplicația îl ține minte și <b>fiecare Export XML</b> (Multicam, Sincronizare, Teaser Studio, Long Film, Long Film v2, Footage
+aplicația îl ține minte și <b>fiecare Export XML</b> (Multicam, Sincronizare, Teaser Studio, Long Film, Long Film, Footage
 Selection, Create Project, povestea din Transcriere) se scrie pentru el. Butonul arată „Export XML → Premiere” sau
 „Export XML → DaVinci”.</p>
 <p><b>Pe Premiere Pro</b> totul rămâne exact cum era, fără timp în plus. <b>Pe DaVinci Resolve</b> fișierul e scris de la zero, cum îl
@@ -279,11 +279,11 @@ din Premiere nu mai rămâne: fără piste stereo „explodate”, fără atribu
 Resolve încadrează singur fiecare clip (Project Settings &gt; Image Scaling); LUT-ul îl pui în pagina Color. După export pornește
 automat o <b>verificare cap-coadă</b> (bara ei de progres): legături, nume, in / out în interiorul fișierului, fiecare fișier găsit
 pe calculator. La final vezi „Gata pentru DaVinci Resolve” sau exact ce nu e în regulă. La Create Project, pe DaVinci butonul
-„Deschide în Premiere Pro” nu mai apare. Lângă opțiunile care merg doar într-un program scrie cu albastru (Culoare în Long Film v2,
+„Deschide în Premiere Pro” nu mai apare. Lângă opțiunile care merg doar într-un program scrie cu albastru (Culoare în Long Film,
 bin-urile din Create Project: doar pentru Premiere Pro).</p>
 <p><b>Sync + Auto Edit</b> (butonul albastru) face totul dintr-o apăsare: Sync, iar imediat ce se termină pornește singur Auto Edit.
 Bun pentru peste noapte: apeși, pleci, dimineață montajul e gata. Mac-ul e ținut treaz până la final (nu intră în sleep).
-La fel și <b>Build</b> din Long Film v2. Sync și Auto Edit separate rămân, pentru când vrei doar unul din ele.</p>
+La fel și <b>Build</b> din Long Film. Sync și Auto Edit separate rămân, pentru când vrei doar unul din ele.</p>
 <h3>Pașii</h3>
 <ol>
 <li><b>Arunci tot materialul</b>: carduri, recorder, foldere întregi. Fișierele auxiliare sunt ignorate automat.</li>
@@ -324,16 +324,16 @@ sunt sincronizate pe el și apar în export pe pistele lor audio, întregi.</p>
 <p>Dacă ai sincronizat deja în Syncaila, Premiere sau DaVinci, exportă de acolo un XML (FCP7 XML) cu fiecare cameră pe pista ei și
 apasă Import XML. Pozițiile sunt preluate exact (fără să mai sincronizeze), fiecare pistă video devine o cameră, fișierele doar-audio
 devin recorderul. Clipurile care nu sunt pe acest calculator sunt sărite, cu avertisment.</p>
-<h3>Recorder cu mai multe piste (Setări)</h3>
+<h3>Recorder cu mai multe piste (secțiunea SYNC din pagină)</h3>
 <p>Un Tascam / Zoom scrie fiecare înregistrare în mai multe fișiere: o pistă safe (auto), una reglată manual și mixul lor
-(de ex. 0190_1-2, 0190_3-4, 0190_MIX). Aplicația folosește una singură, ca să nu le pună una după alta. În Setări alegi care:
+(de ex. 0190_1-2, 0190_3-4, 0190_MIX). Aplicația folosește una singură, ca să nu le pună una după alta. Alegi care în secțiunea <b>SYNC</b> din pagina Multicam / Sincronizare (și în cardul Petrecere din Long Film), unde se și folosește:
 <b>Automat</b> (implicit) = pista cea mai curată (cele mai puține vârfuri tăiate, apoi semnalul mai puternic), niciodată mixul;
 sau <b>Mixul</b>, <b>Pista 1</b>, <b>Pista 2</b>, <b>Pista 3</b> (în ordinea numelor). După schimbare dai din nou Sync.</p>
 <h3>Legătura cu Premiere (Setări)</h3>
 <p>Extensia din Premiere care primește filmele exportate (import în proiectul deschis + adjustment layer cu crop). Aplicația o
 instalează și o actualizează singură când pornește (pe Mac, dacă ai Premiere); Setări arată dacă e instalată și dacă rulează acum
 în Premiere, iar „Instalează din nou” o pune din nou (apoi repornești Premiere).</p>
-<h3>Motorul de sincronizare: Nou sau Clasic (Setări)</h3>
+<h3>Motorul de sincronizare: Nou sau Clasic (secțiunea SYNC din pagină)</h3>
 <p><b>Nou</b> (implicit, v4.4.0): fiecare fișier primește o amprentă de sunet (vârfurile spectrului, perechi), apoi
 <b>toate fișierele sunt potrivite între ele deodată</b>: camerele cu recorderul, dar și camerele între ele, lavalierele cu
 camerele. Fiecare potrivire e verificată pe forma de undă (până la 3 ferestre de 10 s care trebuie să dea același loc,
@@ -355,7 +355,7 @@ din greșeală, puse pe intrarea mirilor sau pe primul dans). Acestea devin „C
 camera principală (cea cu mână liberă cu cel mai mult material) pe pista de sus. Alegi V1, V2... ca să muți o cameră; camera
 care avea pista aleasă trece înapoi pe Auto.</p>
 <h3>Editorul în Multicam</h3>
-<p>Butonul <b>Editează</b> (Edit) deschide editul în același editor ca la Long Film v2: fiecare cameră pe pista ei (cu
+<p>Butonul <b>Editează</b> (Edit) deschide editul în același editor ca la Long Film: fiecare cameră pe pista ei (cu
 ordinea pistelor de mai sus), dedesubt recorderul și sunetul fiecărei camere, întregi. Muți, tai, ștergi ca în Premiere;
 Salvează păstrează varianta ta, iar Export XML o scrie pe ea (la mărimea camerei, 25 fps). Un Auto Edit nou pornește din
 nou de la editul automat.</p>
@@ -522,47 +522,39 @@ repetare), iar aplicația îți spune câte secunde au rămas neacoperite.</li>
 (25 de selecții pe culoare, câteva minute) sau <b>toate selecțiile</b> (lent, peste noapte; Mac-ul nu adoarme cât rulează). Prima dată
 descarcă modelul (câțiva GB). E doar un test: nu schimbă teaserul.</p>
 
-<h2>Long Film (filmul lung)</h2>
-<p>Filmul lung până la petrecere, pre-montat din selecțiile tale cum îl montezi tu (măsurat pe două nunți ale tale: selecțiile +
-filmul final). Muzica, interviurile (Tan) și finisajele le pui tu în Premiere; petrecerea e montajul Multicam. Proiecte pe carduri,
-ca la Teaser Studio.</p>
-<h3>Cardurile paginii</h3>
-<ol>
-<li><b>Filmări</b>: XML-ul sequence-ului de selecții (vezi pagina „Cum trebuie să arate selecția” și desenul de jos din pagină). Îți
-arată camerele găsite, câte selecții are fiecare și dacă ceva nu e bine (de exemplu selecții pierdute după dronă, cu explicația exactă).</li>
-<li><b>Auto sau Blueprint</b> (unul sau altul). Blueprint folosește ca șablon unul din filmele tale lungi terminate (blueprint-urile
-Long Film sunt separate de cele din Teaser Studio): tăieturile, muzica, efectele și ritmul rămân, fiecare tăietură e umplută cu un
-cadru de aceeași culoare din nunta nouă, Tan rămâne loc cu marker „Aici interviul”, iar porțiunile goale de peste 60 s (petrecerea)
-primesc marker „Petrecere (montajul Multicam)”. În Blueprint vornicul e umplut tăietură cu tăietură; pentru vornicul sincronizat pe
-două camere folosește Auto.</li>
-<li><b>Teaser</b> (doar Auto): proiectul din Teaser Studio al aceleiași nunți; teaserul lui (cu muzica) deschide filmul.</li>
-<li><b>Construiește</b>, apoi <b>Export XML</b>. Durata scrisă e durata FILMULUI, nu un timp de așteptare.</li>
-</ol>
-<h3>Ce face Auto, parte cu parte</h3>
+<h2>Long Film Blueprint (BETA)</h2>
+<p>Unul din filmele tale lungi terminate devine șablonul: tăieturile, muzica, efectele sonore și ritmul rămân, iar fiecare
+tăietură e umplută cu un cadru din <b>același moment</b> al nunții noi. Nunta se citește exact ca la Long Film (folderul nunții sau
+secvența ta etichetată; fără culori momentele le găsește AI-ul), deci și aici: alegi folderul / XML-ul, apeși <b>Construiește</b>
+(Build), apoi <b>Export XML</b>.</p>
 <ul>
-<li><b>Copiile</b> de la finalul selecțiilor (tot ce e după ultimul cadru cu drona, plus orice selecție care repetă o bucată deja
-selectată) nu se folosesc: sunt pentru shortmovie.</li>
-<li><b>Camerele</b> sunt recunoscute după fișiere (numele fără cifre + mărimea imaginii + frame rate), iar ziua fiecărei camere după
-numerele fișierelor. Camera principală = cea cu cele mai multe cadre de mire / mireasă. Ceasurile camerelor nu sunt folosite între camere.</li>
-<li><b>Pregătiri</b>: selecțiile scurte de mire și mireasă (până la 8 s), fără primele ~15% din fiecare parte, din fiecare mijlocul
-(0,8–2 s); povestite în paralel, în blocuri ca la tine: un bloc mare cu cine a fost filmat primul (~27% din cadrele lui, 4–20), un bloc
-mare cu celălalt (~20%, 4–14), apoi rânduri de 1–7 (de obicei ~4) potrivite așa încât amândoi să se termine odată. Teal la început.</li>
-<li><b>Vornic și first look</b>: selecțiile lungi de dimineață ale camerei principale (mire / mireasă peste ~1 min = vornic, Iris peste
-15 s) întregi pe V1, cu sunetul continuu. A doua cameră e găsită după sunet (chiar fără biserică pe ea) și pusă întreagă pe V2 (pistă
-oprită), cu sunetul pe A3/A4; pe V3 bucăți alternante de ~3–4 s, la pauzele de vorbire. Se folosesc doar potrivirile sigure, în
-ordinea zilei. Iris-urile scurte de dimineață urmează ca montaj (~2 s).</li>
-<li><b>Biserica</b>: toate cadrele Brown în ordinea ta de pe timeline; cele scurte întregi, din cele lungi (peste 15 s) câteva bucăți de 6 s.</li>
-<li><b>Cuplu și sală</b>: dronă, primul bloc de sală, dronă, primul bloc de cuplu, cu câte o dronă la ~7 cadre; ~1,3–1,6 s fiecare.</li>
-<li>Fiecare cadru își păstrează culoarea ta și are sunetul legat de imagine; teaserul are muzica pe A5/A6; câte un marker pe fiecare
-parte, în limba aplicației. E un pre-montaj: ritmul exact pe muzică și alegerea finală le faci tu.</li>
+<li>Cardul <b>Filmul tău terminat (blueprint-ul)</b>: + Adaugă un blueprint = XML-ul unui film lung terminat de-al tău (din
+Premiere), cu stilul Modern sau Tradițional. Blueprint-urile de aici sunt cele „lungi” (cele din Teaser Studio sunt separate).</li>
+<li>Fiecare tăietură ia o bucată bună dintr-un clip de același fel (mire, mireasă, cuplu, biserică / cununie, sală, dronă,
+petrecere), în ordinea zilei, niciodată același moment de două ori. Tan din filmul tău rămâne loc gol cu marker „Aici interviul”;
+locurile pentru care nunta nouă nu are filmări sunt numărate în pagină și marcate în XML.</li>
+<li>Cadrele de locație (Teal în filmele tale vechi) sunt luate din pregătiri.</li>
+<li>Vornicul, petrecerea Multicam și culoarea (LUT) nu sunt aici: pentru ele folosește Long Film.</li>
 </ul>
+<p>Long Film-ul vechi (cel care lucra doar din XML-ul de selecții) e ascuns din meniu; proiectele lui rămân salvate.</p>
 
-<h2>Long Film v2 (BETA)</h2>
+<h2>Long Film</h2>
+<p><b>Nou în v4.6.0</b> (fostul Long Film, fără BETA): <b>Pregătirile păstrează fiecare cadru bun</b>, chiar și unul filmat doar
+2 secunde (contează câte cadre bune ai, nu cât de lungi sunt), iar din cele lungi intră secundele cele mai bune. <b>Momentele zilei</b>
+(fără culori) le găsește AI-ul, care se uită la fiecare clip (3 imagini) și spune ce arată: pregătiri mire / mireasă, detalii,
+first look, cuplu, cununia civilă, biserică, sală, petrecere, dronă, interviu. Ordinea zilei e doar o probabilitate, nu o regulă:
+pentru fiecare cameră se alege drumul cel mai probabil prin zi (pregătiri → first look → cuplu → cununie → biserică → după),
+iar o pauză de peste 15 minute face trecerea mai ușoară. Cununia poate fi și dimineața, înaintea pregătirilor. Testat pe trei nunți
+ale tale (28 august, 29 august, 4 septembrie): 93–95 % din clipuri în momentul corect.</p>
+<p><b>Cununia civilă</b> (culoarea Mango): e recunoscută după <b>eșarfa tricoloră</b> a ofițerului de stare civilă; clipurile
+celorlalte camere filmate în aceeași scenă (fără pauză de 15 minute) sau în ±10 minute sunt tot cununia. Se montează ca vornicul:
+camera ofițerului întreagă pe V1, cealaltă cameră sincronizată după sunet deasupra, varianta tăiată sus. Fără ofițer văzut
+(eșarfa) nu există cununie: clipurile rămân biserică / pregătiri.</p>
 <p>Filmul lung întreg, inclusiv petrecerea, din secvența făcută de <b>Creează proiectul</b> (Cronologic sau Secvență sincronizată pe
 timecode). În Premiere etichetezi cadrele pe culori, pui în secvență și fișierele recorderului (pentru petrecere), exporți secvența ca
 XML (File &gt; Export &gt; Final Cut Pro XML) și o imporți aici (Import XML sau tras din Finder). Contează doar camerele pe care ai pus
-etichete: pot fi una, două, trei sau mai multe din camerele secvenței. Long Film-ul vechi și Teaser Studio rămân neschimbate:
-culorile de aici sunt doar pentru v2.</p>
+etichete: pot fi una, două, trei sau mai multe din camerele secvenței. Teaser Studio rămâne neschimbat:
+culorile de aici sunt doar pentru Long Film.</p>
 <ul>
 <li><b>Blue (mirele) și Rose (mireasa)</b>: selecție Auto (ca la Footage Selection: focus 40 %, stabilitate 30 %, expunere 30 %,
 prag 60, tăietură minimă 2 s; mișcările de cameră sunt scoase), mirele și mireasa împreună, în ordinea în care au fost filmate.</li>
@@ -757,7 +749,7 @@ un adjustment layer cu Crop 10 % sus și jos, pe toată lungimea filmului, exact
 WarpAutomation (aceiași pași: File > New > Adjustment Layer prin meniu, apoi Crop). Primești o notificare când e gata. Dacă
 Premiere e închis, filmul așteaptă până deschizi un proiect. După prima instalare repornești Premiere o dată. Debifat: crop-ul se
 pune pe fiecare clip, ca înainte.</p>
-<p>Pagina Long Film v2 are și ea un desen: secvența din Creează proiectul, fiecare clip colorat după moment (nu după cameră),
+<p>Pagina Long Film are și ea un desen: secvența din Creează proiectul, fiecare clip colorat după moment (nu după cameră),
 camera A cu toate momentele, celelalte camere, drona, recorderul (doar sunet) și clipurile fără culoare (nefolosite).</p>
 <p>Pagina Long Film are jos un desen cu ordinea: trenulețe de culori, cu numele fiecăruia deasupra și camerele dedesubt. Cu 3, 4 sau 5
 camere se continuă la fel, una după alta; cadrele cu cuplul pot sta la mijlocul petrecerii; drona rămâne ultima.</p>
@@ -924,8 +916,9 @@ Start) sau folosești Import XML din Syncaila.</li>
 <li><b>Formate</b>: orice citește FFmpeg (MXF, MP4, MOV, MKV, AVI etc.). BRAW (Blackmagic) și R3D (RED) nu sunt suportate.</li>
 <li><b>Toate sequence-urile finale sunt la 25 fps.</b></li>
 <li><b>Cât a durat</b>: la final, notificarea spune cât a durat tot procesul (Build, Sync, Auto Edit, analiza, descărcarea
-cardurilor, transcrierea...). Pe Mac, dacă a durat peste un minut, rămâne și în Centrul de notificări.</li>
-<li><b>Scoaterea discului</b>: editorul Long Film v2 eliberează fișierele când îl închizi, ca SSD-ul să poată fi scos (Eject).</li>
+cardurilor, transcrierea...), cu secunde (de exemplu 1 h 5 min 12 s). Pe Mac, dacă a durat peste un minut, rămâne și în Centrul de notificări.</li>
+<li><b>Proiectele</b> din Teaser Studio, Long Film și Long Film Blueprint stau câte 3 pe rând, apoi rândul următor (fără derulare în lateral).</li>
+<li><b>Scoaterea discului</b>: editorul Long Film eliberează fișierele când îl închizi, ca SSD-ul să poată fi scos (Eject).</li>
 <li><b>Proiectele se salvează singure</b> pe calculator. Ștergerea unui proiect nu șterge clipurile tale.</li>
 </ul>
 
@@ -940,8 +933,8 @@ EN = """
 <li><b>Create Project</b>: puts all the footage on one timeline, the way you lay it out for the selection, ready to import into Premiere.</li>
 <li><b>Selection</b>: <b>Footage Selection</b> picks the good shots from the clips by itself.</li>
 <li><b>Multicam</b>: syncs the cameras to the mixer recorder and edits the party.</li>
-<li><b>Long Film</b>: the long film up to the party, pre-edited from your selects.</li>
-<li><b>Long Film v2</b> (BETA): the whole long film from the sequence of Create Project, after you labelled the shots by colour.</li>
+<li><b>Long Film</b>: the whole long film, from the wedding folder (the AI finds the moments) or from your labelled sequence.</li>
+<li><b>Long Film Blueprint</b> (BETA): one of your finished long films, refilled with the shots of the new wedding.</li>
 <li><b>Teaser Studio</b>: the short film (teaser, getting ready, church, venue, party) on your music.</li>
 <li><b>Transcribe</b>: the interviews become text; from the couple's interviews Claude makes one story.</li>
 </ol>
@@ -1193,7 +1186,7 @@ clips' colours: red / yellow / green by level.</li>
 (cards, recorder, lavaliers), press <b>Sync</b> and export: every camera and the recorder on one timeline, whole clips. If you then
 want the edit too, <b>Auto Edit in Multicam →</b> moves the project to Multicam with the sync kept.</p>
 <p><b>I work in: Premiere Pro | DaVinci Resolve</b> (top right, in the whole app): choose your program once, the app remembers it
-and <b>every Export XML</b> (Multicam, Synchronize, Teaser Studio, Long Film, Long Film v2, Footage Selection, Create Project, the
+and <b>every Export XML</b> (Multicam, Synchronize, Teaser Studio, Long Film, Long Film, Footage Selection, Create Project, the
 story of Transcribe) is written for it. The button says "Export XML → Premiere" or "Export XML → DaVinci".</p>
 <p><b>On Premiere Pro</b> everything stays exactly as it was, with no extra time. <b>On DaVinci Resolve</b> the file is written from
 scratch, the way Resolve itself writes it (the shape copied from an export of Resolve Studio 20 on your Mac): the sequence only,
@@ -1204,11 +1197,11 @@ markers. Nothing of Premiere stays: no "exploded" stereo tracks, no Premiere att
 Resolve fits every clip itself (Project Settings &gt; Image Scaling); put your LUT on the Color page. After the export an
 <b>end-to-end check</b> starts by itself (its own progress bar): links, names, in / out inside the file, every file found on this
 computer. At the end you see "Ready for DaVinci Resolve" or exactly what is wrong. In Create Project, on DaVinci the "Open in
-Premiere Pro" button is not shown. Next to the options that work in one program only it says so in blue (Colour in Long Film v2,
+Premiere Pro" button is not shown. Next to the options that work in one program only it says so in blue (Colour in Long Film,
 the bins of Create Project: Premiere Pro only).</p>
 <p><b>Sync + Auto Edit</b> (the blue button) does everything in one press: Sync, and as soon as it ends Auto Edit starts by
 itself. Good overnight: press it, leave, the edit is ready in the morning. The Mac is kept awake until the end (no sleep).
-The same for <b>Build</b> in Long Film v2. Separate Sync and Auto Edit stay, for when you want only one of them.</p>
+The same for <b>Build</b> in Long Film. Separate Sync and Auto Edit stay, for when you want only one of them.</p>
 <h3>The steps</h3>
 <ol>
 <li><b>Drop all the material</b>: cards, recorder, whole folders. Side files are ignored automatically.</li>
@@ -1248,16 +1241,16 @@ to it and exported whole on their own audio tracks.</p>
 <p>If you already synced in Syncaila, Premiere or DaVinci, export an XML (FCP7 XML) with every camera on its track and press Import XML.
 The positions are taken exactly (no new sync), every video track becomes a camera, the audio-only files become the recorder. Clips that
 are not on this computer are skipped, with a warning.</p>
-<h3>Recorder with several tracks (Settings)</h3>
+<h3>Recorder with several tracks (SYNC section of the page)</h3>
 <p>A Tascam / Zoom writes every take as several files: a safe (auto) track, a manual one and their mix (e.g. 0190_1-2,
-0190_3-4, 0190_MIX). The app uses only one, so they are never laid one after the other. In Settings you choose which:
+0190_3-4, 0190_MIX). The app uses only one, so they are never laid one after the other. You choose which in the <b>SYNC</b> section of the Multicam / Synchronize page (and in the Party card of Long Film), where it is used:
 <b>Automatic</b> (default) = the cleanest track (fewest clipped peaks, then the stronger signal), never the mix; or <b>The mix</b>,
 <b>Track 1</b>, <b>Track 2</b>, <b>Track 3</b> (in name order). After a change press Sync again.</p>
 <h3>Premiere bridge (Settings)</h3>
 <p>The extension inside Premiere that receives the exported films (import into the open project + adjustment layer with the
 crop). The app installs and updates it by itself when it starts (on a Mac with Premiere); Settings shows whether it is installed
 and running in Premiere right now, and "Install again" puts it back (then restart Premiere).</p>
-<h3>Sync engine: New or Classic (Settings)</h3>
+<h3>Sync engine: New or Classic (SYNC section of the page)</h3>
 <p><b>New</b> (default, v4.4.0): every file gets a sound fingerprint (spectral peaks, in pairs), then <b>all files are
 matched with each other at once</b>: cameras with the recorder, but also cameras with each other and lavaliers with
 cameras. Every match is checked on the waveform (up to 3 windows of 10 s that must give the same place, within 4 ms), then
@@ -1279,7 +1272,7 @@ Auto Edit. A counter that starts again on the same card (C9999 → C0001) is und
 main camera (the handheld one with the most footage) on the top track. Pick V1, V2... to move a camera; the camera that had that
 track goes back to Auto.</p>
 <h3>The editor in Multicam</h3>
-<p>The <b>Edit</b> button opens the edit in the same editor as Long Film v2: every camera on its track (with the track order
+<p>The <b>Edit</b> button opens the edit in the same editor as Long Film: every camera on its track (with the track order
 above), the recorder and every camera's sound whole underneath. Move, cut, delete like in Premiere; Save keeps your
 version and Export XML writes it (at the camera's size, 25 fps). A new Auto Edit starts again from the automatic edit.</p>
 <h3>If you add files later</h3>
@@ -1439,46 +1432,40 @@ you how many seconds were left uncovered.</li>
 colour, a few minutes) or <b>every selection</b> (slow, overnight; the Mac does not sleep while it runs). The first time it downloads the
 model (a few GB). It is only a test: it does not change the teaser.</p>
 
-<h2>Long Film</h2>
-<p>The long film up to the party, pre-edited from your selects the way you edit it (measured on two of your weddings: selects + final
-film). You add the music, interviews (Tan) and finishing in Premiere; the party is the Multicam edit. Projects on cards, like Teaser Studio.</p>
-<h3>The cards of the page</h3>
-<ol>
-<li><b>Footage</b>: the XML of your selects sequence (see the page "What your selects need" and the drawing at the bottom of the page). It
-shows the cameras found, how many selections each has and whether something is wrong (for example selections lost after the drone, with
-the exact explanation).</li>
-<li><b>Auto or Blueprint</b> (one or the other). Blueprint uses one of your finished long films as a template (Long Film blueprints are
-separate from Teaser Studio's): the cuts, music, effects and pacing stay, every cut is filled with a shot of the same colour from the new
-wedding, Tan stays a place with an "Interview here" marker, and empty stretches over 60 s (the party) get a "Party (the Multicam edit)"
-marker. In Blueprint the vornic is filled cut by cut; for the vornic synced on two cameras use Auto.</li>
-<li><b>Teaser</b> (Auto only): the Teaser Studio project of the same wedding; its teaser (with its music) opens the film.</li>
-<li><b>Build</b>, then <b>Export XML</b>. The length shown is the FILM's length, not a waiting time.</li>
-</ol>
-<h3>What Auto does, part by part</h3>
+<h2>Long Film Blueprint (BETA)</h2>
+<p>One of your finished long films becomes the template: its cuts, music, sound effects and pacing stay, and every cut is refilled
+with a shot of the <b>same moment</b> of the new wedding. The wedding is read exactly like Long Film (the wedding folder or your
+labelled sequence; without colours the AI finds the moments), so here too: choose the folder / XML, press <b>Build</b>, then
+<b>Export XML</b>.</p>
 <ul>
-<li>The <b>copies</b> at the end of your selects (everything after the last drone shot, plus any selection repeating a piece already
-selected) are not used: they are for the short film.</li>
-<li>The <b>cameras</b> are recognised by their files (name without digits + picture size + frame rate), and every camera's day by its file
-numbers. The main camera = the one with the most groom / bride shots. Camera clocks are never compared between cameras.</li>
-<li><b>Getting ready</b>: the short groom and bride selections (up to 8 s), without the first ~15% of each side, the middle of each
-(0.8–2 s); told in parallel, in blocks like yours: a big block of whoever was filmed first (~27% of their shots, 4–20), a big block of
-the other (~20%, 4–14), then turns of 1–7 (usually ~4) sized so both end together. Teal first.</li>
-<li><b>Vornic and first look</b>: the main camera's long morning selections (groom / bride over ~1 min = vornic, Iris over 15 s) whole on
-V1, with continuous sound. The second camera is found by sound (even without a church on it) and put whole on V2 (track off), with its
-sound on A3/A4; on V3 alternating pieces of ~3–4 s, in the speech pauses. Only sure matches are used, in the order of the day. The short
-morning Iris follow as a montage (~2 s).</li>
-<li><b>Church</b>: every Brown shot in your timeline order; short ones whole, from long ones (over 15 s) a few 6 s pieces.</li>
-<li><b>Couple and venue</b>: drone, the first venue block, drone, the first couple block, with a drone every ~7 shots; ~1.3–1.6 s each.</li>
-<li>Every shot keeps your colour and has its sound linked to the picture; the teaser has its music on A5/A6; one marker per part, in the
-app's language. It is a pre-edit: the exact rhythm on the music and the final choice are yours.</li>
+<li>The card <b>Your finished film (the blueprint)</b>: + Add a blueprint = the XML of a finished long film of yours (from
+Premiere), style Modern or Traditional. These are the "long" blueprints (the Teaser Studio ones are separate).</li>
+<li>Every cut takes a good piece of a clip of the same kind (groom, bride, couple, church / civil ceremony, venue, drone, party), in
+the order of the day, never the same moment twice. Tan in your film stays an empty place with an "Interview here" marker; places
+the new wedding has no footage for are counted on the page and marked in the XML.</li>
+<li>Location shots (Teal in your older films) are taken from the getting ready.</li>
+<li>The vornic, the Multicam party and the colour (LUT) are not here: use Long Film for them.</li>
 </ul>
+<p>The old Long Film (the one that worked only from the selects XML) is hidden from the menu; its projects stay saved.</p>
 
-<h2>Long Film v2 (BETA)</h2>
+<h2>Long Film</h2>
+<p><b>New in v4.6.0</b> (the old Long Film, no BETA any more): <b>getting ready keeps every good shot</b>, even one filmed for only
+2 seconds (what counts is how many good shots you have, not how long they are), and from the long ones the best seconds go in.
+<b>The moments of the day</b> (without colours) are found by the AI, which looks at every clip (3 pictures) and says what it shows:
+groom / bride getting ready, details, first look, couple, civil ceremony, church, venue, party, drone, interview. The order of the
+day is only a probability, not a rule: for every camera the most likely path through the day is chosen (getting ready → first look
+→ couple → civil ceremony → church → after), and a pause of more than 15 minutes makes moving on easier. The civil ceremony can also
+be in the morning, before getting ready. Tested on three of your weddings (28 August, 29 August, 4 September): 93-95 % of the clips
+in the right moment.</p>
+<p><b>The civil ceremony</b> (colour Mango): recognised by the registrar's <b>tricolour sash</b>; the other cameras' clips filmed in
+the same scene (no 15-minute pause) or within ±10 minutes are the civil ceremony too. It is edited like the vornic: the registrar's
+camera whole on V1, the other camera synced by sound above it, the cut version on top. No registrar seen (the sash) = no civil
+ceremony: the clips stay church / getting ready.</p>
 <p>The whole long film, the party included, from the sequence of <b>Create Project</b> (Chronological or Timecode synchronized
 sequence). In Premiere you label the shots by colour, put the recorder files in the sequence too (for the party), export the sequence
 as XML (File &gt; Export &gt; Final Cut Pro XML) and import it here (Import XML or dragged from Finder). Only the cameras you labelled
-count: one, two, three or more of the cameras in the sequence. The old Long Film and Teaser Studio stay unchanged: these colours are
-for v2 only.</p>
+count: one, two, three or more of the cameras in the sequence. Teaser Studio stays unchanged: these colours are
+for Long Film only.</p>
 <ul>
 <li><b>Blue (groom) and Rose (bride)</b>: Auto selection (like Footage Selection: focus 40 %, stability 30 %, exposure 30 %,
 threshold 60, minimum cut 2 s; camera moves are cut out), groom and bride together, in the order they were filmed.</li>
@@ -1669,7 +1656,7 @@ bottom over everything, for the whole film, exactly like WarpAutomation's "Adjus
 File > New > Adjustment Layer through the menu, then Crop). A notification tells you when it is done. If Premiere is closed, the
 film waits until you open a project. Restart Premiere once after the first install. Unticked: the crop goes on every clip, as
 before.</p>
-<p>The Long Film v2 page has a drawing too: the Create Project sequence, every clip labelled by its moment (not by camera), camera A
+<p>The Long Film page has a drawing too: the Create Project sequence, every clip labelled by its moment (not by camera), camera A
 with every moment, the other cameras, the drone, the recorder (sound only) and the clips without a colour (not used).</p>
 <p>The Long Film page has a drawing of the order at the bottom: trains of colours, the name of each above it and the cameras under it.
 With 3, 4 or 5 cameras it continues the same way, one after the other; couple shots can sit in the middle of the party; the drone stays last.</p>
@@ -1839,8 +1826,9 @@ on Start) or use Import XML from Syncaila.</li>
 <li><b>All final sequences are 25 fps.</b></li>
 <li><b>How long it took</b>: at the end the notification says how long the whole process took (Build, Sync, Auto Edit, the
 analysis, the card offload, the transcription...). On a Mac, when it took more than a minute, it also stays in the Notification
-Center.</li>
-<li><b>Ejecting the disk</b>: the Long Film v2 editor lets go of the files when you close it, so the SSD can be ejected.</li>
+Center. With seconds (e.g. 1 h 5 min 12 s).</li>
+<li><b>Projects</b> of Teaser Studio, Long Film and Long Film Blueprint sit 3 per row, then the next row (no side scroll).</li>
+<li><b>Ejecting the disk</b>: the Long Film editor lets go of the files when you close it, so the SSD can be ejected.</li>
 <li><b>Projects save themselves</b> on your computer. Deleting a project does not delete your clips.</li>
 </ul>
 

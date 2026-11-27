@@ -31,19 +31,19 @@ import sync
 import teaser
 import xmlimport
 
-KINDS = {"Blue": "groom", "Rose": "bride", "Teal": "firstlook", "Forest": "vornic", "Brown": "church", "Yellow": "venue",
+KINDS = {"Blue": "groom", "Rose": "bride", "Teal": "firstlook", "Forest": "vornic", "Mango": "civil", "Brown": "church", "Yellow": "venue",
          "Purple": "couple", "Violet": "drone", "Iris": "party", "Cerulean": "party"}
 # his own colours (card "Clip colours"): every moment -> a Premiere label / a DaVinci Resolve clip colour
-MOMENTS = ["groom", "bride", "firstlook", "vornic", "church", "venue", "couple", "drone", "party"]
-MOMENT_NAMES = {"groom": "Groom", "bride": "Bride", "firstlook": "First look", "vornic": "Vornic", "church": "Church",
+MOMENTS = ["groom", "bride", "firstlook", "vornic", "civil", "church", "venue", "couple", "drone", "party"]
+MOMENT_NAMES = {"groom": "Groom", "bride": "Bride", "firstlook": "First look", "vornic": "Vornic", "civil": "Civil ceremony", "church": "Church",
                 "venue": "Venue", "couple": "Couple", "drone": "Drone", "party": "Party"}
 PR_COLOURS = ["Violet", "Iris", "Caribbean", "Lavender", "Cerulean", "Forest", "Rose", "Mango", "Purple", "Blue", "Teal",
               "Magenta", "Tan", "Green", "Brown", "Yellow"]
 DV_COLOURS = ["Orange", "Apricot", "Yellow", "Lime", "Olive", "Green", "Teal", "Navy", "Blue", "Purple", "Violet", "Pink",
               "Tan", "Beige", "Brown", "Chocolate"]
-DEFAULT_PR = {"groom": "Blue", "bride": "Rose", "firstlook": "Teal", "vornic": "Forest", "church": "Brown",
+DEFAULT_PR = {"groom": "Blue", "bride": "Rose", "firstlook": "Teal", "vornic": "Forest", "civil": "Mango", "church": "Brown",
               "venue": "Yellow", "couple": "Purple", "drone": "Violet", "party": "Iris"}
-DEFAULT_DV = {"groom": "Blue", "bride": "Pink", "firstlook": "Teal", "vornic": "Green", "church": "Brown",
+DEFAULT_DV = {"groom": "Blue", "bride": "Pink", "firstlook": "Teal", "vornic": "Green", "civil": "Orange", "church": "Brown",
               "venue": "Yellow", "couple": "Purple", "drone": "Violet", "party": "Navy"}
 
 
@@ -79,11 +79,12 @@ def labels_out(c, target):
 
 
 PART_OF = {"groom": "ready", "bride": "ready"}
-PART_NAMES = {"ready": "Groom and bride", "firstlook": "First look", "vornic": "Vornic", "church": "Church",
+PART_NAMES = {"ready": "Groom and bride", "firstlook": "First look", "vornic": "Vornic", "civil": "Civil ceremony", "church": "Church",
               "couple": "Couple", "venue": "Venue", "drone": "Drone", "party": "Party"}
-DEFAULT_ORDER = ["ready", "firstlook", "vornic", "church", "couple", "venue", "drone", "party"]
+DEFAULT_ORDER = ["ready", "firstlook", "vornic", "civil", "church", "couple", "venue", "drone", "party"]
 SELECT = ("ready", "church", "couple", "venue", "drone")       # parts made with the Auto selection
 SEL_THR, SEL_MIN = 60, 2.0          # owner: Auto, minimum cut length 2 s, selection threshold 60
+SEL_KEEP = 1.0                      # the good part of a short clip is kept from 1 s (Keep every good frame)
 SHORT_WHOLE = 6.0                   # a clip HE labelled that is this short is a deliberate detail: kept whole
                                     # (his Alex & Andreea venue: 63257-63261, 3-5 s each, were all dropped by the selection)
 STATIC_CLIP = 600.0                 # a camera whose clips are this long (median) stands on a tripod
@@ -248,7 +249,7 @@ def auto_order(pieces):
     the couple), the party last. The day itself can start anywhere (28 August:
     the venue's decorations were filmed first, before the groom)."""
     have = {part_of(p["kind"]) for p in pieces}
-    order = [k for k in ("ready", "firstlook", "vornic", "church") if k in have]
+    order = [k for k in ("ready", "firstlook", "vornic", "civil", "church") if k in have]
     ch = [p["t"] for p in pieces if p["kind"] == "church" and p.get("t") is not None]
     c1 = max(ch) if ch else None
 
@@ -308,8 +309,11 @@ def stamp(path):
 
 # ---------------------------------------------------------------- 2. selection + the priest
 def selection(an, a0):
-    """The Auto selection of one labelled clip (analysis of that range): [(src in, src out)] in file seconds."""
-    return [(a0 + s0, a0 + s1) for s0, s1, lv in core.auto_segments(an, SEL_THR, SEL_MIN) if lv == 2 and s1 - s0 >= SEL_MIN - 1e-6]
+    """The Auto selection of one clip (analysis of that range): [(src in, src out)] in file seconds. "Keep every good
+    frame" (v4.6.0, owner: a good shot he filmed for 2 s must never be dropped): smooth camera moves that stay sharp are
+    kept, and the good part of a short clip (>= 1 s) survives even under the minimum cut."""
+    return [(a0 + s0, a0 + s1) for s0, s1, lv in core.auto_segments(an, SEL_THR, SEL_MIN, keep_all=True)
+            if lv == 2 and s1 - s0 >= SEL_KEEP - 1e-6]
 
 
 def still_run(an):
@@ -1191,6 +1195,7 @@ def _weights(pieces, recorder, infos, auto, jobs, todo_sec=None, kinds=True):
           ("priest", 2.0 * sum(1 for p in pieces if p["kind"] == "church" and p["b"] - p["a"] >= PRIEST_MIN) if kinds else 5),
           ("firstlook", 4.0 * max(1, sum(1 for p in pieces if p["kind"] == "firstlook")) if kinds else 8),
           ("vornic", 20.0 if kinds and any(p["kind"] == "vornic" for p in pieces) else 2.0),
+          ("civil", 20.0 if kinds and any(p["kind"] == "civil" for p in pieces) else 2.0),
           ("party", party / 60.0 / jobs + rec_h * 20), ("music", rec_h * 6 + 1)]
     return w
 
@@ -1309,6 +1314,20 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
         mp = chrono([p for p in vps if p["cam"] == main], L["layout"], infos)
         op = chrono([p for p in vps if p["cam"] in vo_cams[1:]], L["layout"], infos)
         vo_len, vo_items = longfilm.vornic_cut(mp, op, progress=st("vornic"), cancel=cancel)
+    # the civil ceremony (v4.6.0): built like the vornic: the camera that filmed it most (the officer) WHOLE on V1 with
+    # its sound, the other camera's clips of that moment synced by the sound on top (cut in), so he only trims
+    cv_len, cv_items, cv_cams = 0.0, [], []
+    cps = [p for p in pieces if p["kind"] == "civil"]
+    if cps:
+        foot = {}
+        for p in cps:
+            foot[p["cam"]] = foot.get(p["cam"], 0.0) + p["b"] - p["a"]
+        two = sorted(foot, key=lambda c: -foot[c])[:2]
+        cv_cams = two
+        mp = chrono([p for p in cps if p["cam"] == two[0]], L["layout"], infos)
+        op = chrono([p for p in cps if p["cam"] in two[1:]], L["layout"], infos)
+        st("civil")("Syncing the civil ceremony", 0.0)
+        cv_len, cv_items = longfilm.vornic_cut(mp, op, progress=st("civil"), cancel=cancel)
     chk()
     # the party: sync with the recorder + its music
     party, pfiles, masters, extras = party_inputs(pieces, recorder, infos)
@@ -1361,6 +1380,8 @@ def build(xml_path, vornic_on, cache, progress=None, cancel=None, jobs=2, model_
                 firstlook=[fl_len, [(t, t0, key_of(p), a, b, ["sound"]) for t, t0, p, a, b in fl_items]],
                 vornic=[vo_len, [(t, t0, key_of(p), a, b, ["sound"] if t == 1 else (["sound", "off"] if t == 2 else []))
                                  for t, t0, p, a, b in vo_items], vo_cams],
+                civil=[cv_len, [(t, t0, key_of(p), a, b, ["sound"] if t == 1 else (["sound", "off"] if t == 2 else []))
+                                for t, t0, p, a, b in cv_items], cv_cams],
                 party=psync, faces=model is not None)
 
 
@@ -1473,7 +1494,9 @@ def assemble(r, analyses, st, zones, marker=lambda s: s, vornic_on=True, edits=N
                 t += b - a
             parts.append((name, t, items, []))
             stat[part] = (len(items), t)
-        elif part in ("firstlook", "vornic"):
+        elif part in ("firstlook", "vornic", "civil"):
+            if part not in r:               # a build made before the civil ceremony existed
+                continue
             ln, its = r[part][0], r[part][1]
             if part == "vornic" and (not its or not vornic_on):
                 continue

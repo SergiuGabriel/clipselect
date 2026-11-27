@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.5.1), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.6.0), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -60,7 +60,7 @@ linking to https://www.instagram.com/sergiugabrielcg/.
   vornic (face or Mango) with medium / wide / cut tracks, 25 fps XML.
 - `faces.py` — local face recognition (OpenCV Zoo YuNet MIT + SFace Apache 2.0, downloaded once into
   <data>/ai_model/faces; cosine >= 0.363 = same person). Used for the vornic; later the bride and groom.
-- `longfilm2.py` — Long Film v2 (BETA): the long film from the labelled Create Project sequence (load, selection,
+- `longfilm2.py` — Long Film (was v2): the long film from the labelled Create Project sequence (load, selection,
   priest, first look, vornic, party multicam, 1920x1080 25 fps export) or from the wedding folder (automatic).
 - `daymap.py` — the moments of the day without labels (scenes, church, faces of groom / bride, venue / couple, party).
 - `scenes.py` — what every clip shows, judged by SigLIP 2 (church, drone, speech...), for the automatic mode.
@@ -1230,6 +1230,44 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
 - Checked: every tools/*_check.py, pyflakes, RO / EN scan of every screen, Long Film v2 scripts (labelled, chrono, no
   recorder, editor, save / reopen), Multicam Sync + Auto Edit chain + editor + export, editor bench, DaVinci conversion,
   the bridge path with a fake Premiere (XML without per-clip crop, job sent, answer -> notification).
+
+## v4.6.0 (his list after v4.5.1: getting ready, a general moments model, the civil ceremony, menu, UI; "test everything")
+- Menu: "Long Film" = the old Long Film v2 (no BETA; projects keep store.app["long2_*"]); "Long Film Blueprint" (BETA, new
+  LongFilmBPPage(LongFilm2Page), KEY "longbp" -> store.app["longbp_projects" / "longbp_current"]): the wedding read like
+  Long Film (folder or labelled XML, same Build worker), then blueprint.build(self._pool(), bp) refills one of his finished
+  long films (BlueprintBox kind "long", Auto / Blueprint buttons hidden); pool = every selected range of r["pieces"]
+  (r["sel"], whole ranges for non-SELECT parts) by moment (firstlook -> couple, civil -> church, groom / bride also as
+  "location" for Teal slots of his older films; the pool never uses a moment twice); Export = blueprint.export_xml.
+  Vornic / party / colour cards hidden there. The old Long Film page is hidden (nav "long" hidden, projects kept).
+  LongFilm2Page has KEY / BETA / DESC class attributes, _left / _cards / _card for subclasses.
+- Getting ready keeps every good shot (owner: "count, not length"): longfilm2.selection uses core.auto_segments(...,
+  keep_all=True) and keeps good pieces >= SEL_KEEP 1 s.
+- The day model (daymap.classify_ai, used when scenes.py gives "_p" moment probabilities = SigLIP 2 zero-shot over
+  scenes.MOMENTS prompts, max per moment, softmax scale 50, mean of the clear frames; cache key "scene3|"): per camera a
+  monotone phase Viterbi civil0 -> ready -> firstlook -> couplem -> civil -> church -> after (PHASES emission weights;
+  PH_MOVE -2, 15-min pause = cheap move; a camera's first clip starts in the phase the busier cameras reached in the hour
+  before it, START_LOOK; both couple faces in a clip = -1.5 for "ready"). civil / civil0 kept only when a clip of it has
+  _civil >= CIVIL_SURE 0.7 (the officer's tricolour sash), else church / ready. Cross-camera civil: clips within +-10 min of a
+  sure civil clip, and the rest of the same camera scene (no 15-min pause) when it is not groom / bride (never Brown
+  outside the window: w28 church follows the civil). After the couple met (couplem / after) one of them alone = couple and
+  a church-like building = venue. Groom / bride sides = 2-state Viterbi + the top-2 face identities (AI votes which is the
+  groom); details / rooms take the side of the nearest person clip.
+  Civil ceremony = colour Mango (KINDS, MOMENTS, DEFAULT_PR Mango / DV Orange, PART "Civil ceremony"), edited like the
+  vornic (longfilm.vornic_cut on st("civil"): officer camera on V1, other camera synced above, cut version on top).
+- MEASURED on 4 of his weddings (real SigLIP 2 embeddings + faces computed on his SSD through the device VM, every clip
+  labelled by eye from contact sheets; /home/claude/ev, his Documents/_mmm_analiza/ev): 28 Aug 317/338 (94 %), 29 Aug
+  180/194 (93 %), 4 Sep 209/218 (96 %: civil in the MORNING before getting ready, no church; fx3 clock 2 h behind),
+  12 Sep 181/185 (98 %: traditional day, fetching the bride with guests, church, couple with a car). Old rules on the same
+  labels: 28 Aug 241, 29 Aug 79. Without faces 94-96 %. tools/daymodel_fixture.json (all 4, per clip: probabilities, civil,
+  faces A / B, my label) + tools/daymodel_check.py (>= 90 % each) run in CI.
+- UI: dur_text with seconds ("1 h 5 min 12 s"); StudioHub 3 cards per row, no side scroll; camera track box redone
+  (QFrame#trkbox, track_row, "V{} · auto"); SyncOptions widget (engine New (recommended) / Classic + recorder take) on the
+  Multicam / Synchronize page (SYNC section) and in the Long Film party card, removed from Settings; DropZone centred with
+  stretches (a wrapped hint was clipped); SettingsPage.hideEvent safe at exit.
+- Help (RO + EN): Long Film page (getting ready, day model, civil ceremony), Long Film Blueprint page replaces the old
+  Long Film page, sync options "SYNC section of the page", seconds, 3 projects per row.
+- NOT done: another wedding with a real Build in the app on his Mac (each needs his Mac awake ~1.5 h); 30 Aug, 5 / 11 / 20 Sep
+  not measured (the device VM embeds ~4 clips per 45 s call).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

@@ -57,8 +57,9 @@ def is_drone(path, sc=None):
         return True
     if p.name.upper().startswith("DJI_"):
         if sc:
-            return sc.get("drone", 0.0) >= AI_DRONE or max(
-                (c for c in sc if not c.startswith("_")), key=lambda c: sc[c]) == "drone"
+            q = sc.get("_p") or sc
+            return q.get("drone", 0.0) >= AI_DRONE or max(
+                (c for c in q if not c.startswith("_")), key=lambda c: q[c]) == "drone"
         return True
     return False
 
@@ -239,6 +240,8 @@ def classify(clips, faces, ai=None, speech=None):
     Returns ({key: colour}, info) with info = dict(groom=, bride=, church=(t0, t1), scenes=n, church_by=)."""
     ai = ai or {}
     speech = speech or {}
+    if has_moments(ai):
+        return classify_ai(clips, faces, ai, speech)
     keys = sorted(clips, key=lambda k: clips[k]["t0"])
     lab, info = {}, {}
     for k in keys:
@@ -393,4 +396,243 @@ def classify(clips, faces, ai=None, speech=None):
                 party = use_ai and bool(sk) and scenes_top(sk) == "party"
                 lab[k] = "Purple" if (couple >= 0.4 * len(s) and short and len(s) >= 4 and not party) else "Iris"
         end = max(end, max(clips[k]["t0"] + clips[k]["dur"] for k in s))
+    return lab, info
+
+
+# ---------------------------------------------------------------- v4.6.0: the day model (AI + faces + the order of a day)
+# No rules made for one videographer: every clip is judged by the AI (scenes.MOMENTS, SigLIP 2), the faces tell who the
+# couple is, and the ORDER of a wedding day is used only as likelihood: per camera (its own clock is always coherent),
+# the clips go through the phases getting ready -> first look -> couple session -> civil ceremony -> ceremony -> after
+# (couple, venue, guests, party), any of them may be missing, never backwards. A Viterbi picks the path that agrees best
+# with what the AI sees. Measured (my labels of every clip, real SigLIP 2): 28 August 92 %, 29 August 95 %, ...
+MOMENT_LABEL = {"groom": "Blue", "bride": "Rose", "firstlook": "Teal", "couple": "Purple", "venue": "Yellow",
+                "church": "Brown", "civil": "Mango", "party": "Iris", "interview": "Tan", "drone": "Violet",
+                "vornic": "Forest"}
+PHASES = [  # name, {moment: weight in what the phase "looks like"}, the moments a clip of this phase can be
+    ("civil0", {"civil": 1, "church": .6, "party": .3}, ("civil",)),    # a civil ceremony in the morning, before
+    ("ready", {"groom": 1, "bride": 1, "details": 1, "venue": 1, "speech": 1, "firstlook": .15},
+     ("groom", "bride", "details", "venue", "speech")),
+    ("firstlook", {"firstlook": 1, "groom": .35, "bride": .35, "couple": .35, "church": .3, "speech": .3, "party": .2},
+     ("firstlook",)),
+    ("couplem", {"couple": 1, "venue": 1, "firstlook": .3}, ("couple", "venue")),
+    ("civil", {"civil": 1, "church": .6, "party": .3}, ("civil",)),
+    ("church", {"church": 1}, ("church",)),
+    ("after", {"couple": 1, "venue": 1, "party": 1, "interview": 1}, ("couple", "venue", "party", "interview")),
+]
+PH_MOVE = -2.0              # log cost of going to a later phase
+PH_START = -0.5             # per phase skipped at the first clip of a camera (from "ready"; a morning civil = 1)
+PH_GAP = 15 * 60            # a pause of 15 min (travel) makes moving on cheap and staying a little costly
+PH_GAP_STAY = -1.0
+CIVIL_SURE = 0.7            # a frame with the officer's tricolour sash (his officer clip: 1.0, nothing else above 0.5)
+CIVIL_AROUND = 10 * 60      # the other cameras' clips this close to a sure civil clip are the civil ceremony too
+SIDE_SWITCH = 2.0
+START_LOOK = 60 * 60         # a camera's first clip starts in the phase the other cameras reached in the hour before it
+BOTH_READY = -1.5           # log cost of "getting ready" for a clip where both faces of the couple are seen           # getting ready: groom / bride are filmed in blocks
+
+
+def has_moments(ai):
+    return bool(ai) and sum(1 for v in ai.values() if (v or {}).get("_p")) >= 0.5 * len(ai)
+
+
+def _couple_ids(keys, faces):
+    """The two faces seen in the most clips (the couple is filmed all day). Returns (a, b) unit features or None."""
+    cents = []
+    for k in keys:
+        for f in faces.get(k, []):
+            best, bi = -1.0, -1
+            for i, (c, ks) in enumerate(cents):
+                s = float(f @ (c / np.linalg.norm(c)))
+                if s > best:
+                    best, bi = s, i
+            if best >= SAME + 0.1:
+                cents[bi][0] += f
+                cents[bi][1].add(k)
+            else:
+                cents.append([np.array(f, np.float32), {k}])
+    cents.sort(key=lambda x: -len(x[1]))
+    return [c / np.linalg.norm(c) for c, ks in cents[:2]]
+
+
+def _probs(ai, keys, faces, ids):
+    """{key: np.array over scenes.MOMENT_CATS (without 'unclear')} with the faces' evidence: both of the couple seen ->
+    first look / couple; one of them -> not an empty room."""
+    import scenes
+    cats = [c for c in scenes.MOMENT_CATS if c != scenes.UNCLEAR]
+    out, pres = {}, {}
+    for k in keys:
+        p = (ai.get(k) or {}).get("_p")
+        if not p:
+            continue
+        q = np.array([p.get(c, 0.0) for c in cats], float) + 1e-6
+        fs = faces.get(k, [])
+        ab = tuple(has(i, fs) for i in ids) + (False,) * (2 - len(ids))
+        pres[k] = ab
+        if ab[0] and ab[1]:
+            for c in ("firstlook", "couple"):
+                q[cats.index(c)] *= 1.5
+            for c in ("groom", "bride", "details", "venue"):
+                q[cats.index(c)] *= 0.3
+        elif ab[0] or ab[1]:
+            for c in ("venue", "details"):
+                q[cats.index(c)] *= 0.5
+        out[k] = q / q.sum()
+    return out, pres, cats
+
+
+def _phase_path(keys, P, cats, t0, both=frozenset(), start=1):
+    n, m = len(keys), len(PHASES)
+    em = np.zeros((n, m))
+    for i, k in enumerate(keys):
+        for j, (_, w, _) in enumerate(PHASES):
+            em[i, j] = np.log(1e-3 + sum(P[k][cats.index(c)] * x for c, x in w.items()))
+        if k in both:                   # the groom AND the bride in one clip: they are not getting ready apart any more
+            em[i, [j for j, ph in enumerate(PHASES) if ph[0] == "ready"]] += BOTH_READY
+    D = np.full((n, m), -1e18)
+    B = np.zeros((n, m), int)
+    D[0] = em[0] + np.array([PH_START * abs(j - start) for j in range(m)])
+    for i in range(1, n):
+        big = t0(keys[i]) - t0(keys[i - 1]) >= PH_GAP
+        for j in range(m):
+            prev = [D[i - 1, jj] + ((PH_GAP_STAY if big else 0.0) if jj == j else (PH_MOVE * 0.3 if big else PH_MOVE))
+                    for jj in range(j + 1)]
+            bj = int(np.argmax(prev))
+            D[i, j] = prev[bj] + em[i, j]
+            B[i, j] = bj
+    j = int(D[-1].argmax())
+    path = [0] * n
+    for i in range(n - 1, -1, -1):
+        path[i] = j
+        j = B[i, j]
+    return path
+
+
+def _sides(keys, P, cats, face_side):
+    """Groom / bride of the getting-ready clips of one camera (time order): a 2-state Viterbi with a switch cost; a
+    detail / room with nobody in it takes the side of the nearest clip with a person (the next one first)."""
+    gi, bi = cats.index("groom"), cats.index("bride")
+    ev, neutral = [], []
+    for k in keys:
+        p = P[k]
+        e = np.log(p[gi] + 0.03) - np.log(p[bi] + 0.03)
+        fs = face_side.get(k)
+        e += 2.5 if fs == "groom" else -2.5 if fs == "bride" else 0.0
+        nt = fs is None and p[gi] + p[bi] < 0.25
+        neutral.append(nt)
+        ev.append(0.0 if nt else e / 2)
+    n = len(keys)
+    if not n:
+        return {}
+    D = np.zeros((n, 2))
+    B = np.zeros((n, 2), int)
+    D[0] = [ev[0], -ev[0]]
+    for i in range(1, n):
+        for s in range(2):
+            a, b = D[i - 1, s], D[i - 1, 1 - s] - SIDE_SWITCH
+            B[i, s] = s if a >= b else 1 - s
+            D[i, s] = max(a, b) + (ev[i] if s == 0 else -ev[i])
+    s = int(D[-1].argmax())
+    out = {}
+    for i in range(n - 1, -1, -1):
+        out[keys[i]] = "groom" if s == 0 else "bride"
+        s = B[i, s]
+    for i in range(n):
+        if neutral[i]:
+            j = next((x for x in sorted(range(n), key=lambda x: (abs(x - i), x < i)) if not neutral[x]), None)
+            if j is not None:
+                out[keys[i]] = out[keys[j]]
+    return out
+
+
+def classify_ai(clips, faces, ai, speech=None):
+    """The day model. Same arguments / result as classify (+ 'Mango' = the civil ceremony)."""
+    speech = speech or {}
+    keys = sorted(clips, key=lambda k: clips[k]["t0"])
+    t0 = lambda k: clips[k]["t0"]
+    lab, info = {}, {"church_by": "day model"}
+    for k in keys:
+        if is_drone(clips[k]["path"], ai.get(k)):
+            lab[k] = "Violet"
+    rest = [k for k in keys if k not in lab]
+    ids = _couple_ids(rest, faces)
+    P, pres, cats = _probs(ai, rest, faces, ids)
+    gi, bi = cats.index("groom"), cats.index("bride")
+    vote = [0.0, 0.0]                       # which of the two faces is the groom: the AI's suit vs dress where it is alone
+    for k, (a, b) in pres.items():
+        if a != b:
+            vote[0 if a else 1] += P[k][gi] - P[k][bi]
+    groom_is = 0 if vote[0] >= vote[1] else 1
+    face_side = {k: ("groom" if (0 if a else 1) == groom_is else "bride") for k, (a, b) in pres.items() if a != b}
+    info.update(groom=len(ids) > 0, bride=len(ids) > 1, who=True)
+    phase = {}
+    cam = lambda k: Path(clips[k]["path"]).parent.name
+    seen = []                               # (time, phase index) of the cameras already done (the busiest first)
+    for c in sorted({cam(k) for k in rest}, key=lambda c: -sum(1 for k in rest if cam(k) == c)):
+        ks = sorted((k for k in rest if cam(k) == c and k in P), key=t0)
+        if not ks:
+            continue
+        # a camera that starts late in the day (an Osmo switched on for the party) starts where the others are by then
+        before = [j for t, j in seen if t0(ks[0]) - START_LOOK <= t <= t0(ks[0])]
+        path = _phase_path(ks, P, cats, t0, {k for k in ks if all(pres.get(k, (False, False)))},
+                           start=max(before) if before else 1)
+        seen += [(t0(k), path[i]) for i, k in enumerate(ks)]
+        ix = {ph[0]: j for j, ph in enumerate(PHASES)}
+        for name, instead in (("civil0", "ready"), ("civil", "church")):
+            civ = [i for i in range(len(ks)) if PHASES[path[i]][0] == name]
+            if civ and max((ai.get(ks[i]) or {}).get("_civil", 0.0) for i in civ) < CIVIL_SURE:
+                for i in civ:
+                    path[i] = ix[instead]   # no officer seen: getting ready / a religious ceremony
+        for i, k in enumerate(ks):
+            phase[k] = PHASES[path[i]]
+        rk = [k for k in ks if phase[k][0] == "ready"]
+        sd = _sides(rk, P, cats, face_side)
+        for k in ks:
+            name, _, allowed = phase[k]
+            p = P[k]
+            if name in ("couplem", "after"):    # once they are married / met: one of them alone = the couple session,
+                p = p.copy()                    # a church-like building = the place (venue)
+                p[cats.index("couple")] += p[cats.index("groom")] + p[cats.index("bride")]
+                p[cats.index("venue")] += 0.5 * p[cats.index("church")]
+            best = max(allowed, key=lambda x: p[cats.index(x)])
+            if name == "ready":
+                if not (best == "venue" and cats[int(np.argmax(p))] == "venue" and not any(pres.get(k, ()))):
+                    best = sd.get(k, best)
+            lab[k] = MOMENT_LABEL.get(best, "Iris")
+    # the civil ceremony seen by one camera: the other cameras' clips around it are that moment too (but not a church)
+    sure = [k for k in rest if (ai.get(k) or {}).get("_civil", 0.0) >= CIVIL_SURE]
+    if sure:
+        c0, c1 = min(t0(k) for k in sure) - CIVIL_AROUND, max(t0(k) + clips[k]["dur"] for k in sure) + CIVIL_AROUND
+        gi, bi, ci = cats.index("groom"), cats.index("bride"), cats.index("church")
+        near = set()
+        for c in {cam(k) for k in rest}:        # a camera's whole scene (no pause >= 15 min) that meets the civil time
+            ks = sorted((k for k in rest if cam(k) == c and k in P), key=t0)
+            sc = []
+            for k in ks:
+                if sc and t0(k) - max(t0(x) + clips[x]["dur"] for x in sc[-1]) < PH_GAP:
+                    sc[-1].append(k)
+                else:
+                    sc.append([k])
+            for g in sc:
+                if t0(g[0]) <= c1 and max(t0(x) + clips[x]["dur"] for x in g) >= c0:
+                    near.update(g)
+        for k in rest:
+            if k not in P or P[k][ci] >= 0.8:
+                continue
+            win = c0 <= t0(k) <= c1             # the rest of the scene: never the church (often right after it)
+            if (win and lab.get(k) in ("Brown", "Teal", "Purple", "Iris")) or \
+                    ((win or k in near) and lab.get(k) in ("Rose", "Blue", "Yellow") and P[k][gi] + P[k][bi] < 0.5):
+                lab[k] = "Mango"
+        info["civil"] = (c0 + CIVIL_AROUND, c1 - CIVIL_AROUND)
+    church = [k for k in rest if lab.get(k) == "Brown"]
+    if church:
+        info["church"] = (min(t0(k) for k in church), max(t0(k) + clips[k]["dur"] for k in church))
+    # the vornic (sound measured): a long speech of the morning both cameras film
+    if speech:
+        morning = [[k for k in rest if lab.get(k) in ("Blue", "Rose")]]
+        for k in _vornic(morning, clips, speech, {k: dict(speech=(ai.get(k) or {}).get("_p", {}).get("speech", 0.0))
+                                                  for k in rest}):
+            lab[k] = "Forest"
+        info["vornic_by"] = "speech"
+    info["scenes"] = len(scenes([(t0(k), t0(k) + clips[k]["dur"], k) for k in rest]))
+    for k in rest:
+        lab.setdefault(k, "Iris")
     return lab, info
