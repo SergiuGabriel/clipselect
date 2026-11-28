@@ -32,19 +32,19 @@ import sync
 import teaser
 import xmlimport
 
-KINDS = {"Blue": "groom", "Rose": "bride", "Teal": "firstlook", "Forest": "vornic", "Mango": "civil", "Brown": "church", "Yellow": "venue",
+KINDS = {"Blue": "groom", "Rose": "bride", "Teal": "firstlook", "Forest": "vornic", "Brown": "church", "Yellow": "venue",
          "Purple": "couple", "Violet": "drone", "Iris": "party", "Cerulean": "party"}
 # his own colours (card "Clip colours"): every moment -> a Premiere label / a DaVinci Resolve clip colour
-MOMENTS = ["groom", "bride", "firstlook", "vornic", "civil", "church", "venue", "couple", "drone", "party"]
-MOMENT_NAMES = {"groom": "Groom", "bride": "Bride", "firstlook": "First look", "vornic": "Vornic", "civil": "Civil ceremony", "church": "Church",
+MOMENTS = ["groom", "bride", "firstlook", "vornic", "church", "venue", "couple", "drone", "party"]
+MOMENT_NAMES = {"groom": "Groom", "bride": "Bride", "firstlook": "First look", "vornic": "Vornic", "church": "Church",
                 "venue": "Venue", "couple": "Couple", "drone": "Drone", "party": "Party"}
 PR_COLOURS = ["Violet", "Iris", "Caribbean", "Lavender", "Cerulean", "Forest", "Rose", "Mango", "Purple", "Blue", "Teal",
               "Magenta", "Tan", "Green", "Brown", "Yellow"]
 DV_COLOURS = ["Orange", "Apricot", "Yellow", "Lime", "Olive", "Green", "Teal", "Navy", "Blue", "Purple", "Violet", "Pink",
               "Tan", "Beige", "Brown", "Chocolate"]
-DEFAULT_PR = {"groom": "Blue", "bride": "Rose", "firstlook": "Teal", "vornic": "Forest", "civil": "Mango", "church": "Brown",
+DEFAULT_PR = {"groom": "Blue", "bride": "Rose", "firstlook": "Teal", "vornic": "Forest", "church": "Brown",
               "venue": "Yellow", "couple": "Purple", "drone": "Violet", "party": "Iris"}
-DEFAULT_DV = {"groom": "Blue", "bride": "Pink", "firstlook": "Teal", "vornic": "Green", "civil": "Orange", "church": "Brown",
+DEFAULT_DV = {"groom": "Blue", "bride": "Pink", "firstlook": "Teal", "vornic": "Green", "church": "Brown",
               "venue": "Yellow", "couple": "Purple", "drone": "Violet", "party": "Navy"}
 
 
@@ -80,9 +80,9 @@ def labels_out(c, target):
 
 
 PART_OF = {"groom": "ready", "bride": "ready"}
-PART_NAMES = {"ready": "Groom and bride", "firstlook": "First look", "vornic": "Vornic", "civil": "Civil ceremony", "church": "Church",
+PART_NAMES = {"ready": "Groom and bride", "firstlook": "First look", "vornic": "Vornic", "church": "Church",
               "couple": "Couple", "venue": "Venue", "drone": "Drone", "party": "Party"}
-DEFAULT_ORDER = ["ready", "firstlook", "vornic", "civil", "church", "couple", "venue", "drone", "party"]
+DEFAULT_ORDER = ["ready", "firstlook", "vornic", "church", "couple", "venue", "drone", "party"]
 SELECT = ("ready", "church", "couple", "venue", "drone")       # parts made with the Auto selection
 SEL_THR, SEL_MIN = 60, 2.0          # owner: Auto, minimum cut length 2 s, selection threshold 60
 SEL_KEEP = 1.0                      # the good part of a short clip is kept from 1 s (Keep every good frame)
@@ -250,7 +250,7 @@ def auto_order(pieces):
     the couple), the party last. The day itself can start anywhere (28 August:
     the venue's decorations were filmed first, before the groom)."""
     have = {part_of(p["kind"]) for p in pieces}
-    order = [k for k in ("ready", "firstlook", "vornic", "civil", "church") if k in have]
+    order = [k for k in ("ready", "firstlook", "vornic", "church") if k in have]
     ch = [p["t"] for p in pieces if p["kind"] == "church" and p.get("t") is not None]
     c1 = max(ch) if ch else None
 

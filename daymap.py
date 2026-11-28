@@ -660,7 +660,11 @@ def classify_ai(clips, faces, ai, speech=None):
             if (win and lab.get(k) in ("Brown", "Teal", "Purple", "Iris")) or \
                     ((win or k in near) and lab.get(k) in ("Rose", "Blue", "Yellow") and P[k][gi] + P[k][bi] < 0.5):
                 lab[k] = "Mango"
-        info["civil"] = (c0 + CIVIL_AROUND, c1 - CIVIL_AROUND)
+    # v4.6.2 (owner): no separate civil ceremony part any more ("it took the church for the civil ceremony"): the
+    # civil ceremony is found as before, but it is labelled and edited as the church (one ceremony part)
+    for k in rest:
+        if lab.get(k) == "Mango":
+            lab[k] = "Brown"
     church = [k for k in rest if lab.get(k) == "Brown"]
     if church:
         info["church"] = (min(t0(k) for k in church), max(t0(k) + clips[k]["dur"] for k in church))

@@ -40,7 +40,7 @@ The owner talks in Romanian; the **app UI must stay in English**. Main machine: 
 ## Pages (sidebar)
 Dashboard · Analysis Queue (shows every running job: footage analyses, multicam Sync / Auto Edit, with progress; it
 is refreshed by a timer in Main) · Settings (performance) · Info / How to use (RO/EN, text in help_text.py; keep both
-languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.6.1), "by @sergiugabrielcg"
+languages in sync when features change). Sidebar header (like the owner's WarpAutomation app): big icon, MoneyMaking<b>Machine</b>, @sergiugabrielcg link, version (v4.6.2), "by @sergiugabrielcg"
 linking to https://www.instagram.com/sergiugabrielcg/.
 
 ## Files
@@ -1280,6 +1280,23 @@ multicam Sync / Auto Edit / Import XML (top of the centre column), footage "Anal
   intervals); kept 0 unless better by OFF_BETTER 0.05; only for cameras with fewer clips than the reference (>= 20).
   The camera's own order is kept. On the 4 weddings: a camera moved +5 h / -9 h comes back within 0-20 min; right clocks
   stay; it also found the w29 fx3 2 h behind. Checked in tools/daymodel_check.py (CI).
+
+## v4.6.2 (his test of v4.6.0 on 28 Aug, "prost v4.6.0 - Long Film.xml": Civil ceremony 28 min, Church 9 min)
+- Owner: "it took the church for the civil ceremony, better remove the civil part". No separate civil part any more:
+  daymap.classify_ai still finds it (phases civil0 / civil, the sash) but labels it Brown = church (one ceremony part, a
+  morning ceremony too); longfilm2 KINDS / MOMENTS / PART_NAMES / DEFAULT_* / DEFAULT_ORDER without "civil" (the civil
+  build code stays, never reached: no piece gets kind "civil"). daymodel_check counts church as right for a civil gt.
+- Editor playback (owner: "black at the start and at every cut; no sound from the clips"):
+  * black: QVideoWidget is black while a new source loads / seeks. Editor._freeze() puts the last video frame
+    (videoSink().videoFrame().toImage()) on the still screen at every clip change and _frame_in() switches back to the
+    video at the first frame of the new position (startTime within 0.6 s); play() starts on the still picture. A file the
+    player cannot open shows still pictures 4 / s instead of a frozen frame. Tested headless: still for 20-110 ms at cuts.
+  * sound: the picture player had the only audio output and was MUTED for every clip without "ak" (party cuts, whose
+    sound is on the camera / recorder lanes), and played the FIRST audio stream (FX6 MXF: often the empty one). Now the
+    picture player is silent and a second QMediaPlayer (aplayer) plays _sound_at(t): the top clip's own sound when it
+    has one, else the recorder lane, else a camera lane (unmuted lanes only), re-seeked when it drifts > 0.25 s, with
+    the loudest stream (editor.loudest_stream: ffmpeg volumedetect per stream on the first 60 s, background, cached).
+    Real sound NOT testable here (QAudioOutput hangs in the sandbox, MMM_NO_AUDIO in tests).
 
 ## NEXT (agreed with the owner) — bring it up ONLY when the owner asks about it
 1. Real-wedding test of everything not yet tested on real footage: Sync, Auto Edit on a party, a Slower

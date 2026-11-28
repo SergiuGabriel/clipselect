@@ -964,11 +964,11 @@ TEMPLATES.update({
 EXACT.update({
     "The long film from the wedding folder or from the sequence of Create Project. With your colours every colour "
     "is handled its own way; without colours the AI looks at every clip and finds the moments of the day itself "
-    "(getting ready, first look, civil ceremony, church, couple, venue, party). Then Edit the film to correct it. "
+    "(getting ready, first look, church, couple, venue, party). Then Edit the film to correct it. "
     "One 25 fps 1920x1080 sequence.":
     "Filmul lung din folderul nunții sau din sequence-ul făcut de Create Project. Cu culorile tale, fiecare culoare e "
     "tratată în felul ei; fără culori, AI-ul se uită la fiecare clip și găsește singur momentele zilei (pregătiri, "
-    "first look, cununia civilă, biserica, cuplul, sala, petrecerea). Apoi corectezi filmul în editor. Un singur "
+    "first look, biserica, cuplul, sala, petrecerea). Apoi corectezi filmul în editor. Un singur "
     "sequence 25 fps 1920x1080.",
     "One of your finished long films is the template: its cuts, music, sound effects and pacing stay, and every "
     "cut is refilled with a shot of the same moment from this wedding (the wedding folder or your labelled "

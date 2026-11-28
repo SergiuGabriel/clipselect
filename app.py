@@ -54,7 +54,7 @@ import bridge
 import appnap
 import colour
 
-APP, VER = "MoneyMakingMachine", "v4.6.1"
+APP, VER = "MoneyMakingMachine", "v4.6.2"
 AUTHOR, AUTHOR_URL = "@sergiugabrielcg", "https://www.instagram.com/sergiugabrielcg/"
 # updates: updater.py (the address is never shown to the user)
 
@@ -7793,7 +7793,7 @@ class LongFilm2Page(QWidget):
     BETA = False
     DESC = ("The long film from the wedding folder or from the sequence of Create Project. With your colours every colour "
             "is handled its own way; without colours the AI looks at every clip and finds the moments of the day itself "
-            "(getting ready, first look, civil ceremony, church, couple, venue, party). Then Edit the film to correct it. "
+            "(getting ready, first look, church, couple, venue, party). Then Edit the film to correct it. "
             "One 25 fps 1920x1080 sequence.")
 
     def __init__(self, store):

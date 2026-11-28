@@ -983,6 +983,44 @@ class ShortcutsDialog(QDialog):
 
 
 # ---------------------------------------------------------------- the window
+_LOUD = {}                          # file -> index of its loudest audio stream (FX6: the first one is often empty)
+
+
+def loudest_stream(path):
+    """Index of the audio stream with the most sound in the first minute (ffmpeg volumedetect per stream).
+    Cached; 0 while unknown or when the file has one stream."""
+    if path in _LOUD:
+        return _LOUD[path]
+    _LOUD[path] = 0
+    try:
+        import threading
+        import re
+
+        def run():
+            try:
+                pr = subprocess.run([core.ffmpeg_exe(), "-hide_banner", "-i", path], capture_output=True, text=True,
+                                    errors="replace", timeout=20)
+                n = len(re.findall(r"Stream #\d+:\d+.*?: Audio", pr.stderr))
+            except Exception:
+                n = 0
+            if n < 2:
+                return
+            cmd = [core.ffmpeg_exe(), "-v", "info", "-nostdin", "-t", "60", "-i", path]
+            for k in range(n):
+                cmd += ["-map", f"0:a:{k}", "-af", "volumedetect", "-f", "null", "-"]
+            try:
+                out = subprocess.run(cmd, capture_output=True, text=True, timeout=60).stderr
+            except Exception:
+                return
+            vals = [float(x) for x in re.findall(r"mean_volume:\s*(-?[\d.]+|-inf)", out.replace("-inf", "-999"))]
+            if len(vals) >= n:
+                _LOUD[path] = max(range(n), key=lambda k: vals[k])
+        threading.Thread(target=run, daemon=True).start()
+    except Exception:
+        pass
+    return 0
+
+
 class Editor(QDialog):
     """Program monitor on top, timeline below, tools in between. exec() -> True when saved; .timeline() then."""
 
@@ -1012,21 +1050,27 @@ class Editor(QDialog):
         self.screen.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.stack.addWidget(self.screen)
         self.player = self.video = None
+        self._hold = False
         try:                                   # real playback with sound when Qt Multimedia is in the app
             if os.environ.get("MMM_NO_PLAYER"):
                 raise RuntimeError("player switched off (tests)")
             from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
             from PySide6.QtMultimediaWidgets import QVideoWidget
             self.video = QVideoWidget()
-            self.player = QMediaPlayer(self)
-            self.audio = None
-            if not os.environ.get("MMM_NO_AUDIO"):
+            self.player = QMediaPlayer(self)            # the picture (no sound: the sound player follows the timeline)
+            self.audio = self.aplayer = None
+            if not os.environ.get("MMM_NO_AUDIO"):      # the sound you should hear: the clip's own, else the recorder
+                self.aplayer = QMediaPlayer(self)
                 self.audio = QAudioOutput(self)
-                self.player.setAudioOutput(self.audio)
+                self.aplayer.setAudioOutput(self.audio)
+                self.aplayer.mediaStatusChanged.connect(self._audio_status)
             self.player.setVideoOutput(self.video)
             self.stack.addWidget(self.video)
             self._pending = None
+            self._hold = False                          # the last picture stays on screen until the next clip shows
+            self.acur = self._apending = None
             self.player.mediaStatusChanged.connect(self._media_status)
+            self.video.videoSink().videoFrameChanged.connect(self._frame_in)
         except Exception:
             self.player = None
         v.addWidget(mon, 5)
@@ -1171,7 +1215,7 @@ class Editor(QDialog):
         self._rest.start()
 
     def _frame(self, tag, img):
-        if tag not in ("mon", "scrub") or self.playing and self.player is not None:
+        if tag not in ("mon", "scrub") or self.playing and self.player is not None and not self._hold:
             return
         self._paint_frame(img)
 
@@ -1197,7 +1241,7 @@ class Editor(QDialog):
         self._wall(self.view.ph)
         self.b_play.setText("❚❚")
         if self.player is not None:
-            self.stack.setCurrentWidget(self.video)
+            self._hold = True                   # the still picture stays until the player shows its first frame
         self.timer.start()
         self._tick()
 
@@ -1211,6 +1255,9 @@ class Editor(QDialog):
         self.b_play.setText("▶")
         if self.player is not None:
             self.player.pause()
+        if getattr(self, "aplayer", None) is not None:
+            self.aplayer.pause()
+        self.acur = None
         self.stack.setCurrentWidget(self.screen)
         self._show_frame_at(self.view.ph)
 
@@ -1252,10 +1299,17 @@ class Editor(QDialog):
         self.view.set_playhead(t)
         self.tc.setText(tc(t))
         it = self.m.top_at(t + 0.001)
+        if self.player is not None and self._hold and self.use_wall and self.cur is not None and it is not None \
+                and it["id"] == self.cur["id"]:     # this file does not play here: pictures, a few per second
+            if int(t * 4) != int((t - 0.04) * 4):
+                self.frames.ask("mon", it["path"], it["src"] + t - it["start"])
+            self._sound(t, it)
+            return
         if self.player is None:                # no Qt Multimedia: still pictures, a few per second
             if int(t * 4) != int((t - 0.04) * 4):
                 self.frames.ask("mon", it["path"], it["src"] + t - it["start"]) if it else None
             return
+        self._sound(t, it)
         if it is None:
             if self.cur is not None:
                 self.player.pause()
@@ -1263,19 +1317,107 @@ class Editor(QDialog):
                 self._wall(t)
             return
         if self.cur is None or self.cur["id"] != it["id"]:
+            self._freeze()
             self.cur, self.use_wall, self.moved_t = it, False, time.monotonic() + 1.0
             pos = int((it["src"] + t - it["start"]) * 1000)
             self.last_pos = pos / 1000.0
+            self._want = pos / 1000.0
             if self.player.source() != QUrl.fromLocalFile(it["path"]):
                 self._pending, self.loading, self.load_t = pos, True, time.monotonic()  # applied in _media_status
                 self.player.setSource(QUrl.fromLocalFile(it["path"]))
             else:
                 self.loading = False
                 self.player.setPosition(pos)
-            muted = (not it.get("ak")) or list(it["ak"]) in self.m.muted or not it.get("aon", True)
-            if self.audio is not None:
-                self.audio.setMuted(bool(muted))
             self.player.play()
+
+    def _freeze(self):
+        """Keep the picture now on screen while the next clip loads / seeks (owner: black at every cut)."""
+        try:
+            if self.stack.currentWidget() is self.video:
+                f = self.video.videoSink().videoFrame()
+                if f.isValid():
+                    img = f.toImage()
+                    if not img.isNull():
+                        self._paint_frame(img)
+                self.stack.setCurrentWidget(self.screen)
+        except Exception:
+            self.stack.setCurrentWidget(self.screen)
+        self._hold = True
+
+    def _frame_in(self, f):
+        """The player shows a new frame: switch from the held picture to the video once it is the right moment."""
+        if not self._hold or not self.playing or self.loading or self.cur is None:
+            return
+        try:
+            ft = f.startTime() / 1e6 if f.startTime() >= 0 else None
+        except Exception:
+            ft = None
+        if ft is not None and abs(ft - getattr(self, "_want", ft)) > 0.6 and \
+                abs(ft - self.player.position() / 1000.0) > 0.6:
+            return                              # an old frame from before the seek
+        self._hold = False
+        self.stack.setCurrentWidget(self.video)
+
+    def _sound_at(self, t, top):
+        """What should be heard at t: the clip's own sound when it has one, else the recorder, else a camera's sound."""
+        def audible(it):
+            return it.get("ak") and list(it["ak"]) not in self.m.muted and it.get("aon", True) and \
+                it.get("on", True)
+        if top is not None and audible(top):
+            return top
+        best = None
+        for it in self.m.items:
+            if it.get("v") or not audible(it) or not (it["start"] <= t < it["start"] + it["dur"]):
+                continue
+            rank = 0 if str(it["ak"][0]) == "rec" else 1
+            if best is None or rank < best[0]:
+                best = (rank, it)
+        return best[1] if best else None
+
+    def _sound(self, t, top):
+        if self.aplayer is None:
+            return
+        it = self._sound_at(t, top)
+        if it is None:
+            if self.acur is not None:
+                self.aplayer.pause()
+                self.acur = None
+            return
+        want = it["src"] + t - it["start"]
+        if self.acur is None or self.acur["id"] != it["id"]:
+            self.acur = it
+            if self.aplayer.source() != QUrl.fromLocalFile(it["path"]):
+                self._apending = int(want * 1000)
+                self.aplayer.setSource(QUrl.fromLocalFile(it["path"]))
+            else:
+                self._apending = None
+                self._pick_track()
+                self.aplayer.setPosition(int(want * 1000))
+            self.aplayer.play()
+            return
+        if self._apending is None and abs(self.aplayer.position() / 1000.0 - want) > 0.25:
+            self.aplayer.setPosition(int(want * 1000))          # keep the sound with the picture
+
+    def _pick_track(self):
+        try:
+            if len(self.aplayer.audioTracks()) > 1 and self.acur is not None:
+                k = loudest_stream(self.acur["path"])
+                if self.aplayer.activeAudioTrack() != k:
+                    self.aplayer.setActiveAudioTrack(k)
+        except Exception:
+            pass
+
+    def _audio_status(self, st):
+        try:
+            from PySide6.QtMultimedia import QMediaPlayer
+            if self._apending is not None and st in (QMediaPlayer.LoadedMedia, QMediaPlayer.BufferedMedia):
+                pos, self._apending = self._apending, None
+                self._pick_track()
+                if self.playing and self.acur is not None:
+                    pos = int((self.acur["src"] + self.view.ph - self.acur["start"]) * 1000)
+                self.aplayer.setPosition(pos)
+        except Exception:
+            self._apending = None
 
     def _media_status(self, st):
         try:
@@ -1474,6 +1616,9 @@ class Editor(QDialog):
         if self.player is not None:
             self.player.stop()
             self.player.setSource(QUrl())        # let go of the file: else the footage disk cannot be ejected
+        if getattr(self, "aplayer", None) is not None:
+            self.aplayer.stop()
+            self.aplayer.setSource(QUrl())
         for rd in (self.frames, self.view.thumb_reader):
             rd.stop()
             rd.wait(3000)

@@ -530,7 +530,7 @@ secvența ta etichetată; fără culori momentele le găsește AI-ul), deci și 
 <ul>
 <li>Cardul <b>Filmul tău terminat (blueprint-ul)</b>: + Adaugă un blueprint = XML-ul unui film lung terminat de-al tău (din
 Premiere), cu stilul Modern sau Tradițional. Blueprint-urile de aici sunt cele „lungi” (cele din Teaser Studio sunt separate).</li>
-<li>Fiecare tăietură ia o bucată bună dintr-un clip de același fel (mire, mireasă, cuplu, biserică / cununie, sală, dronă,
+<li>Fiecare tăietură ia o bucată bună dintr-un clip de același fel (mire, mireasă, cuplu, biserică, sală, dronă,
 petrecere), în ordinea zilei, niciodată același moment de două ori. Tan din filmul tău rămâne loc gol cu marker „Aici interviul”;
 locurile pentru care nunta nouă nu are filmări sunt numărate în pagină și marcate în XML.</li>
 <li>Cadrele de locație (Teal în filmele tale vechi) sunt luate din pregătiri.</li>
@@ -542,14 +542,11 @@ locurile pentru care nunta nouă nu are filmări sunt numărate în pagină și 
 <p><b>Nou în v4.6.0</b> (fostul Long Film, fără BETA): <b>Pregătirile păstrează fiecare cadru bun</b>, chiar și unul filmat doar
 2 secunde (contează câte cadre bune ai, nu cât de lungi sunt), iar din cele lungi intră secundele cele mai bune. <b>Momentele zilei</b>
 (fără culori) le găsește AI-ul, care se uită la fiecare clip (3 imagini) și spune ce arată: pregătiri mire / mireasă, detalii,
-first look, cuplu, cununia civilă, biserică, sală, petrecere, dronă, interviu. Ordinea zilei e doar o probabilitate, nu o regulă:
-pentru fiecare cameră se alege drumul cel mai probabil prin zi (pregătiri → first look → cuplu → cununie → biserică → după),
-iar o pauză de peste 15 minute face trecerea mai ușoară. Cununia poate fi și dimineața, înaintea pregătirilor. O cameră pe care sunetul n-a putut-o sincroniza (de exemplu un Osmo cu ora setată la întâmplare) e pusă la locul ei în zi după ce arată clipurile ei, comparat cu ce filmau celelalte camere atunci; ordinea clipurilor ei rămâne cea în care au fost filmate. Testat pe trei nunți
+first look, cuplu, biserică (cu tot cu cununia civilă), sală, petrecere, dronă, interviu. Ordinea zilei e doar o probabilitate, nu o regulă:
+pentru fiecare cameră se alege drumul cel mai probabil prin zi (pregătiri → first look → cuplu → ceremonie → după),
+iar o pauză de peste 15 minute face trecerea mai ușoară. O ceremonie poate fi și dimineața, înaintea pregătirilor. O cameră pe care sunetul n-a putut-o sincroniza (de exemplu un Osmo cu ora setată la întâmplare) e pusă la locul ei în zi după ce arată clipurile ei, comparat cu ce filmau celelalte camere atunci; ordinea clipurilor ei rămâne cea în care au fost filmate. Testat pe trei nunți
 ale tale (28 august, 29 august, 4 septembrie): 93–95 % din clipuri în momentul corect.</p>
-<p><b>Cununia civilă</b> (culoarea Mango): e recunoscută după <b>eșarfa tricoloră</b> a ofițerului de stare civilă; clipurile
-celorlalte camere filmate în aceeași scenă (fără pauză de 15 minute) sau în ±10 minute sunt tot cununia. Se montează ca vornicul:
-camera ofițerului întreagă pe V1, cealaltă cameră sincronizată după sunet deasupra, varianta tăiată sus. Fără ofițer văzut
-(eșarfa) nu există cununie: clipurile rămân biserică / pregătiri.</p>
+<p><b>Cununia civilă</b> nu mai e o parte separată (din v4.6.2): dacă e găsită, intră la biserică, împreună cu ceremonia religioasă.</p>
 <p>Filmul lung întreg, inclusiv petrecerea, din secvența făcută de <b>Creează proiectul</b> (Cronologic sau Secvență sincronizată pe
 timecode). În Premiere etichetezi cadrele pe culori, pui în secvență și fișierele recorderului (pentru petrecere), exporți secvența ca
 XML (File &gt; Export &gt; Final Cut Pro XML) și o imporți aici (Import XML sau tras din Finder). Contează doar camerele pe care ai pus
@@ -1441,7 +1438,7 @@ labelled sequence; without colours the AI finds the moments), so here too: choos
 <ul>
 <li>The card <b>Your finished film (the blueprint)</b>: + Add a blueprint = the XML of a finished long film of yours (from
 Premiere), style Modern or Traditional. These are the "long" blueprints (the Teaser Studio ones are separate).</li>
-<li>Every cut takes a good piece of a clip of the same kind (groom, bride, couple, church / civil ceremony, venue, drone, party), in
+<li>Every cut takes a good piece of a clip of the same kind (groom, bride, couple, church, venue, drone, party), in
 the order of the day, never the same moment twice. Tan in your film stays an empty place with an "Interview here" marker; places
 the new wedding has no footage for are counted on the page and marked in the XML.</li>
 <li>Location shots (Teal in your older films) are taken from the getting ready.</li>
@@ -1453,16 +1450,13 @@ the new wedding has no footage for are counted on the page and marked in the XML
 <p><b>New in v4.6.0</b> (the old Long Film, no BETA any more): <b>getting ready keeps every good shot</b>, even one filmed for only
 2 seconds (what counts is how many good shots you have, not how long they are), and from the long ones the best seconds go in.
 <b>The moments of the day</b> (without colours) are found by the AI, which looks at every clip (3 pictures) and says what it shows:
-groom / bride getting ready, details, first look, couple, civil ceremony, church, venue, party, drone, interview. The order of the
+groom / bride getting ready, details, first look, couple, church (civil ceremony included), venue, party, drone, interview. The order of the
 day is only a probability, not a rule: for every camera the most likely path through the day is chosen (getting ready → first look
-→ couple → civil ceremony → church → after), and a pause of more than 15 minutes makes moving on easier. The civil ceremony can also
+→ couple → ceremony → after), and a pause of more than 15 minutes makes moving on easier. A ceremony can also
 be in the morning, before getting ready. A camera the sound could not sync (an Osmo set to a random time, say) is put in its place in the day
 from what its clips show, compared with what the other cameras filmed then; its clips keep the order they were filmed in. Tested on three of your weddings (28 August, 29 August, 4 September): 93-95 % of the clips
 in the right moment.</p>
-<p><b>The civil ceremony</b> (colour Mango): recognised by the registrar's <b>tricolour sash</b>; the other cameras' clips filmed in
-the same scene (no 15-minute pause) or within ±10 minutes are the civil ceremony too. It is edited like the vornic: the registrar's
-camera whole on V1, the other camera synced by sound above it, the cut version on top. No registrar seen (the sash) = no civil
-ceremony: the clips stay church / getting ready.</p>
+<p><b>The civil ceremony</b> is no longer a separate part (since v4.6.2): when found, it goes into the church part, with the religious ceremony.</p>
 <p>The whole long film, the party included, from the sequence of <b>Create Project</b> (Chronological or Timecode synchronized
 sequence). In Premiere you label the shots by colour, put the recorder files in the sequence too (for the party), export the sequence
 as XML (File &gt; Export &gt; Final Cut Pro XML) and import it here (Import XML or dragged from Finder). Only the cameras you labelled

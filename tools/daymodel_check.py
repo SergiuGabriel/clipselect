@@ -26,7 +26,8 @@ for name, rows in FX.items():
             continue
         p = LAB.get(lab[r["k"]], lab[r["k"]])
         n += 1
-        ok += p in g.split("|") or (g == "interview" and p == "party")
+        opts = g.split("|") + (["church"] if "civil" in g.split("|") else [])   # v4.6.2: the civil ceremony = church
+        ok += p in opts or (g == "interview" and p == "party")
     share = ok / n
     print(f"day model, {name}: {ok} of {n} clips right ({share:.0%})", info.get("church_by"), "civil" in info)
     assert share >= NEED[name], f"{name}: {share:.0%} < {NEED[name]:.0%}"
